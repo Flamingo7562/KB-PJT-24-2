@@ -6,10 +6,14 @@
   "scripts": {
     "prepare": "husky",
     "check:commit": "node scripts/validate-commit-msg.js",
-    "check:guardrails": "node scripts/check-project-guardrails.js"
+    "check:guardrails": "node scripts/check-project-guardrails.js",
+    "check:precommit": "node scripts/check-project-guardrails.js && node scripts/run-lint.js all",
+    "lint": "node scripts/run-lint.js all",
+    "lint:fe": "node scripts/run-lint.js frontend",
+    "lint:be": "node scripts/run-lint.js backend",
+    "check": "npm run check:guardrails && npm run lint"
   },
   "devDependencies": {
     "husky": "^9.1.7"
   }
 }
-

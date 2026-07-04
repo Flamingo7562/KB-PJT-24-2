@@ -1,3 +1,2 @@
 #!/usr/bin/env sh
-npm run check:guardrails
-
+npm run check:precommit

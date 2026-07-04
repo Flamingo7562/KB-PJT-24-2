@@ -17,6 +17,13 @@ npm install
 npm run prepare
 ```
 
+Windows PowerShell에서 `npm.ps1` 실행 정책 오류가 나면 `npm.cmd`를 사용합니다.
+
+```sh
+npm.cmd install
+npm.cmd run prepare
+```
+
 Husky 공식 문서는 새 프로젝트에서 `npx husky init` 사용을 권장합니다. 다만 이 저장소에는 이미 `.husky/pre-commit`, `.husky/commit-msg` 템플릿이 있으므로 덮어쓰지 않도록 아래 수동 절차를 사용합니다.
 
 ```sh
@@ -41,7 +48,7 @@ chmod +x .husky/pre-commit .husky/commit-msg
 
 | Hook         | 파일                | 역할                                       |
 | ------------ | ------------------- | ------------------------------------------ |
-| `pre-commit` | `.husky/pre-commit` | staged 파일에서 금지 기술 추가 여부를 검사 |
+| `pre-commit` | `.husky/pre-commit` | 기술 제약 검사와 lint 실행                 |
 | `commit-msg` | `.husky/commit-msg` | 커밋 메시지가 컨벤션을 지키는지 검사       |
 
 ## 커밋 메시지 검사
@@ -66,28 +73,79 @@ docs: [GITHUB] 이슈 작성 가이드 추가 (#5)
 
 문서와 GitHub 템플릿은 검사 대상에서 제외합니다. 기술 제약을 설명하기 위해 금지 기술 이름을 문서에 적을 수 있어야 하기 때문입니다.
 
-## 향후 확장 예시
+## Lint 검사
 
-프론트엔드와 백엔드 프로젝트가 생성된 뒤에는 `.husky/pre-commit`에 다음 검사를 추가할 수 있습니다.
-
-```sh
-npm --prefix frontend run lint
-npm --prefix frontend run test
-```
-
-Spring legacy 프로젝트가 Maven 기반이라면 다음을 추가할 수 있습니다.
+`pre-commit`은 다음 명령을 실행합니다.
 
 ```sh
-mvn test
+npm run check:precommit
 ```
 
-Gradle 기반이라면 다음을 추가할 수 있습니다.
+이 명령은 기술 제약 검사를 먼저 실행하고, 이어서 프론트엔드와 백엔드 lint를 실행합니다.
 
 ```sh
-./gradlew test
+npm run check:guardrails
+npm run lint
 ```
 
-Windows 팀원이 많다면 Git Bash, WSL, 또는 CI에서 동일 명령이 동작하는지 확인한 뒤 적용합니다.
+아직 `frontend/package.json` 또는 `backend/build.gradle`이 없으면 해당 lint는 건너뜁니다.
+
+## Frontend Lint
+
+Vue 프로젝트가 생성되면 `frontend/package.json`에 `lint` 스크립트를 둡니다.
+
+```json
+{
+  "scripts": {
+    "lint": "eslint src --max-warnings=0",
+    "lint:fix": "eslint src --fix"
+  }
+}
+```
+
+루트에서는 다음 명령으로 실행합니다.
+
+```sh
+npm run lint:fe
+```
+
+## Backend Lint
+
+백엔드는 Gradle `check` 태스크를 기준으로 lint를 실행합니다. Gradle 프로젝트가 생성되면 `backend/build.gradle`에 Checkstyle 플러그인을 추가합니다.
+
+```gradle
+plugins {
+    id 'java'
+    id 'war'
+    id 'checkstyle'
+}
+
+checkstyle {
+    configFile = file('config/checkstyle/checkstyle.xml')
+}
+```
+
+루트 Gradle wrapper를 사용할 경우:
+
+```sh
+# Windows
+.\gradlew.bat -p backend check
+
+# macOS / Linux
+./gradlew -p backend check
+```
+
+`backend/` 내부 Gradle wrapper를 사용할 경우:
+
+```sh
+cd backend
+
+# Windows
+.\gradlew.bat check
+
+# macOS / Linux
+./gradlew check
+```
 
 ## Hook 임시 비활성화
 
