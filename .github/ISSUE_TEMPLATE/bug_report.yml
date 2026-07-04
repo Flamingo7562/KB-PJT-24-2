@@ -1,0 +1,85 @@
+name: 버그 리포트
+description: 재현 가능한 오류나 기대와 다른 동작을 등록합니다.
+title: "fix: [AREA] "
+labels: ["type: bug", "status: triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        버그 이슈 제목은 `fix: [AREA] 작업 요약` 형식으로 작성합니다.
+        예시: `fix: [BE] 세션 만료 시 리다이렉트 오류`
+
+        AREA tag: `[FE]`, `[BE]`, `[DB]`, `[COMMON]`, `[INFRA]`
+  - type: input
+    id: summary
+    attributes:
+      label: 요약
+      description: 어떤 문제가 발생했는지 한 문장으로 적습니다.
+      placeholder: 예) 로그인 실패 시 에러 메시지가 표시되지 않는다.
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: 영역
+      options:
+        - "[FE] Frontend"
+        - "[BE] Backend"
+        - "[DB] Database"
+        - "[COMMON] Common"
+        - "[INFRA] Infra"
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 재현 절차
+      value: |
+        1. 
+        2. 
+        3. 
+      description: 누구나 같은 문제를 재현할 수 있도록 단계별로 적습니다.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 기대 결과
+      description: 정상이라면 어떤 동작이어야 하는지 적습니다.
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: 실제 결과
+      description: 실제로 발생한 동작, 에러 메시지, 로그를 적습니다.
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: 실행 환경
+      value: |
+        - OS:
+        - Browser:
+        - Java:
+        - WAS:
+        - DB:
+  - type: textarea
+    id: logs
+    attributes:
+      label: 로그 / 스크린샷
+      description: 필요한 경우 에러 로그나 화면 캡처를 첨부합니다.
+  - type: input
+    id: related-issues
+    attributes:
+      label: 관련 이슈
+      description: GitHub 이슈 번호를 #12, #34 형식으로 적습니다.
+      placeholder: "#12, #34"
+  - type: checkboxes
+    id: title-convention
+    attributes:
+      label: 제목 컨벤션 확인
+      options:
+        - label: "이슈 제목을 `fix: [AREA] 작업 요약` 형식으로 작성했습니다."
+          required: true

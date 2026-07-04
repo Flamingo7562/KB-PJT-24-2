@@ -1,0 +1,15 @@
+{
+  "name": "kb-pjt-24-2",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Repository-level tooling for the KB-PJT-24-2 Vue.js and Spring Framework legacy project.",
+  "scripts": {
+    "prepare": "husky",
+    "check:commit": "node scripts/validate-commit-msg.js",
+    "check:guardrails": "node scripts/check-project-guardrails.js"
+  },
+  "devDependencies": {
+    "husky": "^9.1.7"
+  }
+}
+

@@ -1,0 +1,15 @@
+<type>: [AREA] <summary> (#issue)
+
+# 예시:
+# feat: [FE] 로그인 화면 라우팅 추가 (#12)
+# fix: [BE] 세션 만료 처리 보정 (#23)
+# docs: [GITHUB] 이슈 작성 가이드 추가 (#5)
+#
+# type:
+# feat, fix, docs, style, refactor, test, chore, build, ci, perf, revert
+#
+# area tag 예시:
+# [FE], [BE], [DB], [DOCS], [GITHUB], [HOOK], [INFRA], [COMMON]
+#
+# 본문에는 변경 이유, 영향 범위, 관련 이슈를 적습니다.
+# Refs #이슈번호

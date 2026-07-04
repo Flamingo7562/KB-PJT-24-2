@@ -1,0 +1,84 @@
+name: 작업 태스크
+description: 설정, 문서, 리팩터링, 조사 작업을 등록합니다.
+title: "chore: [AREA] "
+labels: ["type: task", "status: triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        작업 이슈 제목은 `<type>: [AREA] 작업 요약` 형식으로 작성합니다.
+        예시: `docs: [GITHUB] 이슈 템플릿 정리`, `chore: [HOOK] Husky 설정 추가`
+
+        작업 성격에 따라 `docs`, `refactor`, `test`, `chore`, `ci`, `build` 등을 사용합니다.
+  - type: input
+    id: summary
+    attributes:
+      label: 요약
+      placeholder: 예) GitHub Projects 보드 필드 구성
+    validations:
+      required: true
+  - type: dropdown
+    id: type
+    attributes:
+      label: 작업 종류
+      description: 이슈 제목의 type과 맞춥니다. 조사 작업은 `chore`를 사용합니다.
+      options:
+        - docs
+        - refactor
+        - test
+        - chore
+        - build
+        - ci
+        - research
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: 영역
+      options:
+        - "[DOCS] Docs"
+        - "[GITHUB] GitHub"
+        - "[HOOK] Hook"
+        - "[INFRA] Infra"
+        - "[COMMON] Common"
+        - "[FE] Frontend"
+        - "[BE] Backend"
+        - "[DB] Database"
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: 작업 범위
+      value: |
+        - [ ] 
+        - [ ] 
+    validations:
+      required: true
+  - type: textarea
+    id: done
+    attributes:
+      label: 완료 조건
+      value: |
+        - [ ] 결과물이 문서, 코드, 설정 중 하나로 남아 있다.
+        - [ ] 관련 팀원이 확인할 수 있다.
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: 참고 / 메모
+  - type: input
+    id: related-issues
+    attributes:
+      label: 관련 이슈
+      description: GitHub 이슈 번호를 #12, #34 형식으로 적습니다.
+      placeholder: "#12, #34"
+  - type: checkboxes
+    id: title-convention
+    attributes:
+      label: 제목 컨벤션 확인
+      options:
+        - label: "이슈 제목을 `<type>: [AREA] 작업 요약` 형식으로 작성했습니다."
+          required: true
