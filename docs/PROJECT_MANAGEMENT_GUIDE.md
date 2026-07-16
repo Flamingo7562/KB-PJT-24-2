@@ -57,18 +57,63 @@ docs: [GITHUB] GitHub Projects 필드 구성
 | 브랜치                   | 용도                                         |
 | ------------------------ | -------------------------------------------- |
 | `main`                   | 항상 배포 가능하거나 제출 가능한 기준 브랜치 |
-| `develop`                | 팀이 필요하다고 합의한 경우 통합 개발 브랜치 |
+| `dev`                    | 기능을 모아 공동 검증하는 통합 개발 브랜치   |
 | `feature/12-login-page`  | 기능 개발                                    |
 | `fix/23-session-timeout` | 버그 수정                                    |
 | `docs/5-project-guide`   | 문서 수정                                    |
 | `chore/7-husky-setup`    | 설정, 빌드, 운영 작업                        |
+| `hotfix/31-login-error`  | 배포된 `main`의 긴급 수정                    |
 
 브랜치명은 소문자와 하이픈을 사용하고, 가능하면 이슈 번호를 포함합니다. 브랜치명에는 `#`를 넣지 않고 숫자만 사용합니다.
+
+### 브랜치 흐름
+
+| 작업 | 분기 기준 | PR 대상 | 머지 후 처리 |
+| --- | --- | --- | --- |
+| 기능·일반 버그·문서·설정 | 최신 `dev` | `dev` | 작업 브랜치 삭제 |
+| 배포·제출 | `dev` | `main` | 배포·제출 검증 |
+| 배포 긴급 수정 | 최신 `main` | `main` | `main` 변경을 `dev`로 동기화하는 PR 생성 |
+
+- `main`과 `dev`에는 직접 Push하지 않고 PR로만 반영합니다.
+- 일반 작업 브랜치는 항상 최신 `dev`에서 만듭니다.
+- `dev` 검증이 끝난 배포 묶음은 `dev`에서 `main`으로 PR을 생성합니다.
+- `hotfix/*`는 최신 `main`에서 만들고 `main`에 머지한 뒤, `main`에서 `dev`로 동기화 PR을 생성합니다.
+
+### `dev` 최초 생성
+
+팀 담당자 한 명이 최신 `main`에서 한 번만 생성하고 원격에 Push합니다.
+
+```sh
+git switch main
+git pull --ff-only origin main
+git switch -c dev
+git push -u origin dev
+```
+
+원격 `dev`가 생성된 다음에는 GitHub에서 `main`과 `dev`의 직접 Push를 제한하고 PR 승인과 필수 검사를 적용합니다.
+
+다른 팀원이 로컬 `dev`를 처음 받을 때는 다음과 같이 실행합니다.
+
+```sh
+git fetch origin
+git switch --track origin/dev
+```
+
+### 작업 브랜치 생성
+
+```sh
+git switch dev
+git pull --ff-only origin dev
+git switch -c feature/12-login-page
+git push -u origin feature/12-login-page
+```
 
 ## PR 규칙
 
 - PR 제목은 커밋 컨벤션과 비슷하게 작성합니다.
-- PR 본문에 `Closes #이슈번호`를 적어 이슈가 자동 종료되도록 합니다.
+- 일반 작업 PR은 `dev`를 대상으로 만들고 본문에 `Refs #이슈번호`를 적습니다.
+- 배포·제출 PR은 `dev`에서 `main`을 대상으로 만들고, 이때 종료할 이슈를 `Closes #이슈번호`로 적습니다.
+- 긴급 수정 PR은 `hotfix/*`에서 `main`을 대상으로 만들고, 머지 후 `main`에서 `dev`로 동기화합니다.
 - 변경 범위가 넓다면 기능별로 PR을 나눕니다.
 - 리뷰어가 재현할 수 있도록 확인 방법을 적습니다.
 - 화면 변경은 스크린샷 또는 짧은 설명을 남깁니다.

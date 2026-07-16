@@ -13,6 +13,7 @@ KB IT's Your Life 7기 24-2팀 프로젝트입니다.
 - [Lint 가이드](docs/LINT_GUIDE.md)
 - [GitHub Projects 패널 운영 가이드](docs/GITHUB_PROJECTS_PANEL_GUIDE.md)
 - [커밋 amend 가이드](docs/AMEND_GUIDE.md)
+- [Docker Compose DB Schema 공유 가이드](docs/DOCKER_DATABASE_SCHEMA_GUIDE.md)
 
 ## 프로젝트 구조
 

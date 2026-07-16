@@ -30,3 +30,18 @@ out/
 
 # Logs
 *.log
+
+# Local uploaded document data
+/local-data/
+
+# Local agent workspace
+/AGENTS.md
+/NOTICE.md
+/.agents/
+/.codex/
+/docs/DEVELOPMENT_SCHEDULE.md
+/docs/PROJECT_EXECUTION_DIRECTION.md
+/docs/SYSTEM_ARCHITECTURE.md
+/docs/memory/
+/docs/reports/
+/scripts/check-agent-docs.js
