@@ -25,7 +25,7 @@ function run(command, args, options = {}) {
   const result = spawnSync(command, args, {
     cwd: options.cwd || rootDir,
     stdio: "inherit",
-    shell: false
+    shell: options.shell || false
   });
 
   if (result.error) {
@@ -51,7 +51,9 @@ function runFrontendLint() {
   }
 
   const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
-  return run(npmCommand, ["--prefix", "frontend", "run", "lint"]);
+  return run(npmCommand, ["--prefix", "frontend", "run", "lint"], {
+    shell: process.platform === "win32"
+  });
 }
 
 function getBackendGradleCommand() {
@@ -59,7 +61,7 @@ function getBackendGradleCommand() {
 
   if (process.platform === "win32" && exists("gradlew.bat")) {
     return {
-      command: path.join(rootDir, "gradlew.bat"),
+      command: ".\\gradlew.bat",
       args: ["-p", "backend", "check"],
       cwd: rootDir
     };
@@ -75,7 +77,7 @@ function getBackendGradleCommand() {
 
   if (process.platform === "win32" && exists("backend/gradlew.bat")) {
     return {
-      command: path.join(backendDir, "gradlew.bat"),
+      command: ".\\gradlew.bat",
       args: ["check"],
       cwd: backendDir
     };
@@ -106,7 +108,10 @@ function runBackendLint() {
   }
 
   const gradle = getBackendGradleCommand();
-  return run(gradle.command, gradle.args, { cwd: gradle.cwd });
+  return run(gradle.command, gradle.args, {
+    cwd: gradle.cwd,
+    shell: process.platform === "win32"
+  });
 }
 
 const runners = {
@@ -132,4 +137,3 @@ if (!runners[target]) {
 }
 
 process.exit(runners[target]());
-

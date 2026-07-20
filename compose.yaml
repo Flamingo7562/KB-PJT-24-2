@@ -1,0 +1,46 @@
+services:
+  db:
+    image: mysql:8.4.10
+    ports:
+      - "127.0.0.1:${MYSQL_PORT:-3306}:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      TZ: Asia/Seoul
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+      - --default-time-zone=+09:00
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "--silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  flyway:
+    image: flyway/flyway:12.9.0
+    profiles: ["tools"]
+    environment:
+      FLYWAY_URL: jdbc:mysql://db:3306/${MYSQL_DATABASE}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia%2FSeoul
+      FLYWAY_USER: ${MYSQL_USER}
+      FLYWAY_PASSWORD: ${MYSQL_PASSWORD}
+      FLYWAY_LOCATIONS: filesystem:/flyway/sql
+      FLYWAY_CONNECT_RETRIES: "10"
+      FLYWAY_CONNECT_RETRIES_INTERVAL: "5"
+      FLYWAY_VALIDATE_MIGRATION_NAMING: "true"
+      FLYWAY_FAIL_ON_MISSING_LOCATIONS: "true"
+      FLYWAY_CLEAN_DISABLED: "true"
+    volumes:
+      - ./backend/src/main/resources/db/migration:/flyway/sql:ro
+      - ./backend/build/flyway-drivers/mysql-connector-j-9.7.0.jar:/flyway/drivers/mysql-connector-j-9.7.0.jar:ro
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  mysql-data:
