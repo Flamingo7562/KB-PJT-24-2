@@ -22,6 +22,7 @@ Desktop.ini
 *.pfx
 *.jks
 *.keystore
+/backend/config/database-local.properties
 
 # Node / Vue
 node_modules/
