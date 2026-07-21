@@ -22,7 +22,9 @@ Desktop.ini
 *.pfx
 *.jks
 *.keystore
-/backend/config/database-local.properties
+**/*.properties
+!/backend/config/database.example.properties
+!/backend/gradle/wrapper/gradle-wrapper.properties
 
 # Node / Vue
 node_modules/
