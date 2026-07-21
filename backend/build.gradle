@@ -196,7 +196,36 @@ tasks.register('prepareFlywayDriver', Copy) {
 
 
 test {
-    useJUnitPlatform()
+    useJUnitPlatform {
+        excludeTags 'database'
+    }
+}
+
+tasks.register('databaseTest', Test) {
+    group = 'verification'
+    description = 'Runs the opt-in test against the configured local MySQL database.'
+
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+
+    useJUnitPlatform {
+        includeTags 'database'
+    }
+
+    doFirst {
+        String configLocation = System.getProperty('gighub.database.config')
+        if (configLocation == null || configLocation.isBlank()) {
+            throw new GradleException(
+                    'Pass -Dgighub.database.config with the absolute local properties path.'
+            )
+        }
+        systemProperty 'gighub.database.config', configLocation
+    }
+
+    testLogging {
+        events 'passed', 'failed', 'skipped'
+        showStandardStreams = true
+    }
 }
 
 war {
