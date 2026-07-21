@@ -1,64 +1,23 @@
-:root {
-  color: #172033;
-  background: #f4f7fb;
-  font-family:
-    Pretendard,
-    'Noto Sans KR',
-    system-ui,
-    -apple-system,
-    BlinkMacSystemFont,
-    'Segoe UI',
-    sans-serif;
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-}
+/* ============================================================================
+ * main.css — 전역 스타일 진입점
+ *
+ * main.js 에서 이 파일 하나만 불러오면 폰트·변수·기본 스타일이 모두 적용된다.
+ *   import './assets/main.css'
+ * ========================================================================== */
 
-body {
-  min-width: 320px;
+@import "./fonts.css";
+@import "./base.css";
+
+/* 모바일 화면 컨테이너 (데스크톱에서도 가운데 정렬된 모바일 폭 유지) */
+.app {
+  width: 100%;
+  max-width: 430px;
+  margin: 0 auto;
   min-height: 100vh;
-  margin: 0;
-  background:
-    radial-gradient(circle at top left, rgb(219 234 254 / 80%), transparent 34rem), #f4f7fb;
+  background: var(--color-surface);
 }
 
-#app,
-.app-shell {
-  min-height: 100vh;
-}
-
-.app-shell {
-  display: flex;
-  flex-direction: column;
-}
-
-.brand-mark {
-  display: inline-grid;
-  width: 2rem;
-  height: 2rem;
-  place-items: center;
-  border-radius: 0.65rem;
-  color: #fff;
-  background: #2563eb;
-  font-weight: 800;
-}
-
-.hero-card {
-  overflow: hidden;
-  border: 0;
-  border-radius: 1.5rem;
-  box-shadow: 0 1rem 3rem rgb(23 32 51 / 10%);
-}
-
-.hero-card::before {
-  display: block;
-  height: 0.4rem;
-  background: linear-gradient(90deg, #2563eb, #14b8a6);
-  content: '';
-}
-
-.feature-item {
-  height: 100%;
-  border: 1px solid #e2e8f0;
-  border-radius: 1rem;
-  background: rgb(255 255 255 / 72%);
+/* 하단 탭바에 가리지 않도록 본문 아래 여백 */
+.with-tabbar {
+  padding-bottom: 74px;
 }

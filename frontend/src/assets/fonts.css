@@ -1,0 +1,35 @@
+/* ============================================================================
+ * fonts.css — Pretendard 웹폰트 (Regular / Medium / Bold)
+ *
+ * fonts/ 폴더에 폰트 파일이 함께 커밋되어 있어 별도 다운로드 없이 바로 동작한다.
+ * 경로는 이 파일 기준 상대경로다.
+ * woff2 를 우선 쓰되, 현재 저장소에는 ttf 가 들어 있어 ttf 로 폴백한다.
+ * (용량을 줄이려면 woff2 로 변환해 fonts/ 에 넣으면 자동으로 우선 적용된다.)
+ * ========================================================================== */
+
+@font-face {
+  font-family: "Pretendard";
+  font-weight: 400;
+  font-display: swap;
+  src:
+    url("./fonts/Pretendard-Regular.woff2") format("woff2"),
+    url("./fonts/Pretendard-Regular.ttf") format("truetype");
+}
+
+@font-face {
+  font-family: "Pretendard";
+  font-weight: 500;
+  font-display: swap;
+  src:
+    url("./fonts/Pretendard-Medium.woff2") format("woff2"),
+    url("./fonts/Pretendard-Medium.ttf") format("truetype");
+}
+
+@font-face {
+  font-family: "Pretendard";
+  font-weight: 700;
+  font-display: swap;
+  src:
+    url("./fonts/Pretendard-Bold.woff2") format("woff2"),
+    url("./fonts/Pretendard-Bold.ttf") format("truetype");
+}
