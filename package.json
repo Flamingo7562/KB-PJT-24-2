@@ -8,6 +8,8 @@
     "check:commit": "node scripts/validate-commit-msg.js",
     "check:guardrails": "node scripts/check-project-guardrails.js",
     "check:precommit": "node scripts/check-project-guardrails.js && node scripts/run-lint.js all",
+    "db:migrate": "docker compose --profile tools run --rm flyway migrate",
+    "db:seed:contract": "npm run db:migrate && docker compose --profile tools run --rm seed-contract-test",
     "lint": "node scripts/run-lint.js all",
     "lint:fe": "node scripts/run-lint.js frontend",
     "lint:be": "node scripts/run-lint.js backend",
