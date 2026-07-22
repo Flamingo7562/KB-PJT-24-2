@@ -72,6 +72,7 @@ replay_pid*.log
 /docs/reports/
 
 # Local agent workspace
+/CLAUDE.md
 /AGENTS.md
 /NOTICE.md
 /.agents/
