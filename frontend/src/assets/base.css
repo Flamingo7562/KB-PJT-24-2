@@ -24,6 +24,7 @@
   --color-owner:       #3b59d9;  /* 사장 로고·포인트 (블루) */
   --color-owner-weak:  #eaeffc;  /* 사장 화면 배경 틴트 (지갑카드 등) */
   --color-worker:      #e6a800;  /* 알바생 로고·포인트 (앰버) */
+  --color-worker-weak: #fdf4de;  /* 알바생 화면 배경 틴트 (안심지갑카드 등) */
 
   /* 상태색 (배경 / 글자 쌍) */
   --color-warning:     #e8890c;  --color-warning-bg: #fff4e5;  /* 지각·주의 */
