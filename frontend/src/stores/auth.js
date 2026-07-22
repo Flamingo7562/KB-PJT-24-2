@@ -1,15 +1,14 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 
-import { login as loginApi, logout as logoutApi } from '@/services/auth'
+// TODO(로그인 구현 전 임시): 로그인 화면·API 가 없어 화면 확인용으로 계정을 시드한다.
+// 확인할 화면의 역할에 맞춰 SEED_ROLE 만 바꾸면 된다('OWNER' | 'WORKER').
+// 로그인/온보딩이 붙으면 이 시드를 제거하고 초기값을 null 로 바꾼다.
+const SEED_ROLE = 'WORKER'
+const SEED_NAME = SEED_ROLE === 'OWNER' ? '김사장' : '박알바'
 
 /**
  * 로그인 사용자 상태.
- *
- * DEV 시드: 로그인 없이 화면을 확인할 수 있도록 사장 계정을 시드해 둔다.
- *   - 알바생 화면을 보려면 아래 시드의 role 을 'WORKER' 로 바꾸거나, 로그인 화면에서
- *     login() 을 호출한다.
- *   - 실제 배포 시엔 초기값을 null 로 두고 login() 이 채우도록 한다.
  */
 const DEV_SEED = {
   name: '김사장',
