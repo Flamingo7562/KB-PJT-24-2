@@ -8,28 +8,28 @@
  * ========================================================================== */
 
 @font-face {
-  font-family: "Pretendard";
+  font-family: 'Pretendard';
   font-weight: 400;
   font-display: swap;
   src:
-    url("./fonts/Pretendard-Regular.woff2") format("woff2"),
-    url("./fonts/Pretendard-Regular.ttf") format("truetype");
+    url('./fonts/Pretendard-Regular.woff2') format('woff2'),
+    url('./fonts/Pretendard-Regular.ttf') format('truetype');
 }
 
 @font-face {
-  font-family: "Pretendard";
+  font-family: 'Pretendard';
   font-weight: 500;
   font-display: swap;
   src:
-    url("./fonts/Pretendard-Medium.woff2") format("woff2"),
-    url("./fonts/Pretendard-Medium.ttf") format("truetype");
+    url('./fonts/Pretendard-Medium.woff2') format('woff2'),
+    url('./fonts/Pretendard-Medium.ttf') format('truetype');
 }
 
 @font-face {
-  font-family: "Pretendard";
+  font-family: 'Pretendard';
   font-weight: 700;
   font-display: swap;
   src:
-    url("./fonts/Pretendard-Bold.woff2") format("woff2"),
-    url("./fonts/Pretendard-Bold.ttf") format("truetype");
+    url('./fonts/Pretendard-Bold.woff2') format('woff2'),
+    url('./fonts/Pretendard-Bold.ttf') format('truetype');
 }

@@ -26,3 +26,44 @@ export function formatDateTime(iso) {
   const mi = String(d.getMinutes()).padStart(2, '0')
   return `${mm}.${dd} ${hh}:${mi}`
 }
+
+/** "2026-07-22" 또는 ISO → "2026.07.22" */
+export function formatDate(value) {
+  const d = new Date(value)
+  if (Number.isNaN(d.getTime())) return ''
+  const yyyy = d.getFullYear()
+  const mm = String(d.getMonth() + 1).padStart(2, '0')
+  const dd = String(d.getDate()).padStart(2, '0')
+  return `${yyyy}.${mm}.${dd}`
+}
+
+/**
+ * 시간 표기 → "HH:mm".
+ * "09:00", "09:00:00", ISO 문자열 모두 허용.
+ */
+export function formatTime(value) {
+  if (typeof value === 'string' && /^\d{2}:\d{2}/.test(value)) return value.slice(0, 5)
+  const d = new Date(value)
+  if (Number.isNaN(d.getTime())) return ''
+  const hh = String(d.getHours()).padStart(2, '0')
+  const mi = String(d.getMinutes()).padStart(2, '0')
+  return `${hh}:${mi}`
+}
+
+/** 시작·종료 시간 → "09:00 ~ 18:00" */
+export function formatTimeRange(start, end) {
+  const s = formatTime(start)
+  const e = formatTime(end)
+  if (!s && !e) return ''
+  return `${s} ~ ${e}`
+}
+
+/** 분(minutes) → "7시간 30분" / "45분" */
+export function formatDuration(minutes) {
+  const m = Number(minutes) || 0
+  const h = Math.floor(m / 60)
+  const rest = m % 60
+  if (h && rest) return `${h}시간 ${rest}분`
+  if (h) return `${h}시간`
+  return `${rest}분`
+}

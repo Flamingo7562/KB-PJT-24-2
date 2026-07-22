@@ -5,7 +5,9 @@
  * 백엔드가 준비되면 USE_MOCK 를 false 로 바꾸면 실제 `/api/wallet` 을 호출한다.
  * (컴포넌트·스토어는 이 함수 시그니처만 바라보므로 교체 시 변경 지점이 여기로 한정된다.)
  *
- * 관련 API: GET /api/wallet, GET /api/wallet/transactions
+ * 관련 API(명세 15~18):
+ *   GET /api/wallet   POST /api/wallet/charge   POST /api/wallet/withdraw
+ *   GET /api/wallet/transactions
  */
 import http from '@/services/http'
 
@@ -95,5 +97,26 @@ export async function fetchWallet() {
 export async function fetchTransactions(params = {}) {
   if (USE_MOCK) return { content: [...mockTransactions], totalPages: 1 }
   const { data } = await http.get('/wallet/transactions', { params })
+  return data
+}
+
+/**
+ * 충전 → { balance, txId } (명세 16). 사장 전용, Mock 승인.
+ * 추후 PortOne 교체 지점(클라이언트 금액 불신 — 서버 재검증).
+ * @param {object} payload bankCode, amount
+ */
+export async function chargeWallet({ bankCode, amount }) {
+  if (USE_MOCK) return { balance: mockWallet.balance + Number(amount), txId: Date.now() }
+  const { data } = await http.post('/wallet/charge', { bankCode, amount })
+  return data
+}
+
+/**
+ * 출금 → { balance, txId } (명세 17). 가용 잔액 초과 시 400.
+ * @param {object} payload bankCode, accountNo, amount
+ */
+export async function withdrawWallet({ bankCode, accountNo, amount }) {
+  if (USE_MOCK) return { balance: mockWallet.balance - Number(amount), txId: Date.now() }
+  const { data } = await http.post('/wallet/withdraw', { bankCode, accountNo, amount })
   return data
 }
