@@ -13,6 +13,7 @@ import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
+import org.mybatis.spring.annotation.MapperScan;
 
 /**
  * 외부 properties 파일에서 로컬 MySQL 접속 정보를 읽어 영속성 기반 Bean을 구성합니다.
@@ -23,6 +24,7 @@ import org.springframework.transaction.annotation.EnableTransactionManagement;
 @Configuration
 @EnableTransactionManagement
 @PropertySource(value = "file:${gighub.database.config}", encoding = "UTF-8")
+@MapperScan(basePackages = "com.gighub")
 public class DatabaseConfig {
 
     private static final String MAPPER_LOCATIONS = "classpath*:mappers/**/*.xml";

@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.gighub.wallet.mapper.WalletMapper">
+    <!-- 1. 기본 지갑(Wallet) 쿼리 -->
+
+    <!-- 현재 잔액 조회 -->
+    <select id="getAvailableBalance" resultType="java.math.BigDecimal">
+        SELECT available_balance
+        FROM wallets
+        WHERE user_id = #{userId}
+    </select>
+
+    <!-- 잠금 잔액 조회 -->
+    <select id="getLockedBalance" resultType="java.math.BigDecimal">
+        SELECT locked_balance
+        FROM wallets
+        WHERE user_id = #{userId}
+    </select>
+
+    <!-- 충전 (잔액 증가) -->
+    <update id="addAvailableBalance">
+        UPDATE wallets
+        SET available_balance = available_balance + #{amount},
+            updated_at = NOW()
+        WHERE user_id = #{userId}
+    </update>
+
+    <!-- 출금 (잔액 감소) -->
+    <update id="subtractAvailableBalance">
+        UPDATE wallets
+        SET available_balance = available_balance - #{amount},
+            updated_at = NOW()
+        WHERE user_id = #{userId}
+    </update>
+
+    <!-- 2. 에스크로(Escrow) 쿼리 -->
+
+    <!-- [에스크로 1단계] 예치: 사장님의 돈을 묶음 -->
+    <update id="lockEmployerFunds">
+        UPDATE wallets
+        SET available_balance = available_balance - #{amount},
+            locked_balance = locked_balance + #{amount},
+            updated_at = NOW()
+        WHERE user_id = #{userId}
+    </update>
+
+    <!-- [에스크로 2단계] 정산 시: 사장님의 묶인 돈을 최종 차감 -->
+    <update id="releaseLockedFunds">
+        UPDATE wallets
+        SET locked_balance = locked_balance - #{amount},
+            updated_at = NOW()
+        WHERE user_id = #{userId}
+    </update>
+
+    <!-- 에스크로 예치 기록 생성 -->
+    <insert id="insertEscrowRecord">
+        INSERT INTO escrows (work_case_id, amount, status, held_at, created_at, updated_at)
+        VALUES (#{workCaseId}, #{amount}, #{status}, NOW(), NOW(), NOW())
+    </insert>
+
+    <!-- 에스크로 정산 완료 기록 업데이트 -->
+    <update id="updateEscrowStatus">
+        UPDATE escrows
+        SET status = #{status},
+            released_at = NOW(),
+            updated_at = NOW()
+        WHERE work_case_id = #{workCaseId}
+    </update>
+
+    <!-- FOR UPDATE: 내가 잔액을 조회하고 수정할 때까지 다른 요청은 대기시킴 (따닥 방지) -->
+    <select id="getAvailableBalanceForUpdate" resultType="java.math.BigDecimal">
+        SELECT available_balance
+        FROM wallets
+        WHERE user_id = #{userId}
+            FOR UPDATE
+    </select>
+
+    <!-- 이 영수증 번호가 이미 원장에 있는지 개수 확인 -->
+    <select id="countTransactionByIdempotencyKey" resultType="int">
+        SELECT COUNT(*)
+        FROM wallet_transactions
+        WHERE idempotency_key = #{idempotencyKey}
+    </select>
+
+    <!-- 유저 ID로 지갑 PK 가져오기 -->
+    <select id="getWalletIdByUserId" resultType="long">
+        SELECT id FROM wallets WHERE user_id = #{userId}
+    </select>
+
+    <!-- 거래 내역 원장 기록 (잔액 스냅샷 포함) -->
+    <insert id="insertWalletTransaction">
+        INSERT INTO wallet_transactions
+        (wallet_id, work_case_id, reference_type, reference_id, transaction_type, amount, idempotency_key, available_before, available_after, locked_before, locked_after)
+        VALUES
+            (#{walletId}, #{workCaseId}, 'WORK_CASE', #{workCaseId}, #{transactionType}, #{amount}, #{idempotencyKey}, #{availableBefore}, #{availableAfter}, #{lockedBefore}, #{lockedAfter})
+    </insert>
+
+</mapper>
