@@ -1,0 +1,6 @@
+<svg width="88" height="104" viewBox="0 0 88 104" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="worker level 1">
+  <path d="M44 6 L74 18 L74 44 C74 64 60 78 44 86 C28 78 14 64 14 44 L14 18 Z" fill="#b87333" opacity="0.14"/>
+  <path d="M44 6 L74 18 L74 44 C74 64 60 78 44 86 C28 78 14 64 14 44 L14 18 Z" fill="none" stroke="#b87333" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M32 37 L41 46 L57 27" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="44" cy="80" r="4" fill="#b87333"/>
+</svg>
