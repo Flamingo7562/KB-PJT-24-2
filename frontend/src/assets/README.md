@@ -12,7 +12,7 @@ npm ci                    # 1) 기본 의존성 설치 (package-lock 기준)
 npm install lucide-vue-next   # 2) 아이콘 라이브러리 (에셋 맵에서 사용)
 ```
 
-3) 끝. 전역 스타일·폰트는 이미 `main.js` 에서 불러오므로 추가 작업이 없습니다.
+3. 끝. 전역 스타일·폰트는 이미 `main.js` 에서 불러오므로 추가 작업이 없습니다.
    - `src/main.js` 에 `import '@/assets/main.css'` 가 이미 있습니다.
    - 폰트(Pretendard)는 `fonts/` 에 파일이 함께 커밋되어 있어 **다운로드가 필요 없습니다.**
 
@@ -43,19 +43,19 @@ assets/
 
 ## 에셋 맵 — 어디서 무엇을 쓰나
 
-| 화면 / 위치 | 필요한 것 | 형식·방법 | 출처 |
-|---|---|---|---|
-| 온보딩 역할선택 | GigHub 로고 (사장/알바생 2색) | `logo/logo-gighub.svg` **1개** + CSS 색 | 자체 제작(§로고) |
-| 사장 글로벌 헤더 | 로고 심볼 | `logo/logo-symbol.svg` | 자체 제작 |
-| 헤더 알림·마이 | 종·사람 아이콘 | lucide `Bell` · `CircleUser` | 라이브러리 |
-| 사장 바텀 네비 | 홈·근태·문서·QR | lucide (아래 매핑) | 라이브러리 |
-| 알바생 바텀 네비 | 안심지갑·근로·QR·문서 | lucide (문서·QR **재사용**) | 라이브러리 |
-| 알바생 로고 | GigHub 로고 (앰버) | 위 `logo-gighub.svg` 재사용, 색만 | 자체 제작 |
-| 충전 화면 은행 | 은행 표시 | lucide `Landmark` + 이름 + 색칩 (권장) | §은행 |
-| 마이 이름 옆 | 프로필 대용 | lucide `CircleUser` (공통) | 라이브러리 |
-| 사장 마이 뱃지 | 안심일터 1·2·3 | `badges/badge-owner-lv*.svg` | 파일(제공됨) |
-| 알바생 마이 뱃지 | 성실근로자 1·2·3 | `badges/badge-worker-lv*.svg` | 파일(제공됨) |
-| 송금상세·근태 리스트 | 상태 표시 | lucide 소형 아이콘 + 상태색 (아래) | 라이브러리 |
+| 화면 / 위치          | 필요한 것                     | 형식·방법                               | 출처             |
+| -------------------- | ----------------------------- | --------------------------------------- | ---------------- |
+| 온보딩 역할선택      | GigHub 로고 (사장/알바생 2색) | `logo/logo-gighub.svg` **1개** + CSS 색 | 자체 제작(§로고) |
+| 사장 글로벌 헤더     | 로고 심볼                     | `logo/logo-symbol.svg`                  | 자체 제작        |
+| 헤더 알림·마이       | 종·사람 아이콘                | lucide `Bell` · `CircleUser`            | 라이브러리       |
+| 사장 바텀 네비       | 홈·근태·문서·QR               | lucide (아래 매핑)                      | 라이브러리       |
+| 알바생 바텀 네비     | 안심지갑·근로·QR·문서         | lucide (문서·QR **재사용**)             | 라이브러리       |
+| 알바생 로고          | GigHub 로고 (앰버)            | 위 `logo-gighub.svg` 재사용, 색만       | 자체 제작        |
+| 충전 화면 은행       | 은행 표시                     | lucide `Landmark` + 이름 + 색칩 (권장)  | §은행            |
+| 마이 이름 옆         | 프로필 대용                   | lucide `CircleUser` (공통)              | 라이브러리       |
+| 사장 마이 뱃지       | 안심일터 1·2·3                | `badges/badge-owner-lv*.svg`            | 파일(제공됨)     |
+| 알바생 마이 뱃지     | 성실근로자 1·2·3              | `badges/badge-worker-lv*.svg`           | 파일(제공됨)     |
+| 송금상세·근태 리스트 | 상태 표시                     | lucide 소형 아이콘 + 상태색 (아래)      | 라이브러리       |
 
 ---
 
@@ -65,8 +65,14 @@ assets/
 
 ```vue
 <style scoped>
-.amount { color: var(--color-brand); font-size: var(--text-2xl); }
-.card   { border-radius: var(--radius-md); box-shadow: var(--shadow-card); }
+.amount {
+  color: var(--color-brand);
+  font-size: var(--text-2xl);
+}
+.card {
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card);
+}
 </style>
 ```
 
@@ -88,23 +94,32 @@ assets/
 import LogoGighub from '@/assets/images/logo/logo-gighub.svg'
 </script>
 <template>
-  <LogoGighub class="logo logo--owner" />   <!-- 사장: 파랑 -->
-  <LogoGighub class="logo logo--worker" />  <!-- 알바생: 앰버 -->
+  <LogoGighub class="logo logo--owner" />
+  <!-- 사장: 파랑 -->
+  <LogoGighub class="logo logo--worker" />
+  <!-- 알바생: 앰버 -->
 </template>
 <style scoped>
-.logo--owner  { color: var(--color-owner); }   /* #3b59d9 */
-.logo--worker { color: var(--color-worker); }   /* #e6a800 */
+.logo--owner {
+  color: var(--color-owner);
+} /* #3b59d9 */
+.logo--worker {
+  color: var(--color-worker);
+} /* #e6a800 */
 </style>
 ```
 
 > `.svg`를 위처럼 **컴포넌트로 import** 하려면 `vite-svg-loader` 가 필요합니다.
-> 1) `npm install -D vite-svg-loader`
-> 2) `frontend/vite.config.js` 의 `plugins` 에 추가:
+>
+> 1. `npm install -D vite-svg-loader`
+> 2. `frontend/vite.config.js` 의 `plugins` 에 추가:
+>
 > ```js
 > import svgLoader from 'vite-svg-loader'
 > // ...
 > plugins: [vue(), svgLoader()],
 > ```
+>
 > 설치가 부담되면 `<img src="@/assets/images/logo/logo-gighub.svg">` 로도 되지만
 > 이땐 CSS 로 색을 못 바꿉니다(사장/알바생 2색 불가).
 
@@ -127,37 +142,41 @@ import LogoGighub from '@/assets/images/logo/logo-gighub.svg'
 
 ### 바텀 네비 매핑
 
-| 사장 탭 | 알바생 탭 | lucide |
-|---|---|---|
-| 홈(지갑) | 안심지갑(홈) | `Wallet` |
-| 근태관리 | 근로관리 | `CalendarCheck` / `ClipboardList` |
-| 문서함 | 문서함 | `FileText` ← **동일 재사용** |
-| QR | QR | `QrCode` ← **동일 재사용** |
+| 사장 탭  | 알바생 탭    | lucide                            |
+| -------- | ------------ | --------------------------------- |
+| 홈(지갑) | 안심지갑(홈) | `Wallet`                          |
+| 근태관리 | 근로관리     | `CalendarCheck` / `ClipboardList` |
+| 문서함   | 문서함       | `FileText` ← **동일 재사용**      |
+| QR       | QR           | `QrCode` ← **동일 재사용**        |
 
 ```vue
 <script setup>
 import { Wallet, FileText, QrCode, CalendarCheck } from 'lucide-vue-next'
 </script>
 <template>
-  <button class="tab" :class="{ 'is-active': active==='home' }">
+  <button class="tab" :class="{ 'is-active': active === 'home' }">
     <Wallet :size="20" /><span>홈</span>
   </button>
 </template>
 <style scoped>
-.tab           { color: var(--color-text-sub); }  /* 비활성 */
-.tab.is-active { color: var(--color-text); }        /* 선택됨 — 아이콘이 색을 따라옴 */
+.tab {
+  color: var(--color-text-sub);
+} /* 비활성 */
+.tab.is-active {
+  color: var(--color-text);
+} /* 선택됨 — 아이콘이 색을 따라옴 */
 </style>
 ```
 
 ### 헤더·기타
 
-| 용도 | lucide |
-|---|---|
-| 알림(종) | `Bell` |
-| 마이페이지·프로필 대용 | `CircleUser` |
+| 용도                   | lucide                         |
+| ---------------------- | ------------------------------ |
+| 알림(종)               | `Bell`                         |
+| 마이페이지·프로필 대용 | `CircleUser`                   |
 | 뒤로가기 / 목록 화살표 | `ChevronLeft` / `ChevronRight` |
-| 충전 / 출금 | `Plus` / `ArrowUpRight` |
-| 문의(물음표) | `CircleHelp` |
+| 충전 / 출금            | `Plus` / `ArrowUpRight`        |
+| 문의(물음표)           | `CircleHelp`                   |
 
 ---
 
@@ -166,15 +185,15 @@ import { Wallet, FileText, QrCode, CalendarCheck } from 'lucide-vue-next'
 상태는 **작은 lucide 아이콘 + 상태색 토큰**으로 통일합니다. 아이콘은 선택(없어도 텍스트
 뱃지로 충분)이지만, 넣으면 한눈에 구분됩니다.
 
-| 상태 | 아이콘 | 색 토큰 |
-|---|---|---|
-| 근무전·모집중 | `Clock` | `--color-text-sub` |
-| 근무중 | `Loader` | `--color-primary` |
-| 완료·정산완료 | `CircleCheck` | `--color-success` |
-| 예치중·예치완료 | `Lock` | `--color-brand` |
-| 지각 | `TriangleAlert` | `--color-warning` |
-| 노쇼 | `UserX` | `--color-danger` |
-| 환불 | `RotateCcw` | `--color-text-sub` |
+| 상태            | 아이콘          | 색 토큰            |
+| --------------- | --------------- | ------------------ |
+| 근무전·모집중   | `Clock`         | `--color-text-sub` |
+| 근무중          | `Loader`        | `--color-primary`  |
+| 완료·정산완료   | `CircleCheck`   | `--color-success`  |
+| 예치중·예치완료 | `Lock`          | `--color-brand`    |
+| 지각            | `TriangleAlert` | `--color-warning`  |
+| 노쇼            | `UserX`         | `--color-danger`   |
+| 환불            | `RotateCcw`     | `--color-text-sub` |
 
 ---
 
@@ -199,8 +218,10 @@ import { Wallet, FileText, QrCode, CalendarCheck } from 'lucide-vue-next'
 <script setup>
 import { computed } from 'vue'
 const props = defineProps({ role: String, level: Number }) // role: 'owner'|'worker'
-const src = computed(() =>
-  new URL(`@/assets/images/badges/badge-${props.role}-lv${props.level}.svg`, import.meta.url).href)
+const src = computed(
+  () =>
+    new URL(`@/assets/images/badges/badge-${props.role}-lv${props.level}.svg`, import.meta.url).href
+)
 </script>
 <template>
   <img :src="src" :alt="`뱃지 ${level}단계`" width="48" />

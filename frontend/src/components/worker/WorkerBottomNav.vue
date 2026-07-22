@@ -1,22 +1,22 @@
 <script setup>
-import { CalendarCheck, FileText, QrCode, Wallet } from 'lucide-vue-next'
+import { ClipboardList, FileText, QrCode, Wallet } from 'lucide-vue-next'
 import { RouterLink, useRoute } from 'vue-router'
 
 const route = useRoute()
 
-// 사장 하단 탭: 홈(지갑)·근태관리·문서함·QR
+// 알바생 하단 탭: 안심지갑(홈)·근로관리·QR·문서함 (문서·QR 아이콘은 사장과 동일 재사용)
 const tabs = [
-  { key: 'home', label: '홈', icon: Wallet, to: '/owner/home' },
-  { key: 'attendance', label: '근태관리', icon: CalendarCheck, to: '/owner/attendance' },
-  { key: 'documents', label: '문서함', icon: FileText, to: '/owner/documents' },
-  { key: 'qr', label: 'QR', icon: QrCode, to: '/owner/qr' }
+  { key: 'home', label: '안심지갑', icon: Wallet, to: '/worker/home' },
+  { key: 'work', label: '근로관리', icon: ClipboardList, to: '/worker/work' },
+  { key: 'scan', label: 'QR', icon: QrCode, to: '/worker/scan' },
+  { key: 'documents', label: '문서함', icon: FileText, to: '/worker/documents' }
 ]
 
 const isActive = (to) => route.path === to || route.path.startsWith(`${to}/`)
 </script>
 
 <template>
-  <nav class="bottom-nav" aria-label="사장 메뉴">
+  <nav class="bottom-nav" aria-label="알바생 메뉴">
     <RouterLink
       v-for="tab in tabs"
       :key="tab.key"

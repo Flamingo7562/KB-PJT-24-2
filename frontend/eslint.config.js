@@ -15,9 +15,29 @@ export default [
       ecmaVersion: 'latest',
       sourceType: 'module',
       globals: {
+        // 브라우저 환경 전역 (컴포넌트·서비스에서 사용)
         document: 'readonly',
-        process: 'readonly',
-        window: 'readonly'
+        window: 'readonly',
+        navigator: 'readonly',
+        location: 'readonly',
+        localStorage: 'readonly',
+        sessionStorage: 'readonly',
+        console: 'readonly',
+        fetch: 'readonly',
+        FormData: 'readonly',
+        URL: 'readonly',
+        Blob: 'readonly',
+        File: 'readonly',
+        alert: 'readonly',
+        confirm: 'readonly',
+        structuredClone: 'readonly',
+        setTimeout: 'readonly',
+        clearTimeout: 'readonly',
+        setInterval: 'readonly',
+        clearInterval: 'readonly',
+        requestAnimationFrame: 'readonly',
+        // 빌드 도구
+        process: 'readonly'
       }
     },
     rules: {
