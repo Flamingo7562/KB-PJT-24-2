@@ -3,6 +3,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import HomeView from '@/views/HomeView.vue'
 import OwnerHomeView from '@/views/owner/OwnerHomeView.vue'
+import WorkerHomeView from '@/views/worker/WorkerHomeView.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -27,9 +28,17 @@ const router = createRouter({
       meta: { requiresAuth: true, role: 'OWNER' }
     },
 
-    // ---- 알바생(WORKER) : 라우트 골격만. 화면은 후속 이슈에서 추가 ----
-    // { path: '/worker/home', name: 'worker-home', component: WorkerHomeView,
-    //   meta: { requiresAuth: true, role: 'WORKER' } },
+    // ---- 알바생(WORKER) ----
+    {
+      path: '/worker',
+      redirect: '/worker/home'
+    },
+    {
+      path: '/worker/home',
+      name: 'worker-home',
+      component: WorkerHomeView,
+      meta: { requiresAuth: true, role: 'WORKER' }
+    },
 
     // 정의되지 않은 경로는 온보딩으로
     { path: '/:pathMatch(.*)*', redirect: '/' }
