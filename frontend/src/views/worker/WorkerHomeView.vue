@@ -1,96 +1,17 @@
 <script setup>
-import { Bell, CircleUser } from 'lucide-vue-next'
-import { storeToRefs } from 'pinia'
-import { computed, onMounted } from 'vue'
-
-import LogoSymbol from '@/assets/images/logo/logo-symbol.svg'
-import SecuredEarningCard from '@/components/worker/SecuredEarningCard.vue'
-import TodayShiftCard from '@/components/worker/TodayShiftCard.vue'
-import WorkerBottomNav from '@/components/worker/WorkerBottomNav.vue'
-import WorkerWalletCard from '@/components/worker/WorkerWalletCard.vue'
-import { useWorkerHomeStore } from '@/stores/workerHome'
-
-const workerHomeStore = useWorkerHomeStore()
-const { balance, todayShift, earning } = storeToRefs(workerHomeStore)
-
-// 오늘 근무가 있을 때만 확보 안심금액 표시
-const showEarning = computed(() => earning.value && todayShift.value?.status !== 'NONE')
-
-onMounted(() => {
-  workerHomeStore.loadHome()
-})
-
-// TODO(후속 이슈): 출금(/worker/wallet/withdraw) 화면 연결
-function onWithdraw() {}
+/**
+ * [F] 알바생 홈(안심지갑)  ·  /worker/home  ·  WORKER  (탭 화면)
+ * 안심지갑 잔액·출금(입금 없음) + 오늘의 알바 일정 카드(출근전/지각/노쇼/없음)
+ * + 확보 안심금액(프로그레스바·지각 주황 구간·! 툴팁·예상 실수령액).
+ * 확보 금액·차감 계산은 서버 응답(earning) 그대로 사용 — 프론트 재계산 금지.
+ * 연계 API: GET /worker/home · POST /wallet/withdraw
+ *   →  @/services/worker (getWorkerHome), @/services/wallet (withdrawWallet)
+ * 공통: StatusChip(kind='today') · WalletBalanceCard(출금 전용으로 응용 가능)
+ * 툴팁 문구: '휴게시간, 지각 등 특이사항이 있을 경우 실제 지급되는 금액은 상이할 수 있습니다.'
+ */
+import EmptyState from '@/components/common/EmptyState.vue'
 </script>
 
 <template>
-  <div class="worker-home with-tabbar">
-    <header class="topbar">
-      <span class="brand">
-        <LogoSymbol class="brand-logo" aria-label="Gig Hub" />
-        <span class="brand-name">Gig Hub</span>
-      </span>
-      <div class="icons">
-        <button type="button" class="icon-btn" aria-label="알림">
-          <Bell :size="22" />
-        </button>
-        <button type="button" class="icon-btn" aria-label="마이페이지">
-          <CircleUser :size="22" />
-        </button>
-      </div>
-    </header>
-
-    <main class="content">
-      <WorkerWalletCard :balance="balance" @withdraw="onWithdraw" />
-
-      <TodayShiftCard :shift="todayShift" />
-
-      <SecuredEarningCard v-if="showEarning" :earning="earning" />
-    </main>
-
-    <WorkerBottomNav />
-  </div>
+  <EmptyState message="알바생 안심지갑(홈) 화면 (TODO: 담당 F 구현)" />
 </template>
-
-<style scoped>
-.topbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: var(--space-md) var(--space-lg);
-  background: var(--color-surface);
-}
-
-.brand {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-sm);
-}
-
-.brand-logo {
-  width: 30px;
-  height: 30px;
-  flex-shrink: 0;
-  color: var(--color-worker);
-}
-
-.brand-name {
-  font-size: var(--text-xl);
-  font-weight: var(--weight-bold);
-  color: var(--color-text);
-}
-
-.icons {
-  display: flex;
-  gap: var(--space-sm);
-}
-
-.icon-btn {
-  color: var(--color-text);
-}
-
-.content {
-  padding: var(--space-lg);
-}
-</style>

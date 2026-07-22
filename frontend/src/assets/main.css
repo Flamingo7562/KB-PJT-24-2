@@ -5,8 +5,8 @@
  *   import './assets/main.css'
  * ========================================================================== */
 
-@import "./fonts.css";
-@import "./base.css";
+@import './fonts.css';
+@import './base.css';
 
 /* 모바일 화면 컨테이너 (데스크톱에서도 가운데 정렬된 모바일 폭 유지) */
 .app {
