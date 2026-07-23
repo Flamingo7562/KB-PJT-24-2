@@ -51,9 +51,11 @@ async function onSubmit() {
     <AppBackHeader title="임금분쟁 신고" />
     <main class="screen-body">
       <p class="notice">
-        <Info :size="16" />
-        신고는 <strong>기록·알림용</strong>이며 정산 진행에는 영향을 주지 않습니다. 상황을 최대한
-        구체적으로 작성해주세요.
+        <Info :size="16" class="notice-icon" />
+        <span>
+          신고는 <strong>기록·알림용</strong>이며 정산 진행에는 영향을 주지 않습니다. 상황을 최대한
+          구체적으로 작성해주세요.
+        </span>
       </p>
 
       <label class="field">
@@ -90,6 +92,7 @@ async function onSubmit() {
 }
 .notice {
   display: flex;
+  align-items: flex-start;
   gap: var(--space-sm);
   padding: var(--space-md);
   background: var(--color-warning-bg);
@@ -97,6 +100,10 @@ async function onSubmit() {
   font-size: var(--text-sm);
   color: var(--color-text-sub);
   line-height: 1.5;
+}
+.notice-icon {
+  flex-shrink: 0;
+  margin-top: 2px;
 }
 .notice strong {
   color: var(--color-text);
