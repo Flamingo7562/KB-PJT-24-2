@@ -141,9 +141,7 @@ function goReport() {
   color: var(--color-text-sub);
 }
 .shift-list {
-  /* Bootstrap Reboot 의 ul padding-left(2rem)·margin-bottom 무효화 */
-  margin: var(--space-md) 0 0;
-  padding: 0;
+  margin-top: var(--space-md);
   display: flex;
   flex-direction: column;
   gap: var(--space-md);
