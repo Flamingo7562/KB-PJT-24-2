@@ -38,9 +38,16 @@ Copy-Item .env.example .env
 
 ```powershell
 npm run lint
-npm run format:check
 npm run test:run
 npm run build
+```
+
+Prettier 검사는 읽기 좋은 형식을 확인하고 싶을 때 선택적으로 실행합니다. 운영체제별
+LF/CRLF는 모두 허용하며, 이 검사는 커밋 훅이나 루트 `npm run check`의 필수 통과 조건이
+아닙니다.
+
+```powershell
+npm run format:check
 ```
 
 저장소 루트에서는 다음 명령으로 전체 Guardrail과 lint를 실행합니다.

@@ -14,7 +14,8 @@ const mockMe = {
   name: '김사장',
   email: 'owner@test.com',
   phone: '010-1234-5678',
-  role: 'OWNER'
+  role: 'OWNER',
+  profileImageUrl: null // TODO: 프로필 사진 업로드 연동 전 임시 null
 }
 
 // 사장=TRUST_OWNER(안심거래) / 알바생=TRUST_WORKER(성실근로).
