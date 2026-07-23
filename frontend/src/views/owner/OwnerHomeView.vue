@@ -7,9 +7,10 @@
  */
 import { Lock } from 'lucide-vue-next'
 import { storeToRefs } from 'pinia'
-import { onMounted } from 'vue'
+import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
+import TransactionFilterSheet from '@/components/wallet/TransactionFilterSheet.vue'
 import TransactionList from '@/components/wallet/TransactionList.vue'
 import WalletBalanceCard from '@/components/wallet/WalletBalanceCard.vue'
 import { useWalletStore } from '@/stores/wallet'
@@ -19,14 +20,22 @@ const router = useRouter()
 const walletStore = useWalletStore()
 const { balance, heldAmount, transactions, loading } = storeToRefs(walletStore)
 
+const filterOpen = ref(false)
+const appliedFilter = ref({}) // 현재 적용 중인 송금상세 필터(서버 파라미터)
+
 onMounted(() => {
   walletStore.loadHome()
 })
 
 const onCharge = () => router.push('/owner/wallet/charge')
 const onWithdraw = () => router.push('/owner/wallet/withdraw')
-// TODO(담당 B): 송금상세 필터 시트 열기
-const onOpenFilter = () => {}
+const onOpenFilter = () => (filterOpen.value = true)
+
+// 필터는 서버 파라미터로만 전달 — 프론트에서 목록을 재계산하지 않는다.
+function onApplyFilter(params) {
+  appliedFilter.value = params
+  walletStore.loadTransactions(params)
+}
 </script>
 
 <template>
@@ -42,6 +51,13 @@ const onOpenFilter = () => {}
     </div>
 
     <TransactionList :transactions="transactions" :loading="loading" @open-filter="onOpenFilter" />
+
+    <TransactionFilterSheet
+      :open="filterOpen"
+      :model-value="appliedFilter"
+      @close="filterOpen = false"
+      @apply="onApplyFilter"
+    />
   </div>
 </template>
 
