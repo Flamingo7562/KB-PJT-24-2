@@ -3,9 +3,9 @@ import { computed, ref } from 'vue'
 
 import { login as loginApi, logout as logoutApi } from '@/services/auth'
 
-/**
- * 로그인 사용자 상태.
- */
+// TODO(로그인 구현 전 임시): 로그인 화면 없이 화면을 확인하려고 계정을 시드한다.
+// 확인할 화면의 역할에 맞춰 DEV_SEED.role 만 바꾸면 된다('OWNER' | 'WORKER').
+// 로그인/온보딩이 붙으면 이 시드를 제거하고 초기값을 null 로 바꾼다.
 const DEV_SEED = {
   name: '김사장',
   role: 'OWNER', // 'OWNER' | 'WORKER'
