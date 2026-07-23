@@ -1,5 +1,6 @@
 package com.gighub.support;
 
+import org.springframework.context.annotation.Profile;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -17,6 +18,7 @@ import java.util.Map;
  * <p>TODO(후속): 정식 로그인 도입 시 이 클래스를 제거하고 세션 규약을 인증 파트와 통일한다.
  */
 @RestController
+@Profile("local")
 public class TestLoginController {
 
     @GetMapping("/api/test-login/{userId}")
