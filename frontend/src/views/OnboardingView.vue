@@ -24,7 +24,11 @@ const intros = [
     title: '사장님, 급여 관리 걱정 끝',
     subtitle: '전자지갑 에스크로로 인건비를 미리 예치하고, 정산까지 투명하게 관리하세요.',
     features: [
-      { icon: ShieldCheck, title: '안심 에스크로', desc: '근무 확정 시 임금을 미리 예치해 체불 걱정을 덜어요.' },
+      {
+        icon: ShieldCheck,
+        title: '안심 에스크로',
+        desc: '근무 확정 시 임금을 미리 예치해 체불 걱정을 덜어요.'
+      },
       { icon: QrCode, title: 'QR 출퇴근 관리', desc: '매장별 QR로 출퇴근 현황을 한눈에 확인해요.' },
       { icon: FileText, title: '문서 자동 보관', desc: '근로계약서·보건증을 한곳에서 관리해요.' }
     ]
@@ -35,7 +39,11 @@ const intros = [
     title: '알바생, 내 임금은 안전하게',
     subtitle: '일한 만큼 안심하고 받을 수 있는 전자지갑.',
     features: [
-      { icon: ShieldCheck, title: '확보된 임금 확인', desc: '사장님이 예치한 안심 금액을 바로 확인해요.' },
+      {
+        icon: ShieldCheck,
+        title: '확보된 임금 확인',
+        desc: '사장님이 예치한 안심 금액을 바로 확인해요.'
+      },
       { icon: QrCode, title: 'QR 출퇴근', desc: '스캔 한 번으로 출퇴근을 간편하게 인증해요.' },
       { icon: FileText, title: '정산 내역 한눈에', desc: '지급 이력과 문서를 언제든 열람해요.' }
     ]
@@ -62,12 +70,7 @@ const features = [
       </button>
       <span v-else class="icon-btn-spacer" />
 
-      <button
-        v-if="isIntroStep"
-        type="button"
-        class="skip"
-        @click="step = intros.length"
-      >
+      <button v-if="isIntroStep" type="button" class="skip" @click="step = intros.length">
         건너뛰기
       </button>
     </div>
@@ -81,7 +84,12 @@ const features = [
 
       <ul class="intro-features">
         <li v-for="f in intro.features" :key="f.title" class="intro-feature">
-          <component :is="f.icon" class="intro-feature-icon" :class="`is-${intro.role}`" :size="20" />
+          <component
+            :is="f.icon"
+            class="intro-feature-icon"
+            :class="`is-${intro.role}`"
+            :size="20"
+          />
           <div class="intro-feature-text">
             <strong>{{ f.title }}</strong>
             <span>{{ f.desc }}</span>
@@ -90,12 +98,7 @@ const features = [
       </ul>
 
       <div class="dots" role="tablist" aria-label="온보딩 단계">
-        <span
-          v-for="n in STEP_COUNT"
-          :key="n"
-          class="dot"
-          :class="{ active: n - 1 === step }"
-        />
+        <span v-for="n in STEP_COUNT" :key="n" class="dot" :class="{ active: n - 1 === step }" />
       </div>
 
       <button type="button" class="btn btn-primary" @click="step++">다음</button>
