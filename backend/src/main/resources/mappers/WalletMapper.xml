@@ -92,9 +92,31 @@
     <!-- 거래 내역 원장 기록 (잔액 스냅샷 포함) -->
     <insert id="insertWalletTransaction">
         INSERT INTO wallet_transactions
-        (wallet_id, work_case_id, reference_type, reference_id, transaction_type, amount, idempotency_key, available_before, available_after, locked_before, locked_after)
+        (
+        wallet_id,
+        reference_type,
+        reference_id,
+        transaction_type,
+        amount,
+        idempotency_key,
+        available_before,
+        available_after,
+        locked_before,
+        locked_after
+        )
         VALUES
-            (#{walletId}, #{workCaseId}, 'WORK_CASE', #{workCaseId}, #{transactionType}, #{amount}, #{idempotencyKey}, #{availableBefore}, #{availableAfter}, #{lockedBefore}, #{lockedAfter})
+        (
+        #{walletId},
+        #{referenceType},
+        #{referenceId},
+        #{transactionType},
+        #{amount},
+        #{idempotencyKey},
+        #{availableBefore},
+        #{availableAfter},
+        #{lockedBefore},
+        #{lockedAfter}
+        )
     </insert>
 
 </mapper>

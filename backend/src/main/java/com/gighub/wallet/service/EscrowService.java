@@ -58,6 +58,7 @@ public class EscrowService {
         Long walletId = walletMapper.getWalletIdByUserId(request.getEmployerId());
         walletMapper.insertWalletTransaction(
                 walletId,
+                "WORK_CASE",
                 request.getWorkCaseId(),
                 "ESCROW_HOLD",
                 request.getAmount(),
@@ -118,7 +119,7 @@ public class EscrowService {
         BigDecimal employerLockedAfter = employerLockedBefore.subtract(amount);
         Long employerWalletId = walletMapper.getWalletIdByUserId(employerId);
         walletMapper.insertWalletTransaction(
-                employerWalletId, workCaseId, "ESCROW_RELEASE", amount, idempotencyKey + "_OUT",
+                employerWalletId, "WORK_CASE", workCaseId, "ESCROW_RELEASE", amount, idempotencyKey + "_OUT",
                 employerAvailableBefore, employerAvailableBefore, employerLockedBefore, employerLockedAfter
         );
 
@@ -126,7 +127,7 @@ public class EscrowService {
         BigDecimal workerAvailableAfter = workerAvailableBefore.add(amount);
         Long workerWalletId = walletMapper.getWalletIdByUserId(workerId);
         walletMapper.insertWalletTransaction(
-                workerWalletId, workCaseId, "ESCROW_RELEASE", amount, idempotencyKey + "_IN",
+                workerWalletId, "WORK_CASE", workCaseId, "ESCROW_RELEASE", amount, idempotencyKey + "_IN",
                 workerAvailableBefore, workerAvailableAfter, workerLockedBefore, workerLockedBefore
         );
     }

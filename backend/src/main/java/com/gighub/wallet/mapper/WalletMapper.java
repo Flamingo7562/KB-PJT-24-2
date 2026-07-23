@@ -41,7 +41,8 @@ public interface WalletMapper {
     // 4. 원장(Ledger) 기록
     int insertWalletTransaction(
             @Param("walletId") Long walletId,
-            @Param("workCaseId") Long workCaseId,
+            @Param("referenceType") String referenceType,
+            @Param("referenceId") Long referenceId,
             @Param("transactionType") String transactionType,
             @Param("amount") BigDecimal amount,
             @Param("idempotencyKey") String idempotencyKey,
