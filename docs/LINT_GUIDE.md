@@ -14,6 +14,7 @@
 npm run lint
 npm run lint:fe
 npm run lint:be
+npm run format:staged
 npm run check
 ```
 
@@ -101,7 +102,12 @@ npm run check:precommit
 이 명령은 다음을 실행합니다.
 
 - 기술 제약 검사: React, Spring Boot, JPA 추가 방지
+- 스테이징된 프런트엔드 JS, Vue, JSON, CSS, Markdown, HTML, YAML 파일에 Prettier 자동 적용
 - 프론트엔드 lint: `frontend/package.json`의 `lint` 스크립트가 있을 때 실행
 - 백엔드 lint: `backend/build.gradle`이 있고 Gradle wrapper가 있을 때 `check` 실행
+
+Prettier는 `lint-staged`를 통해 스테이징된 파일만 수정하고 변경 결과를 같은 커밋에 다시
+포함합니다. 프로젝트 전체 `format:check`는 필요할 때 수동으로 실행하는 선택 검사이며,
+커밋 훅은 관계없는 기존 파일을 일괄 포맷하지 않습니다.
 
 백엔드 전체 테스트가 느려지면 `pre-commit`에서는 프론트엔드 lint만 실행하고, 백엔드 `check`는 `pre-push` 또는 GitHub Actions에서 실행하도록 조정할 수 있습니다.
