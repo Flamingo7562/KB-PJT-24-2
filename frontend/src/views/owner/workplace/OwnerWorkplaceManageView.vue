@@ -124,6 +124,10 @@ async function confirmEdit() {
 }
 
 function openDelete(workplace) {
+  if (workingCounts[workplace.workplaceId] > 0) {
+    ui.toast('진행 중인 근무가 있는 지점은 삭제할 수 없어요.', { type: 'warning' })
+    return
+  }
   deleteTarget.value = workplace
   deleteError.value = ''
   deleteOpen.value = true
@@ -171,8 +175,13 @@ async function confirmDelete() {
           </div>
           <div class="wp-actions">
             <button type="button" class="action-btn" @click="openEdit(w)">수정</button>
-            <button type="button" class="action-btn action-btn--danger" @click="openDelete(w)">
-              삭제
+            <button
+              type="button"
+              class="action-btn action-btn--danger"
+              :disabled="workingCounts[w.workplaceId] > 0"
+              @click="openDelete(w)"
+            >
+              {{ workingCounts[w.workplaceId] > 0 ? '삭제 불가' : '삭제' }}
             </button>
           </div>
         </li>
@@ -309,6 +318,11 @@ async function confirmDelete() {
 .action-btn--danger {
   border-color: var(--color-danger);
   color: var(--color-danger);
+}
+.action-btn:disabled {
+  border-color: var(--color-border);
+  color: var(--color-text-sub);
+  cursor: not-allowed;
 }
 
 .notice {
