@@ -7,9 +7,9 @@ import WorkerHomeView from '@/views/worker/WorkerHomeView.vue'
 const push = vi.fn()
 vi.mock('vue-router', () => ({ useRouter: () => ({ push }) }))
 
-vi.mock('@/services/workerHome', () => ({ fetchWorkerHome: vi.fn() }))
+vi.mock('@/services/worker', () => ({ getWorkerHome: vi.fn() }))
 
-import { fetchWorkerHome } from '@/services/workerHome'
+import { getWorkerHome } from '@/services/worker'
 
 const homePayload = {
   wallet: { balance: 320000 },
@@ -36,7 +36,7 @@ describe('WorkerHomeView', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     push.mockClear()
-    fetchWorkerHome.mockResolvedValue(structuredClone(homePayload))
+    getWorkerHome.mockResolvedValue(structuredClone(homePayload))
   })
 
   it('안심지갑 잔액·오늘의 알바·확보 안심금액을 표시한다', async () => {
@@ -49,7 +49,7 @@ describe('WorkerHomeView', () => {
   })
 
   it('오늘 근무가 없으면 확보 안심금액 카드를 숨긴다', async () => {
-    fetchWorkerHome.mockResolvedValue({
+    getWorkerHome.mockResolvedValue({
       wallet: { balance: 0 },
       todayShift: { status: 'NONE' },
       earning: null
