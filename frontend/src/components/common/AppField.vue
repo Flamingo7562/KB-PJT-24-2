@@ -82,6 +82,11 @@ const fieldId = useId()
   outline: none;
   border-color: var(--color-primary);
 }
+.input:disabled {
+  color: var(--color-text-sub);
+  background: var(--color-bg);
+  cursor: not-allowed;
+}
 .field.has-error .input {
   border-color: var(--color-danger);
 }

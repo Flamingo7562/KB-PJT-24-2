@@ -41,6 +41,7 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
+
 # Java / Spring legacy
 .gradle/
 target/
@@ -70,6 +71,7 @@ replay_pid*.log
 /docs/**/*.md
 /docs/memory/
 /docs/reports/
+*.xlsx
 
 # Local agent workspace
 /CLAUDE.md
