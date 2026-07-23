@@ -6,16 +6,17 @@
  *   →  @/services/auth (checkLoginId, checkEmail, signup) — role: 'OWNER'
  * 성공 후: 로그인 화면으로 이동(자동 로그인 없음).
  * 공통: AppField(+ suffix 슬롯에 중복확인 BaseButton) · @/utils/validators
+ * 폼 자체는 사장/알바생 공용 AuthSignupForm(@/components/auth) 에 있다.
  */
+import AuthSignupForm from '@/components/auth/AuthSignupForm.vue'
 import AppBackHeader from '@/components/common/AppBackHeader.vue'
-import EmptyState from '@/components/common/EmptyState.vue'
 </script>
 
 <template>
   <div class="sub-page">
-    <AppBackHeader title="사장 회원가입" to="/owner/login" />
+    <AppBackHeader title="사장 회원가입" to="/?step=auth&role=owner" />
     <main class="screen-body">
-      <EmptyState message="사장 회원가입 화면 (TODO: 담당 A 구현)" />
+      <AuthSignupForm role="OWNER" />
     </main>
   </div>
 </template>

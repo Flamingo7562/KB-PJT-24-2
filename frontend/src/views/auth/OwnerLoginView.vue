@@ -7,15 +7,78 @@
  *          아니면 route.query.redirect ?? '/owner/home'.
  * 공통: AppField(입력) · BaseButton(제출) · useUiStore().toast(실패 안내)
  */
+import { computed, ref } from 'vue'
+import { useRouter } from 'vue-router'
+
+import AuthRoleToggle from '@/components/auth/AuthRoleToggle.vue'
 import AppBackHeader from '@/components/common/AppBackHeader.vue'
-import EmptyState from '@/components/common/EmptyState.vue'
+import AppField from '@/components/common/AppField.vue'
+import BaseButton from '@/components/common/BaseButton.vue'
+import LogoGighub from '@/assets/images/logo/logo-gighub.svg'
+import { useAuthStore } from '@/stores/auth'
+import { useUiStore } from '@/stores/ui'
+import { resolveOwnerLoginRedirect } from '@/utils/authRedirect'
+
+const router = useRouter()
+const auth = useAuthStore()
+const ui = useUiStore()
+
+const loginId = ref('')
+const password = ref('')
+const submitting = ref(false)
+
+const canSubmit = computed(() => loginId.value.trim() !== '' && password.value !== '')
+
+function onChangeRole(next) {
+  if (next === 'WORKER') router.push('/worker/login')
+}
+
+async function onSubmit() {
+  if (!canSubmit.value) {
+    ui.toast('아이디와 비밀번호를 입력해주세요.', { type: 'warning' })
+    return
+  }
+
+  submitting.value = true
+  try {
+    const res = await auth.login({
+      loginId: loginId.value,
+      password: password.value,
+      role: 'OWNER'
+    })
+    router.push(resolveOwnerLoginRedirect(res))
+  } finally {
+    submitting.value = false
+  }
+}
 </script>
 
 <template>
   <div class="sub-page">
-    <AppBackHeader title="사장 로그인" to="/" />
+    <AppBackHeader title="사장 로그인" to="/?step=auth&role=owner" />
     <main class="screen-body">
-      <EmptyState message="사장 로그인 화면 (TODO: 담당 A 구현)" />
+      <LogoGighub class="logo" aria-label="Gig Hub" />
+
+      <AuthRoleToggle model-value="OWNER" @update:model-value="onChangeRole" />
+
+      <form class="form" @submit.prevent="onSubmit">
+        <AppField v-model="loginId" label="아이디" placeholder="아이디" required />
+        <AppField
+          v-model="password"
+          type="password"
+          label="비밀번호"
+          placeholder="비밀번호"
+          required
+        />
+        <BaseButton type="submit" variant="owner" size="lg" block :disabled="submitting">
+          로그인
+        </BaseButton>
+      </form>
+
+      <p class="signup-link">
+        아직 계정이 없나요?
+        <RouterLink to="/owner/signup">회원가입</RouterLink>
+      </p>
     </main>
   </div>
 </template>
@@ -23,5 +86,28 @@ import EmptyState from '@/components/common/EmptyState.vue'
 <style scoped>
 .screen-body {
   padding: var(--space-lg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xl);
+}
+.logo {
+  width: 140px;
+  height: auto;
+  margin: var(--space-md) auto 0;
+  color: var(--color-owner);
+}
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+}
+.signup-link {
+  text-align: center;
+  font-size: var(--text-sm);
+  color: var(--color-text-sub);
+}
+.signup-link a {
+  color: var(--color-owner);
+  font-weight: var(--weight-medium);
 }
 </style>
