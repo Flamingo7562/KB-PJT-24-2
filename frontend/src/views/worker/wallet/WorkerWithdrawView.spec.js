@@ -8,10 +8,10 @@ const back = vi.fn()
 vi.mock('vue-router', () => ({ useRouter: () => ({ back }) }))
 
 vi.mock('@/services/wallet', () => ({ withdrawWallet: vi.fn() }))
-vi.mock('@/services/workerHome', () => ({ fetchWorkerHome: vi.fn() }))
+vi.mock('@/services/worker', () => ({ getWorkerHome: vi.fn() }))
 
 import { withdrawWallet } from '@/services/wallet'
-import { fetchWorkerHome } from '@/services/workerHome'
+import { getWorkerHome } from '@/services/worker'
 
 describe('WorkerWithdrawView', () => {
   beforeEach(() => {
@@ -19,7 +19,7 @@ describe('WorkerWithdrawView', () => {
     back.mockClear()
     withdrawWallet.mockReset()
     withdrawWallet.mockResolvedValue({ balance: 220000, txId: 1 })
-    fetchWorkerHome.mockResolvedValue({
+    getWorkerHome.mockResolvedValue({
       wallet: { balance: 320000 },
       todayShift: { status: 'NONE' },
       earning: null

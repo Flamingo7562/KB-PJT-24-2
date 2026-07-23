@@ -12,27 +12,28 @@ import http from '@/services/http'
 
 const USE_MOCK = true
 
+// 오늘 근무 중(지각 출근) 시나리오 — 확보 안심금액 진행 상태를 함께 보여준다.
 // todayShift.status: BEFORE_WORK / LATE / NO_SHOW / NONE
 // earning 은 서버 계산값(그대로 표시). progressRatio 0~1, 금액 KRW 정수.
 const mockHome = {
   wallet: { balance: 320000 },
   todayShift: {
-    shiftId: 101,
-    status: 'BEFORE_WORK',
+    status: 'LATE',
     title: '주말 홀 서빙',
-    workplaceName: '강남점',
+    workplaceName: '카페 봄',
+    workDate: '2026-07-22',
     startTime: '10:00',
     endTime: '18:00'
   },
   earning: {
     dailyWage: 90000,
-    totalMinutes: 480,
-    unpaidBreakMinutes: 60,
-    lateMinutes: 0,
-    lateDeduction: 0,
-    accruedAmount: 0,
-    progressRatio: 0,
-    expectedNetAmount: 87030 // 3.3% 공제 참고 표시
+    totalMinutes: 480, // 총 구간(휴게 포함)
+    unpaidBreakMinutes: 60, // 무급 휴게
+    lateMinutes: 15,
+    lateDeduction: 3214,
+    accruedAmount: 34526, // 현재까지 확보된 금액
+    progressRatio: 0.42, // 총 구간 기준 진행률(0~1)
+    expectedNetAmount: 83912 // 3.3% 공제 가정 예상 실수령액(참고)
   }
 }
 
