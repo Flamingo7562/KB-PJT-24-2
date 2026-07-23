@@ -22,11 +22,11 @@ const emit = defineEmits(['close'])
 
 <template>
   <Teleport to="body">
-    <Transition name="modal">
+    <Transition name="base-modal">
       <div v-if="open" class="modal-overlay" @click.self="closable && emit('close')">
-        <div class="modal" role="dialog" aria-modal="true">
+        <div class="base-modal" role="dialog" aria-modal="true">
           <header v-if="title || closable" class="modal-head">
-            <h2 class="modal-title">{{ title }}</h2>
+            <h2 class="base-modal-title">{{ title }}</h2>
             <button
               v-if="closable"
               type="button"
@@ -38,9 +38,9 @@ const emit = defineEmits(['close'])
             </button>
           </header>
 
-          <div class="modal-body"><slot /></div>
+          <div class="base-modal-body"><slot /></div>
 
-          <footer v-if="$slots.footer" class="modal-footer">
+          <footer v-if="$slots.footer" class="base-modal-footer">
             <slot name="footer" />
           </footer>
         </div>
@@ -60,7 +60,7 @@ const emit = defineEmits(['close'])
   padding: var(--space-xl);
   background: var(--color-overlay);
 }
-.modal {
+.base-modal {
   width: 100%;
   max-width: 360px;
   background: var(--color-surface);
@@ -74,7 +74,7 @@ const emit = defineEmits(['close'])
   justify-content: space-between;
   padding: var(--space-lg) var(--space-lg) 0;
 }
-.modal-title {
+.base-modal-title {
   font-size: var(--text-lg);
   font-weight: var(--weight-bold);
   color: var(--color-text);
@@ -82,22 +82,22 @@ const emit = defineEmits(['close'])
 .close {
   color: var(--color-text-sub);
 }
-.modal-body {
+.base-modal-body {
   padding: var(--space-lg);
   color: var(--color-text);
 }
-.modal-footer {
+.base-modal-footer {
   display: flex;
   gap: var(--space-sm);
   padding: 0 var(--space-lg) var(--space-lg);
 }
 
-.modal-enter-active,
-.modal-leave-active {
+.base-modal-enter-active,
+.base-modal-leave-active {
   transition: opacity 0.18s ease;
 }
-.modal-enter-from,
-.modal-leave-to {
+.base-modal-enter-from,
+.base-modal-leave-to {
   opacity: 0;
 }
 </style>
