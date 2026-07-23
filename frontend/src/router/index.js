@@ -165,6 +165,12 @@ const routes = [
   },
   // ───────── 알바생: 서브 화면 (뒤로가기 헤더) ─────────
   {
+    path: '/worker/wallet/withdraw',
+    name: 'worker-withdraw',
+    component: () => import('@/views/worker/wallet/WorkerWithdrawView.vue'),
+    meta: WORKER
+  },
+  {
     path: '/worker/work/shifts/:shiftId',
     name: 'worker-shift-detail',
     component: () => import('@/views/worker/shift/WorkerShiftDetailView.vue'),
