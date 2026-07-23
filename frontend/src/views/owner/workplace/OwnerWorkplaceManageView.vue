@@ -9,7 +9,7 @@
  */
 import { Building2 } from 'lucide-vue-next'
 import { storeToRefs } from 'pinia'
-import { onMounted, reactive, ref } from 'vue'
+import { nextTick, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 import AppBackHeader from '@/components/common/AppBackHeader.vue'
@@ -21,6 +21,7 @@ import { getShiftSummary } from '@/services/shifts'
 import { deleteWorkplace, updateWorkplace } from '@/services/workplaces'
 import { useUiStore } from '@/stores/ui'
 import { useWorkplaceStore } from '@/stores/workplace'
+import { embedAddressSearch } from '@/utils/daumPostcode'
 import { blockNonDigitKeydown, formatPhoneInput } from '@/utils/format'
 import { isPhone, isRequired } from '@/utils/validators'
 
@@ -74,6 +75,26 @@ function openEdit(workplace) {
 
 function onEditPhoneInput(v) {
   editPhone.value = formatPhoneInput(v)
+}
+
+const addressSearchOpen = ref(false)
+const addressSearchContainer = ref(null)
+
+async function searchEditAddress() {
+  addressSearchOpen.value = true
+  await nextTick()
+  embedAddressSearch(
+    addressSearchContainer.value,
+    (result) => {
+      editAddress.value = result.address
+      editAddressError.value = ''
+      addressSearchOpen.value = false
+    },
+    () => {
+      addressSearchOpen.value = false
+      ui.toast('주소 검색을 불러오지 못했어요. 직접 입력해주세요.', { type: 'danger' })
+    }
+  )
 }
 
 async function confirmEdit() {
@@ -163,7 +184,13 @@ async function confirmDelete() {
     <BaseModal :open="editOpen" title="사업장 수정" @close="editOpen = false">
       <div class="edit-form">
         <AppField v-model="editName" label="상호명" required :error="editNameError" />
-        <AppField v-model="editAddress" label="사업장 주소" required :error="editAddressError" />
+        <AppField v-model="editAddress" label="사업장 주소" required :error="editAddressError">
+          <template #suffix>
+            <BaseButton type="button" variant="secondary" @click="searchEditAddress"
+              >검색</BaseButton
+            >
+          </template>
+        </AppField>
         <AppField
           :model-value="editPhone"
           label="사업장 전화번호 (지역번호 포함 9~11자리)"
@@ -196,6 +223,10 @@ async function confirmDelete() {
           삭제하기
         </BaseButton>
       </template>
+    </BaseModal>
+
+    <BaseModal :open="addressSearchOpen" title="주소 검색" @close="addressSearchOpen = false">
+      <div ref="addressSearchContainer" class="postcode-embed"></div>
     </BaseModal>
   </div>
 </template>
@@ -303,5 +334,8 @@ async function confirmDelete() {
   margin-top: var(--space-sm);
   font-size: var(--text-sm);
   color: var(--color-danger);
+}
+.postcode-embed {
+  height: 400px;
 }
 </style>

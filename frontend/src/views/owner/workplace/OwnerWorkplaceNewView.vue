@@ -1,7 +1,9 @@
 <script setup>
 /**
  * [D] 사업장 등록  ·  /owner/workplaces/new  ·  OWNER
- * 폼: 사업자등록번호·상호명·대표자명·사업장 주소·사업장 전화번호(주소→좌표 자동, 반경 기본 100).
+ * 폼: 사업자등록번호·상호명·대표자명·사업장 주소·사업장 전화번호.
+ * 주소는 다음 우편번호 검색(모달 내 embed, @/utils/daumPostcode) 또는 직접 입력. 좌표 자동
+ * 변환은 별도 지오코딩 API 필요(미구현). 인증 반경은 기본값(100).
  * 진입 경로 2가지: ① 첫 로그인(G7, 사업장 0개) 강제 진입 ② /owner/mypage/workplaces 에서 수동 추가.
  * 연계 API: POST /workplaces  →  @/services/workplaces (createWorkplace)
  * 등록 성공 후: useWorkplaceStore().load({force:true}) 갱신 →
@@ -10,16 +12,18 @@
  *   (⚠ needsWorkplaceSetup 갱신을 빼먹으면 G7 가드가 /owner/home 이동을 즉시 되돌려 무한 루프)
  * 공통: AppField · BaseButton · @/utils/validators (isBusinessNumber, isPhone)
  */
-import { ref } from 'vue'
+import { nextTick, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 import AppBackHeader from '@/components/common/AppBackHeader.vue'
 import AppField from '@/components/common/AppField.vue'
 import BaseButton from '@/components/common/BaseButton.vue'
+import BaseModal from '@/components/common/BaseModal.vue'
 import { createWorkplace } from '@/services/workplaces'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
 import { useWorkplaceStore } from '@/stores/workplace'
+import { embedAddressSearch } from '@/utils/daumPostcode'
 import { blockNonDigitKeydown, formatBusinessNumberInput, formatPhoneInput } from '@/utils/format'
 import { isBusinessNumber, isPhone, isRequired } from '@/utils/validators'
 
@@ -51,6 +55,26 @@ function onBusinessNumberInput(v) {
 
 function onPhoneInput(v) {
   phone.value = formatPhoneInput(v)
+}
+
+const addressSearchOpen = ref(false)
+const addressSearchContainer = ref(null)
+
+async function searchAddress() {
+  addressSearchOpen.value = true
+  await nextTick()
+  embedAddressSearch(
+    addressSearchContainer.value,
+    (result) => {
+      address.value = result.address
+      addressError.value = ''
+      addressSearchOpen.value = false
+    },
+    () => {
+      addressSearchOpen.value = false
+      ui.toast('주소 검색을 불러오지 못했어요. 직접 입력해주세요.', { type: 'danger' })
+    }
+  )
 }
 
 function validate() {
@@ -130,10 +154,14 @@ async function handleSubmit() {
         <AppField
           v-model="address"
           label="사업장 주소"
-          placeholder="사업장 주소를 입력하세요"
+          placeholder="주소 검색을 이용하거나 직접 입력하세요"
           required
           :error="addressError"
-        />
+        >
+          <template #suffix>
+            <BaseButton type="button" variant="secondary" @click="searchAddress">검색</BaseButton>
+          </template>
+        </AppField>
         <AppField
           :model-value="phone"
           label="사업장 전화번호 (지역번호 포함 9~11자리)"
@@ -149,6 +177,10 @@ async function handleSubmit() {
         <BaseButton type="submit" variant="owner" block :disabled="submitting">등록</BaseButton>
       </form>
     </main>
+
+    <BaseModal :open="addressSearchOpen" title="주소 검색" @close="addressSearchOpen = false">
+      <div ref="addressSearchContainer" class="postcode-embed"></div>
+    </BaseModal>
   </div>
 </template>
 
@@ -160,5 +192,8 @@ async function handleSubmit() {
   display: flex;
   flex-direction: column;
   gap: var(--space-lg);
+}
+.postcode-embed {
+  height: 400px;
 }
 </style>
