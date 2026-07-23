@@ -1,81 +1,80 @@
 package com.gighub.wallet.controller;
 
-import com.gighub.wallet.dto.EscrowLockRequest;
-import com.gighub.wallet.dto.EscrowReleaseRequest;
+import com.gighub.wallet.dto.EscrowHoldRequest;
 import com.gighub.wallet.service.EscrowService;
-import org.springframework.beans.factory.annotation.Autowired;
+import com.gighub.wallet.service.command.EscrowHoldCommand;
+import com.gighub.wallet.service.command.EscrowReleaseCommand;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RestController;
 
 import javax.servlet.http.HttpSession;
-import java.util.HashMap;
+import javax.validation.Valid;
 import java.util.Map;
 
 @RestController
+@RequiredArgsConstructor
 public class EscrowController {
+
+    private static final String LOGIN_USER = "LOGIN_USER";
+
     private final EscrowService escrowService;
 
-    @Autowired
-    public EscrowController(EscrowService escrowService){
-        this.escrowService = escrowService;
-    }
-
-    // 예치 API(근로자가 계약 수락 시 호출)
+     //예치 API (근로자가 초대를 수락할 때 호출).
+     //TODO(후속): token에서 employer/worker/workCase/amount를 서버가 도출하도록 교체.
     @PostMapping("/api/invites/{token}/accept")
-    public ResponseEntity<Map<String, Object>> lockFunds(@PathVariable String token, @RequestHeader("Idempotency-Key") String idempotencyKey, @RequestBody EscrowLockRequest request, HttpSession session){
-        // 1. 세션에서 로그인한 유저 ID 확인 (회원가입/로그인 파트에서 'LOGIN_USER' 키로 세션에 저장했다고 가정)
-        Long loggedInUserId = (Long) session.getAttribute("LOGIN_USER");
+    public ResponseEntity<Map<String, Object>> hold(
+            @PathVariable String token,
+            @RequestHeader("Idempotency-Key") String idempotencyKey,
+            @Valid @RequestBody EscrowHoldRequest request,
+            HttpSession session) {
 
-        // 2. 권한 검증: 비로그인 상태이거나, 요청한 사장님 ID와 로그인한 유저 ID가 다르면 차단
-        if (loggedInUserId == null || !loggedInUserId.equals(request.getWorkerId())) {
-            return ResponseEntity.status(401).body(Map.of(
-                    "status", 401,
-                    "message", "권한이 없습니다. 알바생 계정으로 로그인해주세요."
-            ));
+        Long loginUserId = (Long) session.getAttribute(LOGIN_USER);
+        if (loginUserId == null) {
+            return ResponseEntity.status(401)
+                    .body(Map.of("code", "AUTH_REQUIRED", "message", "로그인이 필요합니다."));
+        }
+        // 예치는 근로자가 수락하는 시점이므로 workerId와 대조한다.
+        if (!loginUserId.equals(request.getWorkerId())) {
+            return ResponseEntity.status(403)
+                    .body(Map.of("code", "FORBIDDEN", "message", "알바생 본인 계정으로만 수락할 수 있습니다."));
         }
 
-        // 3. 비즈니스 로직 실행 및 자체 예외 처리 (전역 예외 처리 도입 전 임시)
-        try {
-            request.setIdempotencyKey(idempotencyKey); // 서비스로 넘기기 위해 세팅
-            escrowService.lockFunds(request);
+        escrowService.hold(EscrowHoldCommand.builder()
+                .employerId(request.getEmployerId())
+                .workerId(request.getWorkerId())
+                .workCaseId(request.getWorkCaseId())
+                .amount(request.getAmount())
+                .idempotencyKey(idempotencyKey)
+                .build());
 
-            // 성공 응답은 "data" 객체로 감싸기
-            return ResponseEntity.ok(Map.of("data", Map.of(
-                    "message", "에스크로 예치가 성공적으로 완료되었습니다."
-            )));
-        } catch (RuntimeException e) {
-            return ResponseEntity.status(409).body(Map.of(
-                    "code", "INSUFFICIENT_WALLET_BALANCE",
-                    "message", e.getMessage()
-            ));
-        }
+        return ResponseEntity.ok(Map.of("data", Map.of("message", "에스크로 예치 완료")));
     }
 
-    // 정산 API (수동 정산 또는 자동 정산 시 호출)
+    /** 정산 API (사장님 수동 승인 또는 향후 자동 정산 작업에서 호출). */
     @PostMapping("/api/work-cases/{workCaseId}/settlement/approve")
-    public ResponseEntity<Map<String, Object>> releaseFunds(@PathVariable Long workCaseId, @RequestHeader("Idempotency-Key") String idempotencyKey, HttpSession session){
-        // 1. 세션에서 로그인한 유저 ID 확인
-        Long loggedInUserId = (Long) session.getAttribute("LOGIN_USER");
+    public ResponseEntity<Map<String, Object>> release(
+            @PathVariable Long workCaseId,
+            @RequestHeader("Idempotency-Key") String idempotencyKey,
+            HttpSession session) {
 
-        // 2. 권한 검증 (정산은 사장님 권한)
-        if (loggedInUserId == null) {
-            return ResponseEntity.status(401).body(Map.of(
-                    "code", "AUTH_REQUIRED",
-                    "message", "권한이 없습니다. 올바른 계정으로 로그인해주세요."
-            ));
+        Long loginUserId = (Long) session.getAttribute(LOGIN_USER);
+        if (loginUserId == null) {
+            return ResponseEntity.status(401)
+                    .body(Map.of("code", "AUTH_REQUIRED", "message", "로그인이 필요합니다."));
         }
 
-        // 3. 비즈니스 로직 실행 및 자체 예외 처리
-        try {
-            escrowService.releaseFunds(workCaseId, loggedInUserId, idempotencyKey);
+        // 수령자와 금액은 서비스가 DB에서 도출한다.
+        escrowService.release(EscrowReleaseCommand.builder()
+                .workCaseId(workCaseId)
+                .employerId(loginUserId)
+                .idempotencyKey(idempotencyKey)
+                .build());
 
-            return ResponseEntity.ok(Map.of("data", Map.of(
-                    "status", "COMPLETED"
-            )));
-        } catch (RuntimeException e) {
-            return ResponseEntity.status(409).body(Map.of(
-                    "code", "SETTLEMENT_ERROR", "message", e.getMessage()
-            ));
-        }
+        return ResponseEntity.ok(Map.of("data", Map.of("status", "COMPLETED")));
     }
 }

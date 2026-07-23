@@ -2,14 +2,16 @@ package com.gighub.work.mapper;
 
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
-
-import java.math.BigDecimal;
+import java.util.List;
 
 @Mapper
 public interface WorkMapper {
     // 근무 건의 상태(status)를 업데이트
-    int updateWorkStatus(@Param("workCaseId") Long workCaseId, @Param("status") String status);
+    int updateWorkStatus(@Param("workCaseId") Long workCaseId,
+                         @Param("fromStatuses") List<String> fromStatuses,
+                         @Param("toStatus") String toStatus);
 
-    Long getWorkerIdByWorkCaseId(Long workCaseId);
-    BigDecimal getAgreedWageByWorkCaseId(Long workCaseId);
+    Long getWorkerIdByWorkCaseId(@Param("workCaseId") Long workCaseId);
+
+    Long getAgreedWageByWorkCaseId(@Param("workCaseId") Long workCaseId);
 }

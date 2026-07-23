@@ -1,20 +1,27 @@
-### [사전 준비] 테스트 전 데이터 초기화 쿼리 (MySQL에서 한 번 실행해 주세요)
+### [사전 준비] 테스트 전 데이터 초기화 (MySQL에서 한 번 실행해 주세요)
 # UPDATE wallets SET available_balance = 700000, locked_balance = 0 WHERE user_id = 3;
-# DELETE FROM escrows WHERE work_case_id = 1;
+# UPDATE wallets SET available_balance = 0, locked_balance = 0 WHERE user_id = 4;
 # DELETE FROM wallet_transactions WHERE work_case_id = 1;
-# UPDATE work_cases SET status = 'ACCEPTED' WHERE id = 1;
+# DELETE FROM escrows WHERE work_case_id = 1;
+# UPDATE work_cases SET status = 'INVITED', worker_id = 4 WHERE id = 1;
+#
+# [확인] 아래 agreed_wage 값과 2번 요청의 amount가 같아야 합니다.
+# SELECT id, employer_id, worker_id, agreed_wage, status FROM work_cases WHERE id = 1;
 
 ### =================================================================
+
+POST http://localhost:8080/api/work-cases/1/settlement/approve
+Idempotency-Key: PING-TEST
 
 ### 1. (알바생) 4번 유저로 가짜 로그인 (세션 발급)
 GET http://localhost:8080/api/test-login/4
 
 ### =================================================================
 
-### 2. 예치 요청 (주소: /api/invites/{token}/accept / 멱등성 키는 Header로 이동!)
+### 2. 예치 요청 (amount는 work_cases.agreed_wage와 일치해야 함)
 POST http://localhost:8080/api/invites/TEST-TOKEN-123/accept
 Content-Type: application/json
-Idempotency-Key: TEST-LOCK-007
+Idempotency-Key: TEST-LOCK-008
 
 {
   "employerId": 3,
@@ -30,6 +37,11 @@ GET http://localhost:8080/api/test-login/3
 
 ### =================================================================
 
-### 4. 정산 승인(Release) 요청 (주소: /api/work-cases/{id}/settlement/approve / Body 없음!)
+### 4. 정산 승인(Release) 요청 (Body 없음)
 POST http://localhost:8080/api/work-cases/1/settlement/approve
-Idempotency-Key: TEST-RELEASE-007
+Idempotency-Key: TEST-RELEASE-008
+
+### =================================================================
+### [선택] 이중 정산 차단 확인 - 멱등 키만 바꿔서 재요청 -> 409 INVALID_ESCROW_STATE 기대
+POST http://localhost:8080/api/work-cases/1/settlement/approve
+Idempotency-Key: TEST-RELEASE-009

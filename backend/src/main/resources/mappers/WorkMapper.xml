@@ -7,17 +7,21 @@
     <!-- 근무 건 상태 변경 -->
     <update id="updateWorkStatus">
         UPDATE work_cases
-        SET status = #{status}
+        SET status = #{toStatus}
         WHERE id = #{workCaseId}
+        AND status IN
+        <foreach item="s" collection="fromStatuses" open="(" separator="," close=")">
+            #{s}
+        </foreach>
     </update>
 
     <!-- work_cases 테이블에서 알바생 ID 가져오기 -->
-    <select id="getWorkerIdByWorkCaseId" resultType="long">
+    <select id="getWorkerIdByWorkCaseId" resultType="java.lang.Long">
         SELECT worker_id FROM work_cases WHERE id = #{workCaseId}
     </select>
 
     <!-- work_cases 테이블에서 약속된 임금(agreed_wage) 가져오기 -->
-    <select id="getAgreedWageByWorkCaseId" resultType="java.math.BigDecimal">
+    <select id="getAgreedWageByWorkCaseId" resultType="java.lang.Long">
         SELECT agreed_wage FROM work_cases WHERE id = #{workCaseId}
     </select>
 
