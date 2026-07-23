@@ -12,7 +12,12 @@ const isEmpty = computed(() => !props.shift || props.shift.status === 'NONE')
 const meta = computed(() => {
   switch (props.shift?.status) {
     case 'BEFORE_WORK':
-      return { label: '출근 전', color: 'var(--color-text-sub)', bg: 'var(--color-bg)', icon: Clock }
+      return {
+        label: '출근 전',
+        color: 'var(--color-text-sub)',
+        bg: 'var(--color-bg)',
+        icon: Clock
+      }
     case 'LATE':
       return {
         label: '지각',
@@ -48,7 +53,9 @@ const meta = computed(() => {
         {{ meta.label }}
       </span>
       <p class="shift-title">{{ shift.title }}</p>
-      <p class="shift-info">{{ shift.workplaceName }} · {{ shift.startTime }}–{{ shift.endTime }}</p>
+      <p class="shift-info">
+        {{ shift.workplaceName }} · {{ shift.startTime }}–{{ shift.endTime }}
+      </p>
     </div>
   </section>
 </template>
