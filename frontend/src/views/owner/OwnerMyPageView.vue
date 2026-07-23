@@ -8,7 +8,7 @@
  * 진입: /owner/mypage/{profile,password,workplaces}. 공통: TrustBadge(role='owner')
  */
 import { Building2, ChevronRight, KeyRound, UserRound } from 'lucide-vue-next'
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 
 import AppBackHeader from '@/components/common/AppBackHeader.vue'
@@ -27,6 +27,22 @@ const ui = useUiStore()
 
 const me = ref(null)
 const badge = ref(null)
+
+// TODO: 최근 구인/신고/정산 통계 API 명세 확정 전 임시 0값. 연동 시 API 응답으로 교체한다.
+const recentJobCount = ref(0)
+const reportCount = ref(0)
+const settlementRate = ref(0)
+
+// 진행률: 등급 판정 기준(최근 15건) 대비 최근 실적 비율.
+const progressPercent = computed(() => {
+  const recent = badge.value?.recentCount ?? 0
+  return Math.min(100, Math.round((recent / 15) * 100))
+})
+
+const nextLevelLabel = computed(() => {
+  const level = badge.value?.level ?? 0
+  return level >= 3 ? '최고 등급' : `Lv.${level + 1}`
+})
 
 const menuItems = [
   { label: '회원정보 변경', to: '/owner/mypage/profile', icon: UserRound },
@@ -79,20 +95,51 @@ async function confirmWithdraw() {
     <AppBackHeader title="마이페이지" />
 
     <main class="screen-body">
-      <section v-if="me" class="profile-summary">
-        <p class="profile-name">{{ me.name }}</p>
-        <p class="profile-sub">{{ me.email }}</p>
-      </section>
+      <section v-if="me && badge" class="profile-card">
+        <div class="profile-top">
+          <span class="avatar">
+            <img
+              v-if="me.profileImageUrl"
+              :src="me.profileImageUrl"
+              :alt="`${me.name} 프로필 사진`"
+              class="avatar__img"
+            />
+            <UserRound v-else :size="24" />
+          </span>
 
-      <section v-if="badge" class="badge-card">
-        <TrustBadge
-          role="owner"
-          :level="badge.level"
-          :size="64"
-          show-remaining
-          :remaining="badge.remainingToNextLevel"
-          :criterion="badge.criterionLabel"
-        />
+          <div class="profile-info">
+            <p class="profile-name">{{ me.name }}</p>
+            <p class="profile-sub">{{ me.loginId }} | {{ me.email }}</p>
+          </div>
+
+          <div class="badge-slot">
+            <TrustBadge role="owner" :level="badge.level" :size="40" />
+          </div>
+        </div>
+
+        <div class="stats-row">
+          <span>최근 구인 {{ recentJobCount }}건</span>
+          <span class="stats-row__divider">|</span>
+          <span>신고 {{ reportCount }}건</span>
+          <span class="stats-row__divider">|</span>
+          <span>정상 정산 {{ settlementRate }}%</span>
+        </div>
+
+        <div
+          class="bar"
+          role="progressbar"
+          :aria-valuenow="progressPercent"
+          aria-valuemin="0"
+          aria-valuemax="100"
+        >
+          <div class="bar__fill" :style="{ width: progressPercent + '%' }"></div>
+        </div>
+
+        <p class="level-remaining">
+          다음 레벨 {{ nextLevelLabel }}까지 {{ badge.criterionLabel }}
+          {{ badge.remainingToNextLevel }}건 남음 (최근 15건 기준)
+        </p>
+
         <p class="badge-desc">{{ badge.criterionDesc }}</p>
       </section>
 
@@ -135,8 +182,41 @@ async function confirmWithdraw() {
   padding: var(--space-lg);
 }
 
-.profile-summary {
-  padding: var(--space-sm) 0 var(--space-lg);
+.profile-card {
+  margin: var(--space-sm) 0 var(--space-lg);
+  padding: var(--space-lg);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.profile-top {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+}
+
+.avatar {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  overflow: hidden;
+  color: var(--color-owner);
+  background: var(--color-owner-weak);
+  border-radius: var(--radius-pill);
+}
+.avatar__img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.profile-info {
+  flex: 1;
+  min-width: 0;
 }
 .profile-name {
   font-size: var(--text-xl);
@@ -149,17 +229,43 @@ async function confirmWithdraw() {
   color: var(--color-text-sub);
 }
 
-.badge-card {
+.badge-slot {
+  flex-shrink: 0;
+}
+
+.stats-row {
   display: flex;
-  flex-direction: column;
   align-items: center;
   gap: var(--space-sm);
-  padding: var(--space-xl) var(--space-lg);
-  background: var(--color-owner-weak);
-  border-radius: var(--radius-md);
-  text-align: center;
+  margin-top: var(--space-lg);
+  font-size: var(--text-sm);
+  color: var(--color-text-sub);
+}
+.stats-row__divider {
+  color: var(--color-border);
+}
+
+.bar {
+  height: 8px;
+  margin-top: var(--space-sm);
+  overflow: hidden;
+  background: var(--color-bg);
+  border-radius: var(--radius-pill);
+}
+.bar__fill {
+  height: 100%;
+  background: var(--color-owner);
+  border-radius: var(--radius-pill);
+}
+
+.level-remaining {
+  margin-top: var(--space-sm);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--color-text);
 }
 .badge-desc {
+  margin-top: var(--space-xs);
   font-size: var(--text-sm);
   color: var(--color-text-sub);
 }
