@@ -1,8 +1,14 @@
 import { mount } from '@vue/test-utils'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { RouterLinkStub } from '@vue/test-utils'
 
 import OnboardingView from '@/views/OnboardingView.vue'
+
+// 역할 선택 단계(③)는 ?step=auth 진입을 가정해 소개 슬라이드(①②)를 건너뛴다.
+vi.mock('vue-router', async (importOriginal) => {
+  const actual = await importOriginal()
+  return { ...actual, useRoute: () => ({ query: { step: 'auth' } }) }
+})
 
 describe('OnboardingView', () => {
   const factory = () =>
