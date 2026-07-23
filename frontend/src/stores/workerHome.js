@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 
-import { fetchWorkerHome } from '@/services/workerHome'
+import { getWorkerHome } from '@/services/worker'
 
 /**
  * 알바생 홈 화면 상태.
@@ -18,7 +18,7 @@ export const useWorkerHomeStore = defineStore('workerHome', () => {
     loading.value = true
     error.value = null
     try {
-      const data = await fetchWorkerHome()
+      const data = await getWorkerHome()
       balance.value = data.wallet.balance
       todayShift.value = data.todayShift
       earning.value = data.earning
