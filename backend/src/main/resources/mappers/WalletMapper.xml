@@ -93,30 +93,20 @@
     <insert id="insertWalletTransaction">
         INSERT INTO wallet_transactions
         (
-        wallet_id,
-        reference_type,
-        reference_id,
-        transaction_type,
-        amount,
-        idempotency_key,
-        available_before,
-        available_after,
-        locked_before,
-        locked_after
+            wallet_id,
+            work_case_id,
+            transaction_type,
+            amount,
+            idempotency_key
         )
         VALUES
-        (
-        #{walletId},
-        #{referenceType},
-        #{referenceId},
-        #{transactionType},
-        #{amount},
-        #{idempotencyKey},
-        #{availableBefore},
-        #{availableAfter},
-        #{lockedBefore},
-        #{lockedAfter}
-        )
+            (
+                #{walletId},
+                #{workCaseId},
+                #{transactionType},
+                #{amount},
+                #{idempotencyKey}
+            )
     </insert>
 
 </mapper>

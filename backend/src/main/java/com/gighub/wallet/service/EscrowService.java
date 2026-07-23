@@ -58,15 +58,10 @@ public class EscrowService {
         Long walletId = walletMapper.getWalletIdByUserId(request.getEmployerId());
         walletMapper.insertWalletTransaction(
                 walletId,
-                "WORK_CASE",
                 request.getWorkCaseId(),
                 "ESCROW_HOLD",
                 request.getAmount(),
-                request.getIdempotencyKey(),
-                availableBefore,
-                availableAfter,
-                lockedBefore,
-                lockedAfter
+                request.getIdempotencyKey()
         );
     }
 
@@ -119,16 +114,22 @@ public class EscrowService {
         BigDecimal employerLockedAfter = employerLockedBefore.subtract(amount);
         Long employerWalletId = walletMapper.getWalletIdByUserId(employerId);
         walletMapper.insertWalletTransaction(
-                employerWalletId, "WORK_CASE", workCaseId, "ESCROW_RELEASE", amount, idempotencyKey + "_OUT",
-                employerAvailableBefore, employerAvailableBefore, employerLockedBefore, employerLockedAfter
+                employerWalletId,
+                workCaseId,
+                "ESCROW_RELEASE",
+                amount,
+                idempotencyKey + "_OUT"
         );
 
         // 알바생 원장 기록 (가용 잔액만 증가, 잠금 잔액은 그대로)
         BigDecimal workerAvailableAfter = workerAvailableBefore.add(amount);
         Long workerWalletId = walletMapper.getWalletIdByUserId(workerId);
         walletMapper.insertWalletTransaction(
-                workerWalletId, "WORK_CASE", workCaseId, "ESCROW_RELEASE", amount, idempotencyKey + "_IN",
-                workerAvailableBefore, workerAvailableAfter, workerLockedBefore, workerLockedBefore
+                workerWalletId,
+                workCaseId,
+                "ESCROW_RELEASE",
+                amount,
+                idempotencyKey + "_IN"
         );
     }
 }

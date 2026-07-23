@@ -41,14 +41,9 @@ public interface WalletMapper {
     // 4. 원장(Ledger) 기록
     int insertWalletTransaction(
             @Param("walletId") Long walletId,
-            @Param("referenceType") String referenceType,
-            @Param("referenceId") Long referenceId,
+            @Param("workCaseId") Long workCaseId,
             @Param("transactionType") String transactionType,
             @Param("amount") BigDecimal amount,
-            @Param("idempotencyKey") String idempotencyKey,
-            @Param("availableBefore") BigDecimal availableBefore,
-            @Param("availableAfter") BigDecimal availableAfter,
-            @Param("lockedBefore") BigDecimal lockedBefore,
-            @Param("lockedAfter") BigDecimal lockedAfter
+            @Param("idempotencyKey") String idempotencyKey
     );
 }
