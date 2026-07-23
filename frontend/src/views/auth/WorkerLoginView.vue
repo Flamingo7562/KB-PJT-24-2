@@ -55,7 +55,7 @@ async function onSubmit() {
 
 <template>
   <div class="sub-page">
-    <AppBackHeader title="알바생 로그인" to="/" />
+    <AppBackHeader title="알바생 로그인" to="/?step=auth&role=worker" />
     <main class="screen-body">
       <LogoGighub class="logo" aria-label="Gig Hub" />
 

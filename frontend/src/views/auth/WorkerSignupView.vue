@@ -13,7 +13,7 @@ import AppBackHeader from '@/components/common/AppBackHeader.vue'
 
 <template>
   <div class="sub-page">
-    <AppBackHeader title="알바생 회원가입" to="/worker/login" />
+    <AppBackHeader title="알바생 회원가입" to="/?step=auth&role=worker" />
     <main class="screen-body">
       <AuthSignupForm role="WORKER" />
     </main>

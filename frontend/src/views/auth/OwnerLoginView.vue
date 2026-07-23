@@ -55,7 +55,7 @@ async function onSubmit() {
 
 <template>
   <div class="sub-page">
-    <AppBackHeader title="사장 로그인" to="/" />
+    <AppBackHeader title="사장 로그인" to="/?step=auth&role=owner" />
     <main class="screen-body">
       <LogoGighub class="logo" aria-label="Gig Hub" />
 

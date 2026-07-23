@@ -14,7 +14,7 @@ import AppBackHeader from '@/components/common/AppBackHeader.vue'
 
 <template>
   <div class="sub-page">
-    <AppBackHeader title="사장 회원가입" to="/owner/login" />
+    <AppBackHeader title="사장 회원가입" to="/?step=auth&role=owner" />
     <main class="screen-body">
       <AuthSignupForm role="OWNER" />
     </main>
