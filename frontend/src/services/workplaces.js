@@ -62,3 +62,21 @@ export async function deleteWorkplace(workplaceId) {
   }
   await http.delete(`/workplaces/${workplaceId}`)
 }
+
+/**
+ * 지점 출퇴근 QR 발급 → { qrToken, expiresAt }.
+ *
+ * 토큰 생성·유효기간 판정은 서버가 한다(1회성·만료 시 410 — docs/rules/api.md).
+ * 프론트는 받은 토큰을 표시하고 만료 전에 다시 발급받기만 한다.
+ * TODO(백엔드 연동): 엔드포인트 위치·응답 필드 확정 후 USE_MOCK 해제.
+ */
+export async function getWorkplaceQr(workplaceId) {
+  if (USE_MOCK) {
+    return {
+      qrToken: `mock-qr-${workplaceId}-${Date.now().toString(36)}`,
+      expiresAt: new Date(Date.now() + 30_000).toISOString()
+    }
+  }
+  const { data } = await http.get(`/workplaces/${workplaceId}/qr`)
+  return data
+}

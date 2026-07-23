@@ -60,8 +60,6 @@ defineEmits(['open-filter'])
 
 .list {
   margin-top: var(--space-sm);
-  /* Bootstrap Reboot 의 ul padding-left(2rem) 무효화 */
-  padding: 0;
 }
 
 .empty {

@@ -5,6 +5,7 @@ import javax.sql.DataSource;
 import com.zaxxer.hikari.HikariDataSource;
 import org.apache.ibatis.session.SqlSessionFactory;
 import org.mybatis.spring.SqlSessionFactoryBean;
+import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.PropertySource;
@@ -23,6 +24,7 @@ import org.springframework.transaction.annotation.EnableTransactionManagement;
 @Configuration
 @EnableTransactionManagement
 @PropertySource(value = "file:${gighub.database.config}", encoding = "UTF-8")
+@MapperScan(basePackages = {"com.gighub.wallet.mapper", "com.gighub.work.mapper"})
 public class DatabaseConfig {
 
     private static final String MAPPER_LOCATIONS = "classpath*:mappers/**/*.xml";

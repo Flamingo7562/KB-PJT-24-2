@@ -113,6 +113,11 @@ a {
 ul,
 ol {
   list-style: none;
+  /* Bootstrap Reboot 의 ul/ol { padding-left: 2rem; margin-bottom: 1rem } 를 전역 무효화.
+     base.css 는 Bootstrap 다음에 로드되므로 동일 특이도(element)라도 이긴다.
+     → 개별 리스트 컴포넌트에서 padding:0 리셋을 반복할 필요가 없다. */
+  margin: 0;
+  padding: 0;
 }
 img,
 svg {
