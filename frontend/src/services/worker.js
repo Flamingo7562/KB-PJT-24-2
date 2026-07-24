@@ -4,20 +4,20 @@
  * 확보 안심금액(earning)은 서버 단일 소스 계산 결과를 그대로 표시한다
  * (프론트 재계산 금지 — docs/rules/domain.md).
  *
- * 관련 API(명세 29~32):
- *   GET  /api/worker/home   GET /api/worker/shifts   GET /api/worker/workplaces
- *   POST /api/worker/scan
+ * 관련 API(명세 DASH-001, WORKER-001/002, ATT-002):
+ *   GET  /api/worker/home   GET /api/worker/work-cases   GET /api/worker/workplaces
+ *   POST /api/attendance/scans
  */
 import http from '@/services/http'
 
 const USE_MOCK = true
 
 // 오늘 근무 중(지각 출근) 시나리오 — 확보 안심금액 진행 상태를 함께 보여준다.
-// todayShift.status: BEFORE_WORK / LATE / NO_SHOW / NONE
+// todayWorkCase.status: BEFORE_WORK / LATE / NO_SHOW / NONE
 // earning 은 서버 계산값(그대로 표시). progressRatio 0~1, 금액 KRW 정수.
 const mockHome = {
-  wallet: { balance: 320000 },
-  todayShift: {
+  wallet: { availableBalance: 320000 },
+  todayWorkCase: {
     status: 'LATE',
     title: '주말 홀 서빙',
     workplaceName: '카페 봄',
@@ -26,20 +26,18 @@ const mockHome = {
     endTime: '18:00'
   },
   earning: {
-    dailyWage: 90000,
+    dailyWage: 90000, // 합의 일급(agreedWage) 전액 — 지각 차감 없음
     totalMinutes: 480, // 총 구간(휴게 포함)
     unpaidBreakMinutes: 60, // 무급 휴게
-    lateMinutes: 15,
-    lateDeduction: 3214,
+    lateMinutes: 15, // 지각 표시(뱃지)용 — 지급액에 영향 없음
     accruedAmount: 34526, // 현재까지 확보된 금액
-    progressRatio: 0.42, // 총 구간 기준 진행률(0~1)
-    expectedNetAmount: 83912 // 3.3% 공제 가정 예상 실수령액(참고)
+    progressRatio: 0.42 // 총 구간 기준 진행률(0~1)
   }
 }
 
-const mockShifts = [
+const mockWorkCases = [
   {
-    shiftId: 101,
+    workCaseId: 101,
     workplaceName: '강남점',
     workDate: '2026-07-22',
     time: '10:00 ~ 18:00',
@@ -48,7 +46,7 @@ const mockShifts = [
     settleStatus: 'HOLD'
   },
   {
-    shiftId: 90,
+    workCaseId: 90,
     workplaceName: '홍대점',
     workDate: '2026-07-15',
     time: '09:00 ~ 15:00',
@@ -58,7 +56,7 @@ const mockShifts = [
   }
 ]
 
-// 보건증 공유 대상: MATCHED(확정·시작 전) 근무가 있는 지점만
+// 보건증 공유 대상: 확정·시작 전(ACCEPTED/READY) 근무가 있는 지점만
 const mockShareWorkplaces = [
   { workplaceId: 1, workplaceName: '강남점', ownerName: '김사장' },
   { workplaceId: 3, workplaceName: '신촌점', ownerName: '최사장' }
@@ -71,11 +69,11 @@ export async function getWorkerHome() {
   return data
 }
 
-/** 근무 히스토리 조회 → { content[], totalPages } (명세 31) */
-export async function listWorkerShifts(params = {}) {
-  if (USE_MOCK) return { content: mockShifts.map((s) => ({ ...s })), totalPages: 1 }
-  const { data } = await http.get('/worker/shifts', { params })
-  return data
+/** 근무 히스토리 조회 → { content[], totalPages } (WORKER-001) */
+export async function listWorkerWorkCases(params = {}) {
+  if (USE_MOCK) return { content: mockWorkCases.map((s) => ({ ...s })), totalPages: 1 }
+  // 페이지 응답 { content, page, size, totalElements } 은 data 래핑이 없어 본문을 그대로 반환.
+  return http.get('/worker/work-cases', { params })
 }
 
 /** 근무 예정 지점 목록(보건증 공유 드롭다운 전용) (명세 32) */
@@ -86,8 +84,8 @@ export async function listWorkerWorkplaces() {
 }
 
 /**
- * QR 출퇴근 스캔 → { scanType, scanTime, isLate, lateMinutes, settleDueAt? } (명세 29).
- * 서버가 기록 상태로 출근/퇴근 자동 판별 + QR 유효성·GPS 반경 검증(실패 400).
+ * QR 출퇴근 스캔 → { scanType, scanTime, isLate, lateMinutes, settleDueAt? } (ATT-002).
+ * 서버가 기록 상태로 출근/퇴근 자동 판별 + QR 유효성·GPS 반경 검증(실패 422).
  * @param {object} payload qrToken, latitude, longitude
  */
 export async function scan({ qrToken, latitude, longitude }) {
@@ -99,6 +97,6 @@ export async function scan({ qrToken, latitude, longitude }) {
       lateMinutes: 0
     }
   }
-  const { data } = await http.post('/worker/scan', { qrToken, latitude, longitude })
+  const { data } = await http.post('/attendance/scans', { qrToken, latitude, longitude })
   return data
 }

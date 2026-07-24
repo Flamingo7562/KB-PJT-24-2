@@ -1,9 +1,9 @@
 <script setup>
 /**
- * [H] 근무 확정(초대 링크)  ·  /invite/:token  ·  WORKER(로그인 필수, 딥링크)
+ * [H] 근무 확정(초대 링크)  ·  /invitations/:token  ·  WORKER(로그인 필수, 딥링크)
  * 자동 입력된 근무 내역 확인 → 전자서명 → 근무 확정(=에스크로 예치). 사장 안심 뱃지 표시.
  * 만료·사용 토큰 410. OWNER 접근은 가드 G4가 차단.
- * 연계 API: GET /invites/{token} · POST /invites/{token}/confirm
+ * 연계 API: GET /invitations/{token} · POST /invitations/{token}/accept
  *   →  @/services/invites (getInvite, confirmInvite)
  * route.params.token 사용. 공통: TrustBadge(role='owner') · BaseButton
  * 고정 경고 문구(변경 금지):

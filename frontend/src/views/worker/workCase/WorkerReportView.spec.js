@@ -2,17 +2,17 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import WorkerReportView from '@/views/worker/shift/WorkerReportView.vue'
+import WorkerReportView from '@/views/worker/workCase/WorkerReportView.vue'
 
 const back = vi.fn()
 vi.mock('vue-router', () => ({
-  useRoute: () => ({ params: { shiftId: '101' } }),
+  useRoute: () => ({ params: { workCaseId: '101' } }),
   useRouter: () => ({ back })
 }))
 
-vi.mock('@/services/shifts', () => ({ createReport: vi.fn() }))
+vi.mock('@/services/workCases', () => ({ createReport: vi.fn() }))
 
-import { createReport } from '@/services/shifts'
+import { createReport } from '@/services/workCases'
 
 describe('WorkerReportView', () => {
   beforeEach(() => {

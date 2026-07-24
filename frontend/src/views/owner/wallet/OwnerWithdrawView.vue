@@ -1,9 +1,9 @@
 <script setup>
 /**
  * [B] 사장 출금  ·  /owner/wallet/withdraw  ·  OWNER
- * 출금 대상(은행·계좌)·금액 지정. 가용 잔액 내에서만(초과 시 서버 400).
- * 연계 API: POST /wallet/withdraw  →  @/services/wallet (withdrawWallet)
- * 공통: BankSelect(BANKS) · AppField(계좌) · WalletAmountField · isPositiveAmount
+ * 입금 은행·계좌번호·금액 지정. 가용 잔액 내에서만(초과 시 서버 409).
+ * 연계 API: POST /wallet/withdrawal-requests  →  @/services/wallet
+ * 공통: BankSelect(은행) · AppField(계좌) · WalletAmountField · isPositiveAmount
  */
 import { storeToRefs } from 'pinia'
 import { computed, onMounted, ref } from 'vue'
@@ -23,7 +23,7 @@ import { isPositiveAmount } from '@/utils/validators'
 const router = useRouter()
 const ui = useUiStore()
 const walletStore = useWalletStore()
-const { balance } = storeToRefs(walletStore)
+const { availableBalance } = storeToRefs(walletStore)
 
 const bankCode = ref('')
 const accountNo = ref('')
@@ -49,7 +49,7 @@ const accountCheck = computed(() => {
 const amountCheck = computed(() => {
   const base = isPositiveAmount(amount.value)
   if (!base.valid) return base
-  if (Number(amount.value) > balance.value) {
+  if (Number(amount.value) > availableBalance.value) {
     return { valid: false, message: '가용 잔액을 초과했습니다.' }
   }
   return { valid: true, message: '' }
@@ -91,7 +91,7 @@ async function onSubmit() {
     <AppBackHeader title="출금" />
     <main class="screen-body">
       <p class="balance-line">
-        출금 가능 금액 <strong>{{ formatKRW(balance) }}</strong>
+        출금 가능 금액 <strong>{{ formatKRW(availableBalance) }}</strong>
       </p>
 
       <BankSelect v-model="bankCode" label="입금 은행" />
@@ -107,8 +107,8 @@ async function onSubmit() {
         v-model="amount"
         label="출금 금액"
         :error="amountError"
-        :fill-amount="balance"
-        :max="balance"
+        :fill-amount="availableBalance"
+        :max="availableBalance"
       />
 
       <BaseButton

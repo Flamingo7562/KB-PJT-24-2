@@ -1,11 +1,11 @@
 <script setup>
 /**
  * [F] 알바생 안심지갑 출금  ·  /worker/wallet/withdraw  ·  WORKER
- * 출금 대상(은행·계좌)·금액 지정. 안심지갑 가용 잔액 내에서만(초과 시 서버 400).
+ * 입금 계좌·금액 지정. 안심지갑 가용 잔액 내에서만(초과 시 서버 409).
  * 알바생 지갑은 출금 전용(자가 충전 없음). 사장 출금 화면과 동일한 별도 화면 흐름.
- * 연계 API: GET /worker/home(잔액) · POST /wallet/withdraw
+ * 연계 API: GET /worker/home(잔액) · POST /wallet/withdrawal-requests
  *   →  @/stores/workerHome (loadHome), @/services/wallet (withdrawWallet)
- * 공통: BankSelect(BANKS) · AppField(계좌) · WalletAmountField · isPositiveAmount
+ * 공통: BankSelect(은행) · AppField(계좌) · WalletAmountField · isPositiveAmount
  */
 import { storeToRefs } from 'pinia'
 import { computed, onMounted, ref } from 'vue'
@@ -25,7 +25,7 @@ import { isPositiveAmount } from '@/utils/validators'
 const router = useRouter()
 const ui = useUiStore()
 const homeStore = useWorkerHomeStore()
-const { balance } = storeToRefs(homeStore)
+const { availableBalance } = storeToRefs(homeStore)
 
 const bankCode = ref('')
 const accountNo = ref('')
@@ -51,7 +51,7 @@ const accountCheck = computed(() => {
 const amountCheck = computed(() => {
   const base = isPositiveAmount(amount.value)
   if (!base.valid) return base
-  if (Number(amount.value) > balance.value) {
+  if (Number(amount.value) > availableBalance.value) {
     return { valid: false, message: '가용 잔액을 초과했습니다.' }
   }
   return { valid: true, message: '' }
@@ -93,7 +93,7 @@ async function onSubmit() {
     <AppBackHeader title="출금" />
     <main class="screen-body">
       <p class="balance-line">
-        출금 가능 금액 <strong>{{ formatKRW(balance) }}</strong>
+        출금 가능 금액 <strong>{{ formatKRW(availableBalance) }}</strong>
       </p>
 
       <BankSelect v-model="bankCode" label="입금 은행" />
@@ -109,8 +109,8 @@ async function onSubmit() {
         v-model="amount"
         label="출금 금액"
         :error="amountError"
-        :fill-amount="balance"
-        :max="balance"
+        :fill-amount="availableBalance"
+        :max="availableBalance"
       />
 
       <BaseButton

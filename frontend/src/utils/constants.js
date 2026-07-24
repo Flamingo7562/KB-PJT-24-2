@@ -2,10 +2,12 @@
  * 화면 공통 상수 — 상태 라벨·색 토큰·코드 목록.
  *
  * 화면 표기 용어와 색을 여기서 단일 관리한다(도메인 규칙 docs/rules/domain.md 기준).
- * - `label`: 화면에 노출할 한글 문구(예: DB enum `OPEN` → '매칭전').
+ * - `label`: 화면에 노출할 한글 문구(예: DB enum `SETTLED` → '정산완료').
  * - `color`: base.css 색 변수 문자열. 컴포넌트는 이 값을 그대로 style 에 바인딩한다.
  *
  * 아이콘 매핑(lucide)은 이 파일이 아니라 StatusChip.vue 가 담당한다(여기는 순수 데이터).
+ *
+ * 근무(work_case) 8단계 상태 매핑은 여기가 아니라 `@/constants/workCaseStatus` 단일 소스에 있다.
  */
 import bankHana from '@/assets/images/banks/hana.png'
 import bankIbk from '@/assets/images/banks/ibk.png'
@@ -15,15 +17,6 @@ import bankNh from '@/assets/images/banks/nh.png'
 import bankShinhan from '@/assets/images/banks/shinhan.png'
 import bankToss from '@/assets/images/banks/toss.png'
 import bankWoori from '@/assets/images/banks/woori.png'
-
-/* ---- 근무(shift) 상태 : OPEN→MATCHED→IN_PROGRESS→COMPLETED / MATCHED→NO_SHOW ---- */
-export const SHIFT_STATUS = {
-  OPEN: { label: '매칭전', color: 'var(--color-text-sub)' },
-  MATCHED: { label: '근무전', color: 'var(--color-owner)' },
-  IN_PROGRESS: { label: '근무중', color: 'var(--color-primary)' },
-  COMPLETED: { label: '완료', color: 'var(--color-success)' },
-  NO_SHOW: { label: '노쇼', color: 'var(--color-danger)' }
-}
 
 /* ---- 정산·에스크로 상태 ---- */
 export const SETTLE_STATUS = {
@@ -63,8 +56,8 @@ export const TX_SORT = [
   { value: 'AMOUNT', label: '금액순' }
 ]
 
-/* ---- 오늘의 알바 일정 카드(GET /api/worker/home todayShift.status) ---- */
-export const TODAY_SHIFT_STATUS = {
+/* ---- 오늘의 알바 일정 카드(GET /api/worker/home todayWorkCase.status) ---- */
+export const TODAY_WORK_CASE_STATUS = {
   BEFORE_WORK: { label: '출근 전', color: 'var(--color-owner)' },
   LATE: { label: '지각', color: 'var(--color-warning)' },
   NO_SHOW: { label: '노쇼', color: 'var(--color-danger)' },
@@ -97,7 +90,7 @@ export const BADGE_TYPE = {
 
 /* ---- 알림 유형(GET /api/notifications notiType) ---- */
 export const NOTI_TYPE = {
-  SHIFT_CONFIRMED: { label: '근무 확정' },
+  WORK_CASE_CONFIRMED: { label: '근무 확정' },
   ESCROW_HELD: { label: '예치 완료' },
   SETTLED: { label: '정산 완료' },
   REFUNDED: { label: '노쇼 환불' },
@@ -105,7 +98,7 @@ export const NOTI_TYPE = {
   WAGE_REPORTED: { label: '임금분쟁 신고' }
 }
 
-/* ---- QR 스캔 결과(POST /api/worker/scan scanType) ---- */
+/* ---- QR 스캔 결과(POST /api/attendance/scans scanType) ---- */
 export const SCAN_TYPE = {
   CHECK_IN: { label: '출근' },
   CHECK_OUT: { label: '퇴근' }

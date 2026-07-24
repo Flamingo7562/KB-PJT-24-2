@@ -12,8 +12,8 @@ vi.mock('@/services/worker', () => ({ getWorkerHome: vi.fn() }))
 import { getWorkerHome } from '@/services/worker'
 
 const homePayload = {
-  wallet: { balance: 320000 },
-  todayShift: {
+  wallet: { availableBalance: 320000 },
+  todayWorkCase: {
     status: 'LATE',
     title: '주말 홀 서빙',
     workplaceName: '카페 봄',
@@ -25,10 +25,8 @@ const homePayload = {
     totalMinutes: 480,
     unpaidBreakMinutes: 60,
     lateMinutes: 15,
-    lateDeduction: 3214,
     accruedAmount: 34526,
-    progressRatio: 0.42,
-    expectedNetAmount: 83912
+    progressRatio: 0.42
   }
 }
 
@@ -50,8 +48,8 @@ describe('WorkerHomeView', () => {
 
   it('오늘 근무가 없으면 확보 안심금액 카드를 숨긴다', async () => {
     getWorkerHome.mockResolvedValue({
-      wallet: { balance: 0 },
-      todayShift: { status: 'NONE' },
+      wallet: { availableBalance: 0 },
+      todayWorkCase: { status: 'NONE' },
       earning: null
     })
     const wrapper = mount(WorkerHomeView)

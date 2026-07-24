@@ -18,7 +18,7 @@ import { formatKRW } from '@/utils/format'
 
 const router = useRouter()
 const walletStore = useWalletStore()
-const { balance, heldAmount, transactions, loading } = storeToRefs(walletStore)
+const { availableBalance, lockedBalance, transactions, loading } = storeToRefs(walletStore)
 
 const filterOpen = ref(false)
 const appliedFilter = ref({}) // 현재 적용 중인 송금상세 필터(서버 파라미터)
@@ -40,14 +40,18 @@ function onApplyFilter(params) {
 
 <template>
   <div class="owner-home">
-    <WalletBalanceCard :balance="balance" @charge="onCharge" @withdraw="onWithdraw" />
+    <WalletBalanceCard
+      :available-balance="availableBalance"
+      @charge="onCharge"
+      @withdraw="onWithdraw"
+    />
 
     <div class="held-summary">
       <span class="held-label">
         <Lock :size="16" />
         예치중
       </span>
-      <strong class="held-amount">{{ formatKRW(heldAmount) }}</strong>
+      <strong class="held-amount">{{ formatKRW(lockedBalance) }}</strong>
     </div>
 
     <TransactionList :transactions="transactions" :loading="loading" @open-filter="onOpenFilter" />

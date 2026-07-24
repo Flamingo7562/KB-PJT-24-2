@@ -1,9 +1,9 @@
 <script setup>
 /**
- * [F] 알바생 근무 정보 상세  ·  /worker/work/shifts/:shiftId  ·  WORKER(본인 근무)
+ * [F] 알바생 근무 정보 상세  ·  /worker/work/work-cases/:workCaseId  ·  WORKER(본인 근무)
  * 근무 정보 확인(제목·날짜·시간·휴게·일급·정산 상태).
- * 연계 API: GET /shifts/{id} · GET /shifts/{id}/owner-contact  →  @/services/shifts
- * route.params.shiftId 사용. 공통: StatusChip · 문의하기 시트 · 신고 진입.
+ * 연계 API: GET /work-cases/{id} · GET /work-cases/{id}/workplace-contact  →  @/services/workCases
+ * route.params.workCaseId 사용. 공통: StatusChip · 문의하기 시트 · 신고 진입.
  */
 import { Phone } from 'lucide-vue-next'
 import { onMounted, ref } from 'vue'
@@ -14,7 +14,7 @@ import BaseBottomSheet from '@/components/common/BaseBottomSheet.vue'
 import BaseButton from '@/components/common/BaseButton.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import StatusChip from '@/components/common/StatusChip.vue'
-import { getOwnerContact, getShift } from '@/services/shifts'
+import { getOwnerContact, getWorkCase } from '@/services/workCases'
 import { useUiStore } from '@/stores/ui'
 import { formatDate, formatDuration, formatKRW, formatTimeRange } from '@/utils/format'
 
@@ -22,13 +22,13 @@ const route = useRoute()
 const router = useRouter()
 const ui = useUiStore()
 
-const shiftId = route.params.shiftId
-const shift = ref(null)
+const workCaseId = route.params.workCaseId
+const workCase = ref(null)
 const loading = ref(true)
 
 onMounted(async () => {
   try {
-    shift.value = await getShift(shiftId)
+    workCase.value = await getWorkCase(workCaseId)
   } catch {
     ui.toast('근무 정보를 불러오지 못했습니다.', { type: 'danger' })
   } finally {
@@ -46,7 +46,7 @@ async function openContact() {
   contactOpen.value = true
   contactLoading.value = true
   try {
-    contact.value = await getOwnerContact(shiftId)
+    contact.value = await getOwnerContact(workCaseId)
   } catch {
     ui.toast('연락처를 불러오지 못했습니다.', { type: 'warning' })
   } finally {
@@ -55,7 +55,7 @@ async function openContact() {
 }
 
 function goReport() {
-  router.push(`/worker/work/shifts/${shiftId}/report`)
+  router.push(`/worker/work/work-cases/${workCaseId}/report`)
 }
 </script>
 
@@ -65,40 +65,40 @@ function goReport() {
     <main class="screen-body">
       <p v-if="loading" class="loading">불러오는 중…</p>
 
-      <EmptyState v-else-if="!shift" message="근무 정보를 찾을 수 없습니다." />
+      <EmptyState v-else-if="!workCase" message="근무 정보를 찾을 수 없습니다." />
 
       <template v-else>
         <section class="detail-card">
           <header class="head">
             <div>
-              <p class="workplace">{{ shift.workplaceName }}</p>
-              <h1 class="title">{{ shift.title }}</h1>
+              <p class="workplace">{{ workCase.workplaceName }}</p>
+              <h1 class="title">{{ workCase.title }}</h1>
             </div>
             <div class="chips">
-              <StatusChip :status="shift.status" kind="shift" />
-              <StatusChip :status="shift.settleStatus" kind="settle" />
+              <StatusChip :status="workCase.status" kind="workCase" />
+              <StatusChip :status="workCase.settleStatus" kind="settle" />
             </div>
           </header>
 
           <dl class="info">
             <div class="row">
               <dt>근무일</dt>
-              <dd>{{ formatDate(shift.workDate) }}</dd>
+              <dd>{{ formatDate(workCase.workDate) }}</dd>
             </div>
             <div class="row">
               <dt>근무 시간</dt>
-              <dd>{{ formatTimeRange(shift.startTime, shift.endTime) }}</dd>
+              <dd>{{ formatTimeRange(workCase.startTime, workCase.endTime) }}</dd>
             </div>
             <div class="row">
               <dt>휴게 시간</dt>
               <dd>
-                {{ formatDuration(shift.breakMinutes) }}
-                <span class="break-tag">{{ shift.breakPaid ? '유급' : '무급' }}</span>
+                {{ formatDuration(workCase.breakMinutes) }}
+                <span class="break-tag">{{ workCase.breakPaid ? '유급' : '무급' }}</span>
               </dd>
             </div>
             <div class="row">
               <dt>일급</dt>
-              <dd class="wage">{{ formatKRW(shift.dailyWage) }}</dd>
+              <dd class="wage">{{ formatKRW(workCase.dailyWage) }}</dd>
             </div>
           </dl>
         </section>

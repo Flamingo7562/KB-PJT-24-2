@@ -1,9 +1,9 @@
 /**
  * 회원(내 정보·뱃지) API 서비스.
  *
- * 관련 API(명세 6~10):
+ * 관련 API(명세 USER-001~004, BADGE-001):
  *   GET /api/users/me   PATCH /api/users/me   PATCH /api/users/me/password
- *   DELETE /api/users/me   GET /api/users/me/badge
+ *   POST /api/users/me/withdrawal   GET /api/users/me/badge
  */
 import http from '@/services/http'
 
@@ -49,10 +49,10 @@ export async function changePassword({ currentPassword, newPassword }) {
   await http.patch('/users/me/password', { currentPassword, newPassword })
 }
 
-/** 회원 탈퇴 (명세 9). 잔액·예치금·진행 근무 존재 시 409 */
+/** 회원 탈퇴 (USER-004). 잔액·예치금·진행 근무 존재 시 409 */
 export async function deleteMe({ password }) {
   if (USE_MOCK) return
-  await http.delete('/users/me', { data: { password } })
+  await http.post('/users/me/withdrawal', { password })
 }
 
 /** 내 뱃지 조회 (명세 10) */

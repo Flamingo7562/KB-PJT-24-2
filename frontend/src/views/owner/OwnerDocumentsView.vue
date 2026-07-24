@@ -98,20 +98,23 @@ async function confirmUpload() {
     formData.append('file', file)
     const res = await uploadDocument(formData)
     // mock 은 저장하지 않으므로, 업로드 결과를 로컬에서 즉시 반영해 화면에 보이게 한다.
-    documents.value.unshift({
-      documentId: res.documentId,
-      docType: 'CONTRACT',
-      workplaceId: selectedId.value,
-      workCaseId: null,
-      fileName: file.name.replace(/\.[^.]+$/, ''),
-      fileExt: file.name.split('.').pop(),
-      issuedDate: new Date().toISOString().slice(0, 10),
-      expiryDate: null,
-      source: 'OWN',
-      sharedByName: null,
-      shiftStatus: null,
-      createdAt: new Date().toISOString()
-    })
+    documents.value = [
+      {
+        documentId: res.documentId,
+        docType: 'CONTRACT',
+        workplaceId: selectedId.value,
+        workCaseId: null,
+        fileName: file.name.replace(/\.[^.]+$/, ''),
+        fileExt: file.name.split('.').pop(),
+        issuedDate: new Date().toISOString().slice(0, 10),
+        expiryDate: null,
+        source: 'OWN',
+        sharedByName: null,
+        workCaseStatus: null,
+        createdAt: new Date().toISOString()
+      },
+      ...documents.value
+    ]
     ui.toast('계약서 스캔본을 업로드했어요.', { type: 'success' })
     uploadConfirmOpen.value = false
     pendingFile.value = null
