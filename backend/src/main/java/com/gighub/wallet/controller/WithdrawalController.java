@@ -1,9 +1,9 @@
 package com.gighub.wallet.controller;
 
-import com.gighub.wallet.service.FundingService;
-import com.gighub.wallet.service.command.FundingCommand;
-import com.gighub.wallet.service.result.FundingResult;
-import com.gighub.wallet.dto.FundingRequest;
+import com.gighub.wallet.dto.WithdrawalRequest;
+import com.gighub.wallet.service.WithdrawalService;
+import com.gighub.wallet.service.command.WithdrawalCommand;
+import com.gighub.wallet.service.result.WithdrawalResult;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -18,37 +18,37 @@ import java.util.Map;
 
 @RestController
 @RequiredArgsConstructor
-public class FundingController {
-
+public class WithdrawalController {
     private static final String LOGIN_USER = "LOGIN_USER";
 
-    private final FundingService fundingService;
+    private final WithdrawalService withdrawalService;
 
-    // Mock 게좌에서 지갑으로 충전
-    @PostMapping("/api/wallet/funding-orders")
-    public ResponseEntity<Map<String, Object>> fund(
+    //Mock 계좌로 출금 (사장과 알바생 모두 사용)
+    @PostMapping("/api/wallet/withdrawal-requests")
+    public ResponseEntity<Map<String, Object>> withdraw(
             @RequestHeader("Idempotency-Key") String idempotencyKey,
-            @Valid @RequestBody FundingRequest request,
+            @Valid @RequestBody WithdrawalRequest request,
             HttpSession session) {
+
         Long loginUserId = (Long) session.getAttribute(LOGIN_USER);
         if (loginUserId == null) {
             return ResponseEntity.status(401)
                     .body(Map.of("code", "AUTH_REQUIRED", "message", "로그인이 필요합니다."));
         }
 
-        FundingResult result = fundingService.fund(FundingCommand.builder()
-                .employerId(loginUserId)
+        WithdrawalResult result = withdrawalService.withdraw(WithdrawalCommand.builder()
+                .userId(loginUserId)
                 .linkedAccountId(request.getBankAccountId())
                 .amount(request.getAmount())
                 .idempotencyKey(idempotencyKey)
                 .build());
 
+        // 잔액은 응답에 포함하지 않는다. 최신 잔액은 GET /api/wallet으로 조회한다.
         Map<String, Object> data = new LinkedHashMap<>();
-        data.put("fundingOrderId", result.getFundingOrderId());
+        data.put("withdrawalRequestId", result.getWithdrawalRequestId());
         data.put("status", result.getStatus());
         data.put("bankTransactionId", result.getBankTransactionId());
 
-        // 최초 201, 멱등 재전송은 200 + Idempotency-Replayed
         if (result.isReplayed()) {
             return ResponseEntity.ok()
                     .header("Idempotency-Replayed", "true")

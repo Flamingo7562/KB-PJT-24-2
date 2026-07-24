@@ -79,3 +79,78 @@ GET http://localhost:8080/api/wallet/transactions?size=2&page=0
 GET http://localhost:8080/api/wallet/transactions?sort=id;DROP
 ###
 GET http://localhost:8080/api/wallet/transactions?size=1000
+
+### 알바생(4번) 로그인
+GET http://localhost:8080/api/test-login/4
+
+### 현재 잔액 확인
+GET http://localhost:8080/api/wallet
+
+### 출금
+POST http://localhost:8080/api/wallet/withdrawal-requests
+Content-Type: application/json
+Idempotency-Key: WDR-001
+
+{
+  "bankAccountId": 2,
+  "amount": 300000
+}
+
+### 1. 사장 로그인
+GET http://localhost:8080/api/test-login/3
+
+### 2. 충전
+POST http://localhost:8080/api/wallet/funding-orders
+Content-Type: application/json
+Idempotency-Key: E2E-FUND-01
+
+{"bankAccountId": 1, "amount": 700000}
+
+### 3. 알바생 로그인
+GET http://localhost:8080/api/test-login/4
+
+### 4. 예치
+POST http://localhost:8080/api/invites/TEST-TOKEN-123/accept
+Content-Type: application/json
+Idempotency-Key: E2E-LOCK-01
+
+{"employerId": 3, "workerId": 4, "workCaseId": 1, "amount": 300000}
+
+### 5. 사장 로그인
+GET http://localhost:8080/api/test-login/3
+
+### 6. 정산
+POST http://localhost:8080/api/work-cases/1/settlement/approve
+Idempotency-Key: E2E-REL-01
+
+### 7. 알바생 로그인
+GET http://localhost:8080/api/test-login/4
+
+### 8. 출금
+POST http://localhost:8080/api/wallet/withdrawal-requests
+Content-Type: application/json
+Idempotency-Key: E2E-WDR-01
+
+{"bankAccountId": 2, "amount": 300000}
+
+
+### 멱등 재요청 -> 200 + Idempotency-Replayed: true
+POST http://localhost:8080/api/wallet/withdrawal-requests
+Content-Type: application/json
+Idempotency-Key: E2E-WDR-01
+
+{"bankAccountId": 2, "amount": 300000}
+
+### 같은 키 다른 금액 -> 409 IDEMPOTENCY_KEY_REUSED
+POST http://localhost:8080/api/wallet/withdrawal-requests
+Content-Type: application/json
+Idempotency-Key: E2E-WDR-01
+
+{"bankAccountId": 2, "amount": 100000}
+
+### 타인 계좌 -> 403 BANK_ACCOUNT_FORBIDDEN (계좌1은 사장 소유)
+POST http://localhost:8080/api/wallet/withdrawal-requests
+Content-Type: application/json
+Idempotency-Key: E2E-WDR-02
+
+{"bankAccountId": 1, "amount": 10000}

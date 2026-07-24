@@ -11,6 +11,8 @@ import com.gighub.wallet.exception.InvalidEscrowStateException;
 import com.gighub.wallet.exception.InvalidFundingRequestException;
 import com.gighub.wallet.exception.InvalidIdempotencyKeyException;
 import com.gighub.wallet.exception.InvalidWalletStateException;
+import com.gighub.wallet.exception.InvalidWithdrawalRequestException;
+import com.gighub.wallet.exception.WithdrawalIntegrityException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
@@ -142,6 +144,20 @@ public class CommonExceptionHandler {
         payload.put("message", String.valueOf(message));
         payload.put("traceId", UUID.randomUUID().toString());
         return payload;
+    }
+
+    // 409 - 출금 처리 중 서버 무결성 오류
+    @ExceptionHandler(WithdrawalIntegrityException.class)
+    public ResponseEntity<Map<String, Object>> handleWithdrawalIntegrity(
+            WithdrawalIntegrityException e) {
+        return body(409, "STATE_CONFLICT", e.getMessage());
+    }
+
+    // 400 - 출금 요청 필수 값 또는 금액 오류
+    @ExceptionHandler(InvalidWithdrawalRequestException.class)
+    public ResponseEntity<Map<String, Object>> handleInvalidWithdrawalRequest(
+            InvalidWithdrawalRequestException e) {
+        return body(400, "VALIDATION_FAILED", e.getMessage());
     }
 
 }
