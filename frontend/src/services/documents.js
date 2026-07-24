@@ -16,32 +16,63 @@ import http from '@/services/http'
 const USE_MOCK = true
 
 // source: OWN(내 문서) / SHARED(공유받음, 사장 문서함). expiryDate = 보건증 발급일+1년(표시 계산)
+// shiftStatus: 연결된 근무(work_case)의 상태 스냅샷 — 계약서 삭제 가능 여부 판단용(mock 전용 필드).
+//   실제 API 연동 시 서버가 이미 계산해 내려주는 값으로 교체될 수 있다(교체 지점: isContractDeletable).
 const mockDocuments = [
   {
     documentId: 1,
     docType: 'CONTRACT',
+    workplaceId: 1,
+    workCaseId: 201,
     fileName: '근로계약서_강남점_0722',
     fileExt: 'pdf',
     issuedDate: '2026-07-22',
     expiryDate: null,
     source: 'OWN',
     sharedByName: null,
+    shiftStatus: 'MATCHED', // 근무 시작 전 — 삭제 잠금
     createdAt: '2026-07-22T09:20:00'
   },
   {
     documentId: 2,
-    docType: 'HEALTH_CERT',
-    fileName: '보건증_이알바',
-    fileExt: 'jpg',
-    issuedDate: '2026-03-01',
-    expiryDate: '2027-03-01',
+    docType: 'CONTRACT',
+    workplaceId: 1,
+    workCaseId: 189,
+    fileName: '근로계약서_강남점_0610',
+    fileExt: 'pdf',
+    issuedDate: '2026-06-10',
+    expiryDate: null,
     source: 'OWN',
     sharedByName: null,
-    createdAt: '2026-07-10T14:00:00'
+    shiftStatus: 'COMPLETED', // 근무 종료 — 삭제 가능
+    createdAt: '2026-06-10T09:00:00'
+  },
+  {
+    documentId: 3,
+    docType: 'HEALTH_CERT',
+    workplaceId: 1,
+    workCaseId: 201,
+    fileName: '보건증_김알바',
+    fileExt: 'jpg',
+    issuedDate: '2026-06-01',
+    expiryDate: '2027-06-01',
+    source: 'SHARED',
+    sharedByName: '김알바',
+    shiftStatus: null,
+    createdAt: '2026-06-05T10:00:00'
   }
 ]
 
 const mockShares = [{ workplaceId: 1, workplaceName: '강남점', sharedAt: '2026-07-20T10:00:00' }]
+
+/**
+ * 계약서 삭제 가능 여부(연결 근무 종료 후만, 도메인 규칙).
+ * 보건증은 사장 쪽에서 항상 삭제 불가(원본 삭제는 알바생 권한).
+ * 실제 API 연동 시 서버가 최종 검증(409)하므로, 이 함수는 버튼 노출용 UI 힌트로만 쓴다 — 교체 지점.
+ */
+export function isContractDeletable(document) {
+  return document.docType === 'CONTRACT' && ['COMPLETED', 'NO_SHOW'].includes(document.shiftStatus)
+}
 
 /**
  * 문서 목록 조회 → { content[] } (명세 37).
