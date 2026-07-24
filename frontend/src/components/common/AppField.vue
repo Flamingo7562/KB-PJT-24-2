@@ -19,7 +19,8 @@ defineProps({
   error: { type: String, default: '' },
   hint: { type: String, default: '' },
   required: { type: Boolean, default: false },
-  disabled: { type: Boolean, default: false }
+  disabled: { type: Boolean, default: false },
+  maxlength: { type: [String, Number], default: null }
 })
 
 defineEmits(['update:modelValue'])
@@ -42,6 +43,7 @@ const fieldId = useId()
         :value="modelValue"
         :placeholder="placeholder"
         :disabled="disabled"
+        :maxlength="maxlength"
         @input="$emit('update:modelValue', $event.target.value)"
       />
       <div v-if="$slots.suffix" class="suffix"><slot name="suffix" /></div>
