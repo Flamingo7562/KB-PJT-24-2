@@ -92,15 +92,15 @@ const routes = [
     meta: OWNER
   },
   {
-    path: '/owner/attendance/shifts/new',
-    name: 'owner-shift-new',
-    component: () => import('@/views/owner/shift/OwnerShiftNewView.vue'),
+    path: '/owner/attendance/work-cases/new',
+    name: 'owner-work-case-new',
+    component: () => import('@/views/owner/workCase/OwnerWorkCaseNewView.vue'),
     meta: OWNER
   },
   {
-    path: '/owner/attendance/shifts/:shiftId',
-    name: 'owner-shift-detail',
-    component: () => import('@/views/owner/shift/OwnerShiftDetailView.vue'),
+    path: '/owner/attendance/work-cases/:workCaseId',
+    name: 'owner-work-case-detail',
+    component: () => import('@/views/owner/workCase/OwnerWorkCaseDetailView.vue'),
     meta: OWNER
   },
   {
@@ -171,15 +171,15 @@ const routes = [
     meta: WORKER
   },
   {
-    path: '/worker/work/shifts/:shiftId',
-    name: 'worker-shift-detail',
-    component: () => import('@/views/worker/shift/WorkerShiftDetailView.vue'),
+    path: '/worker/work/work-cases/:workCaseId',
+    name: 'worker-work-case-detail',
+    component: () => import('@/views/worker/workCase/WorkerWorkCaseDetailView.vue'),
     meta: WORKER
   },
   {
-    path: '/worker/work/shifts/:shiftId/report',
+    path: '/worker/work/work-cases/:workCaseId/report',
     name: 'worker-report',
-    component: () => import('@/views/worker/shift/WorkerReportView.vue'),
+    component: () => import('@/views/worker/workCase/WorkerReportView.vue'),
     meta: WORKER
   },
   {
@@ -209,14 +209,24 @@ const routes = [
 
   // ───────── 딥링크: 근무 확정 (WORKER 전용) ─────────
   {
-    path: '/invite/:token',
+    path: '/invitations/:token',
     name: 'invite-confirm',
     component: () => import('@/views/invite/InviteConfirmView.vue'),
     meta: { requiresAuth: true, role: 'WORKER', invite: true }
   },
 
-  // 정의되지 않은 경로는 온보딩으로
-  { path: '/:pathMatch(.*)*', redirect: '/' }
+  // ───────── 오류 화면 (의미 분리: 403 ≠ 404, catch-all 을 /로 리다이렉트하지 않는다) ─────────
+  {
+    path: '/forbidden',
+    name: 'forbidden',
+    component: () => import('@/views/error/ForbiddenView.vue')
+  },
+  // 정의되지 않은 경로는 404 화면(온보딩 리다이렉트 금지 — 잘못된 주소를 홈으로 숨기지 않는다)
+  {
+    path: '/:pathMatch(.*)*',
+    name: 'not-found',
+    component: () => import('@/views/error/NotFoundView.vue')
+  }
 ]
 
 const router = createRouter({
