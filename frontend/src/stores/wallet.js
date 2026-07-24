@@ -8,16 +8,16 @@ import { fetchTransactions, fetchWallet } from '@/services/wallet'
  * 서버 데이터의 최종 원본은 백엔드이며, 여기서는 화면 표시용 상태만 보관한다.
  */
 export const useWalletStore = defineStore('wallet', () => {
-  const balance = ref(0) // 가용 잔액
-  const heldAmount = ref(0) // 예치중 합계
+  const availableBalance = ref(0) // 대표 잔액·출금 가능액 (예치금 미포함)
+  const lockedBalance = ref(0) // 예치중 금액
   const transactions = ref([])
   const loading = ref(false)
   const error = ref(null)
 
   async function loadWallet() {
     const data = await fetchWallet()
-    balance.value = data.balance
-    heldAmount.value = data.heldAmount
+    availableBalance.value = data.availableBalance
+    lockedBalance.value = data.lockedBalance
   }
 
   async function loadTransactions(params = {}) {
@@ -39,8 +39,8 @@ export const useWalletStore = defineStore('wallet', () => {
   }
 
   return {
-    balance,
-    heldAmount,
+    availableBalance,
+    lockedBalance,
     transactions,
     loading,
     error,

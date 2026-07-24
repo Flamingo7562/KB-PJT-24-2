@@ -1,9 +1,9 @@
 <script setup>
 /**
  * [B] 사장 충전  ·  /owner/wallet/charge  ·  OWNER
- * 은행·금액 선택 후 충전(Mock 승인). 사장 전용.
- * 연계 API: POST /wallet/charge  →  @/services/wallet (chargeWallet)
- * 공통: BankSelect(BANKS) · AppField(계좌) · WalletAmountField · isPositiveAmount
+ * PortOne 모의 결제창 — 은행·계좌번호·금액 입력 후 충전(Mock 승인). 사장 전용.
+ * 연계 API: POST /wallet/funding-orders  →  @/services/wallet
+ * 공통: BankSelect(은행) · AppField(계좌) · WalletAmountField · isPositiveAmount
  */
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
@@ -55,7 +55,7 @@ async function onSubmit() {
 
   submitting.value = true
   try {
-    // 서버가 금액을 최종 재검증한다(프론트 값 불신 — 추후 PortOne 교체 지점).
+    // 서버가 금액·계좌를 최종 재검증한다(프론트 값 불신 — 추후 PortOne 교체 지점).
     await chargeWallet({
       bankCode: bankCode.value,
       accountNo: accountNo.value.replace(/-/g, ''),

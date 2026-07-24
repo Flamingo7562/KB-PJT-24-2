@@ -18,10 +18,10 @@ describe('WorkerWithdrawView', () => {
     setActivePinia(createPinia())
     back.mockClear()
     withdrawWallet.mockReset()
-    withdrawWallet.mockResolvedValue({ balance: 220000, txId: 1 })
+    withdrawWallet.mockResolvedValue({ availableBalance: 220000, txId: 1 })
     getWorkerHome.mockResolvedValue({
-      wallet: { balance: 320000 },
-      todayShift: { status: 'NONE' },
+      wallet: { availableBalance: 320000 },
+      todayWorkCase: { status: 'NONE' },
       earning: null
     })
   })
@@ -33,9 +33,10 @@ describe('WorkerWithdrawView', () => {
     const submit = () => wrapper.find('button.submit')
     expect(submit().attributes('disabled')).toBeDefined()
 
-    await wrapper.findAll('.bank')[0].trigger('click')
+    await wrapper.find('button.bank').trigger('click') // 은행 선택(첫 은행)
+    // 입력 필드: [0] 계좌번호, [1] 금액
     const [accountInput, amountInput] = wrapper.findAll('input')
-    await accountInput.setValue('110123456789')
+    await accountInput.setValue('110222333') // 계좌번호(8자리 이상)
 
     await amountInput.setValue('500000') // 잔액 초과
     expect(submit().attributes('disabled')).toBeDefined()
@@ -48,16 +49,16 @@ describe('WorkerWithdrawView', () => {
     const wrapper = mount(WorkerWithdrawView)
     await flushPromises()
 
-    await wrapper.findAll('.bank')[0].trigger('click')
+    await wrapper.find('button.bank').trigger('click')
     const [accountInput, amountInput] = wrapper.findAll('input')
-    await accountInput.setValue('110123456789')
+    await accountInput.setValue('110222333')
     await amountInput.setValue('100000')
 
     await wrapper.find('button.submit').trigger('click')
     await flushPromises()
 
     expect(withdrawWallet).toHaveBeenCalledWith(
-      expect.objectContaining({ accountNo: '110123456789', amount: 100000 })
+      expect.objectContaining({ bankCode: 'KB', accountNo: '110222333', amount: 100000 })
     )
     expect(back).toHaveBeenCalled()
   })

@@ -5,17 +5,20 @@
  * 백엔드가 준비되면 USE_MOCK 를 false 로 바꾸면 실제 `/api/wallet` 을 호출한다.
  * (컴포넌트·스토어는 이 함수 시그니처만 바라보므로 교체 시 변경 지점이 여기로 한정된다.)
  *
- * 관련 API(명세 15~18):
- *   GET /api/wallet   POST /api/wallet/charge   POST /api/wallet/withdraw
+ * 충전·출금은 PortOne 모의 결제창을 흉내낸다 — 은행(bankCode)과 계좌번호(accountNo)를
+ * 직접 입력받아 요청에 싣는다(계좌 등록·조회 목록 없음). 현재는 전부 mock 처리.
+ *
+ * 관련 API(명세 WALLET-001~004):
+ *   GET /api/wallet   POST /api/wallet/funding-orders   POST /api/wallet/withdrawal-requests
  *   GET /api/wallet/transactions
  */
-import http from '@/services/http'
+import http, { idempotentPost } from '@/services/http'
 
 const USE_MOCK = true
 
 const mockWallet = {
-  balance: 1250000, // 가용 잔액
-  heldAmount: 480000 // 예치중 합계(escrow.status='HOLD')
+  availableBalance: 1250000, // 대표 잔액·출금 가능액 (예치금 미포함)
+  lockedBalance: 480000 // 예치중 금액(escrow.status='HOLD')
 }
 
 // 사장 관점 거래 이력. txType: CHARGE/WITHDRAW/ESCROW_HOLD/ESCROW_REFUND
@@ -83,7 +86,7 @@ const mockTransactions = [
   }
 ]
 
-/** 지갑 잔액·예치중 금액 조회 */
+/** 지갑 잔액 조회 → { availableBalance, lockedBalance } */
 export async function fetchWallet() {
   if (USE_MOCK) return { ...mockWallet }
   const { data } = await http.get('/wallet')
@@ -96,27 +99,35 @@ export async function fetchWallet() {
  */
 export async function fetchTransactions(params = {}) {
   if (USE_MOCK) return { content: [...mockTransactions], totalPages: 1 }
-  const { data } = await http.get('/wallet/transactions', { params })
-  return data
+  // 페이지 응답 { content, page, size, totalElements } 은 data 래핑이 없어 본문을 그대로 반환.
+  return http.get('/wallet/transactions', { params })
 }
 
 /**
- * 충전 → { balance, txId } (명세 16). 사장 전용, Mock 승인.
- * 추후 PortOne 교체 지점(클라이언트 금액 불신 — 서버 재검증).
- * @param {object} payload bankCode, accountNo, amount
+ * 충전 → { availableBalance, txId } (WALLET-002). 사장 전용, PortOne 모의 결제(Mock 승인).
+ * 클라이언트 금액·계좌는 신뢰하지 않는다 — 서버(추후 PortOne)가 최종 재검증.
+ * Idempotency-Key(UUID) 필수 — 더블클릭·네트워크 재시도 시 동일 키로 중복 충전 방지.
+ * @param {object} payload bankCode(은행), accountNo(계좌번호), amount
  */
 export async function chargeWallet({ bankCode, accountNo, amount }) {
-  if (USE_MOCK) return { balance: mockWallet.balance + Number(amount), txId: Date.now() }
-  const { data } = await http.post('/wallet/charge', { bankCode, accountNo, amount })
+  if (USE_MOCK)
+    return { availableBalance: mockWallet.availableBalance + Number(amount), txId: Date.now() }
+  const { data } = await idempotentPost('/wallet/funding-orders', { bankCode, accountNo, amount })
   return data
 }
 
 /**
- * 출금 → { balance, txId } (명세 17). 가용 잔액 초과 시 400.
- * @param {object} payload bankCode, accountNo, amount
+ * 출금 → { availableBalance, txId } (WALLET-003). 가용 잔액 초과 시 409.
+ * Idempotency-Key(UUID) 필수 — 재시도 시 동일 키로 중복 출금 방지.
+ * @param {object} payload bankCode(입금 은행), accountNo(계좌번호), amount
  */
 export async function withdrawWallet({ bankCode, accountNo, amount }) {
-  if (USE_MOCK) return { balance: mockWallet.balance - Number(amount), txId: Date.now() }
-  const { data } = await http.post('/wallet/withdraw', { bankCode, accountNo, amount })
+  if (USE_MOCK)
+    return { availableBalance: mockWallet.availableBalance - Number(amount), txId: Date.now() }
+  const { data } = await idempotentPost('/wallet/withdrawal-requests', {
+    bankCode,
+    accountNo,
+    amount
+  })
   return data
 }
