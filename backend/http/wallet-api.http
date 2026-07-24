@@ -4,6 +4,12 @@ Idempotency-Key: PING
 ### 1. 사장(3번) 로그인
 GET http://localhost:8080/api/test-login/3
 
+###
+GET http://localhost:8080/api/mock-bank-accounts
+
+###
+GET http://localhost:8080/api/wallet
+
 ### 2. 충전 700,000
 POST http://localhost:8080/api/wallet/funding-orders
 Content-Type: application/json
@@ -13,7 +19,6 @@ Idempotency-Key: FUND-001
   "bankAccountId": 1,
   "amount": 500000
 }
-
 
 
 ### 3. 알바생(4번) 로그인
@@ -50,3 +55,27 @@ Idempotency-Key: WDR-001
   "bankAccountId": 2,
   "amount": 300000
 }
+
+### 필터
+GET http://localhost:8080/api/mock-bank-accounts?status=ACTIVE
+###
+GET http://localhost:8080/api/mock-bank-accounts?status=CLOSED
+
+###
+GET http://localhost:8080/api/wallet/transactions
+
+### 필터
+GET http://localhost:8080/api/wallet/transactions?type=ESCROW_HOLD
+###
+GET http://localhost:8080/api/wallet/transactions?sort=AMOUNT_DESC
+###
+GET http://localhost:8080/api/wallet/transactions?minAmount=500000
+###
+GET http://localhost:8080/api/wallet/transactions?from=2026-07-24&to=2026-07-24
+###
+GET http://localhost:8080/api/wallet/transactions?size=2&page=0
+
+### whitelist 방어 (400 기대)
+GET http://localhost:8080/api/wallet/transactions?sort=id;DROP
+###
+GET http://localhost:8080/api/wallet/transactions?size=1000
