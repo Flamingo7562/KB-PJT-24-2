@@ -13,6 +13,8 @@ import { storeToRefs } from 'pinia'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
+import BaseButton from '@/components/common/BaseButton.vue'
+import BaseModal from '@/components/common/BaseModal.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import {
   deleteDocument,
@@ -72,11 +74,22 @@ function triggerUpload() {
   fileInput.value?.click()
 }
 
-async function onFileSelected(e) {
+/* ---- 계약서 스캔 업로드(확인 모달) ---- */
+const pendingFile = ref(null)
+const uploadConfirmOpen = ref(false)
+
+// 파일 선택 시 바로 올리지 않고, 확인 모달로 한 번 더 확인받는다.
+function onFileSelected(e) {
   const file = e.target.files?.[0]
   e.target.value = ''
   if (!file) return
+  pendingFile.value = file
+  uploadConfirmOpen.value = true
+}
 
+async function confirmUpload() {
+  const file = pendingFile.value
+  if (!file) return
   uploading.value = true
   try {
     const formData = new FormData()
@@ -100,6 +113,8 @@ async function onFileSelected(e) {
       createdAt: new Date().toISOString()
     })
     ui.toast('계약서 스캔본을 업로드했어요.', { type: 'success' })
+    uploadConfirmOpen.value = false
+    pendingFile.value = null
   } catch (err) {
     ui.toast(err?.response?.data?.message || '업로드에 실패했어요.', { type: 'danger' })
   } finally {
@@ -107,14 +122,36 @@ async function onFileSelected(e) {
   }
 }
 
-async function onDelete(doc) {
+/* ---- 삭제(확인 모달) ---- */
+const deleteTarget = ref(null)
+const deleteOpen = ref(false)
+const deleting = ref(false)
+
+function openDelete(doc) {
+  deleteTarget.value = doc
+  deleteOpen.value = true
+}
+
+async function confirmDelete() {
+  const doc = deleteTarget.value
+  if (!doc) return
+  deleting.value = true
   try {
     await deleteDocument(doc.documentId)
     // 당사자별 독립 삭제(내 문서함에서만 제거) — 로컬 리스트에서만 제거해 흉내낸다.
     documents.value = documents.value.filter((d) => d.documentId !== doc.documentId)
     ui.toast('삭제했어요.', { type: 'success' })
+    deleteOpen.value = false
+    deleteTarget.value = null
   } catch (err) {
-    ui.toast(err?.response?.data?.message || '삭제할 수 없어요.', { type: 'danger' })
+    // 계약서는 근무 종료 후에만 삭제 가능 — 서버가 최종 검증(409).
+    if (err?.response?.status === 409) {
+      ui.toast('진행 중인 근무가 있어 계약서를 삭제할 수 없어요.', { type: 'warning' })
+    } else {
+      ui.toast(err?.response?.data?.message || '삭제할 수 없어요.', { type: 'danger' })
+    }
+  } finally {
+    deleting.value = false
   }
 }
 </script>
@@ -185,7 +222,7 @@ async function onDelete(doc) {
             type="button"
             class="delete-btn"
             aria-label="문서 삭제"
-            @click="onDelete(doc)"
+            @click="openDelete(doc)"
           >
             <Trash2 :size="16" />
           </button>
@@ -197,6 +234,37 @@ async function onDelete(doc) {
       계약서 삭제는 해당 근무 종료 후 가능 · 공유받은 보건증은 읽기 전용(공유 취소는 알바생 권한) ·
       보건증 직접 업로드 없음
     </p>
+
+    <!-- 업로드 확인 -->
+    <BaseModal
+      :open="uploadConfirmOpen"
+      title="계약서를 업로드할까요?"
+      @close="uploadConfirmOpen = false"
+    >
+      <p class="modal-msg">
+        <strong>{{ pendingFile?.name }}</strong> 파일을 계약서 스캔본으로 등록합니다.
+      </p>
+      <template #footer>
+        <BaseButton variant="secondary" block @click="uploadConfirmOpen = false">취소</BaseButton>
+        <BaseButton variant="owner" block :disabled="uploading" @click="confirmUpload">
+          {{ uploading ? '업로드 중…' : '업로드' }}
+        </BaseButton>
+      </template>
+    </BaseModal>
+
+    <!-- 삭제 확인 -->
+    <BaseModal :open="deleteOpen" title="삭제할까요?" @close="deleteOpen = false">
+      <p class="modal-msg">
+        <strong>{{ deleteTarget?.fileName }}</strong> 문서를 삭제합니다.
+      </p>
+      <p class="modal-note">근무가 종료된 계약서만 삭제할 수 있어요.</p>
+      <template #footer>
+        <BaseButton variant="secondary" block @click="deleteOpen = false">취소</BaseButton>
+        <BaseButton variant="danger" block :disabled="deleting" @click="confirmDelete">
+          {{ deleting ? '삭제 중…' : '삭제' }}
+        </BaseButton>
+      </template>
+    </BaseModal>
   </div>
 </template>
 
@@ -346,6 +414,16 @@ async function onDelete(doc) {
   padding: var(--space-md);
   background: var(--color-bg);
   border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  color: var(--color-text-sub);
+}
+
+.modal-msg {
+  font-size: var(--text-md);
+  color: var(--color-text);
+}
+.modal-note {
+  margin-top: var(--space-sm);
   font-size: var(--text-sm);
   color: var(--color-text-sub);
 }
