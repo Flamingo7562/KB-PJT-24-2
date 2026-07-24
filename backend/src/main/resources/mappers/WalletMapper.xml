@@ -32,6 +32,18 @@
             FOR UPDATE
     </select>
 
+    <!-- 지갑 잔액 스냅샷 조회 및 행 잠금 -->
+    <select id="getWalletSnapshotForUpdate"
+            resultType="com.gighub.wallet.dto.WalletBalanceSnapshot">
+        SELECT id                AS walletId,
+               user_id           AS userId,
+               available_balance AS availableBalance,
+               locked_balance    AS lockedBalance
+        FROM wallets
+        WHERE user_id = #{userId}
+        FOR UPDATE
+    </select>
+
     <update id="addAvailableBalance">
         UPDATE wallets
         SET available_balance = available_balance + #{amount},
@@ -113,6 +125,7 @@
         SELECT id
         FROM escrows
         WHERE work_case_id = #{workCaseId}
+        FOR UPDATE
     </select>
 
     <!-- ================= 3. 원장(Ledger) ================= -->
@@ -121,6 +134,55 @@
         SELECT COUNT(*)
         FROM wallet_transactions
         WHERE idempotency_key = #{idempotencyKey}
+    </select>
+
+    <sql id="transactionSnapshotColumns">
+        wt.id                 AS id,
+        wt.wallet_id          AS walletId,
+        w.user_id             AS walletUserId,
+        wt.work_case_id       AS workCaseId,
+        wt.transaction_type   AS transactionType,
+        wt.amount             AS amount,
+        wt.available_before   AS availableBefore,
+        wt.available_after    AS availableAfter,
+        wt.locked_before      AS lockedBefore,
+        wt.locked_after       AS lockedAfter,
+        wt.reference_type     AS referenceType,
+        wt.reference_id       AS referenceId
+    </sql>
+
+    <select id="findTransactionByIdempotencyKey"
+            resultType="com.gighub.wallet.dto.WalletTransactionSnapshot">
+        SELECT <include refid="transactionSnapshotColumns"/>
+        FROM wallet_transactions wt
+        JOIN wallets w ON w.id = wt.wallet_id
+        WHERE wt.idempotency_key = #{idempotencyKey}
+    </select>
+
+    <select id="findFundingTransactionSnapshot"
+            resultType="com.gighub.wallet.dto.WalletTransactionSnapshot">
+        SELECT <include refid="transactionSnapshotColumns"/>
+        FROM wallet_transactions wt
+        JOIN wallets w ON w.id = wt.wallet_id
+        WHERE wt.idempotency_key = #{idempotencyKey}
+          AND wt.transaction_type = 'FUNDING'
+          AND wt.work_case_id IS NULL
+          AND wt.reference_type = 'FUNDING_ORDER'
+          AND wt.reference_id = #{fundingOrderId}
+          AND w.user_id = #{employerId}
+        FOR SHARE OF wt
+    </select>
+
+    <select id="findEscrowHoldTransactionSnapshot"
+            resultType="com.gighub.wallet.dto.WalletTransactionSnapshot">
+        SELECT <include refid="transactionSnapshotColumns"/>
+        FROM wallet_transactions wt
+        JOIN wallets w ON w.id = wt.wallet_id
+        WHERE wt.work_case_id = #{workCaseId}
+          AND wt.transaction_type = 'ESCROW_HOLD'
+          AND wt.reference_type = 'ESCROW'
+          AND wt.reference_id = #{escrowId}
+        FOR SHARE OF wt
     </select>
 
     <insert id="insertWalletTransaction"

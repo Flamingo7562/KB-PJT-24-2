@@ -3,14 +3,16 @@ package com.gighub.common.exception;
 import com.gighub.bank.exception.BankAccountForbiddenException;
 import com.gighub.bank.exception.InsufficientBankBalanceException;
 import com.gighub.bank.exception.InvalidBankAccountStateException;
+import com.gighub.wallet.exception.EscrowAccessDeniedException;
 import com.gighub.wallet.exception.IdempotencyKeyReusedException;
 import com.gighub.wallet.exception.InsufficientAvailableBalanceException;
 import com.gighub.wallet.exception.InsufficientWalletBalanceException;
 import com.gighub.wallet.exception.InvalidEscrowStateException;
+import com.gighub.wallet.exception.InvalidFundingRequestException;
+import com.gighub.wallet.exception.InvalidIdempotencyKeyException;
 import com.gighub.wallet.exception.InvalidWalletStateException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingRequestHeaderException;
@@ -27,6 +29,13 @@ import java.util.UUID;
 public class CommonExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(CommonExceptionHandler.class);
+
+    /** 403 - 근무 건 에스크로 접근 권한 없음 */
+    @ExceptionHandler(EscrowAccessDeniedException.class)
+    public ResponseEntity<Map<String, Object>> handleEscrowAccessDenied(
+            EscrowAccessDeniedException e) {
+        return body(403, "WORK_CASE_FORBIDDEN", e.getMessage());
+    }
 
     /** 403 - 타인 소유 계좌 접근 */
     @ExceptionHandler(BankAccountForbiddenException.class)
@@ -76,10 +85,18 @@ public class CommonExceptionHandler {
         return body(409, "IDEMPOTENCY_KEY_REUSED", e.getMessage());
     }
 
-    /** 409 - UNIQUE 제약 충돌 (동시 요청이 멱등성 검사를 함께 통과한 경우 DB가 막는 지점) */
-    @ExceptionHandler(DuplicateKeyException.class)
-    public ResponseEntity<Map<String, Object>> handleDuplicate(DuplicateKeyException e) {
-        return body(409, "DUPLICATE_REQUEST", "이미 처리된 요청입니다.");
+    /** 400 - 멱등 키 형식 오류 */
+    @ExceptionHandler(InvalidIdempotencyKeyException.class)
+    public ResponseEntity<Map<String, Object>> handleInvalidIdempotencyKey(
+            InvalidIdempotencyKeyException e) {
+        return body(400, "INVALID_IDEMPOTENCY_KEY", e.getMessage());
+    }
+
+    /** 400 - 충전 요청 필수 값 또는 금액 오류 */
+    @ExceptionHandler(InvalidFundingRequestException.class)
+    public ResponseEntity<Map<String, Object>> handleInvalidFundingRequest(
+            InvalidFundingRequestException e) {
+        return body(400, "VALIDATION_FAILED", e.getMessage());
     }
 
     /** 400 - Idempotency-Key 헤더 누락 */
