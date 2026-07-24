@@ -11,8 +11,10 @@ Idempotency-Key: FUND-001
 
 {
   "bankAccountId": 1,
-  "amount": 700000
+  "amount": 500000
 }
+
+
 
 ### 3. 알바생(4번) 로그인
 GET http://localhost:8080/api/test-login/4
