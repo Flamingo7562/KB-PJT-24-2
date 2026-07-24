@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.gighub.wallet.mapper.FundingMapper">
+
+    <select id="findByIdempotencyKeyForShare"
+            resultType="com.gighub.wallet.dto.FundingOrder">
+        SELECT id                       AS id,
+               employer_id              AS employerId,
+               linked_account_id        AS linkedAccountId,
+               expected_amount          AS expectedAmount,
+               transferred_amount       AS transferredAmount,
+               mock_bank_transaction_id AS mockBankTransactionId,
+               status                   AS status
+        FROM funding_orders
+        WHERE idempotency_key = #{idempotencyKey}
+        FOR SHARE
+    </select>
+
+    <insert id="insertFundingOrder" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO funding_orders
+        (employer_id, linked_account_id, expected_amount, idempotency_key, status)
+        VALUES
+        (#{employerId}, #{linkedAccountId}, #{expectedAmount}, #{idempotencyKey}, 'READY')
+    </insert>
+
+    <update id="completeFundingOrder">
+        UPDATE funding_orders
+        SET transferred_amount       = #{transferredAmount},
+        mock_bank_transaction_id = #{bankTransactionId},
+        status                   = 'COMPLETED',
+        completed_at             = NOW(6),
+        updated_at               = NOW(6)
+        WHERE id = #{id} AND status = 'READY'
+    </update>
+
+</mapper>

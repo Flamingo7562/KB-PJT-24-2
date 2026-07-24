@@ -1,0 +1,50 @@
+POST http://localhost:8080/api/work-cases/1/settlement/approve
+Idempotency-Key: PING
+
+### 1. 사장(3번) 로그인
+GET http://localhost:8080/api/test-login/3
+
+### 2. 충전 700,000
+POST http://localhost:8080/api/wallet/funding-orders
+Content-Type: application/json
+Idempotency-Key: FUND-001
+
+{
+  "bankAccountId": 1,
+  "amount": 700000
+}
+
+### 3. 알바생(4번) 로그인
+GET http://localhost:8080/api/test-login/4
+
+### 4. 예치
+POST http://localhost:8080/api/invites/TEST-TOKEN-123/accept
+Content-Type: application/json
+Idempotency-Key: LOCK-001
+
+{
+  "employerId": 3,
+  "workerId": 4,
+  "workCaseId": 1,
+  "amount": 300000
+}
+
+### 5. 사장(3번) 로그인
+GET http://localhost:8080/api/test-login/3
+
+### 6. 정산 승인
+POST http://localhost:8080/api/work-cases/1/settlement/approve
+Idempotency-Key: RELEASE-001
+
+### 7. 알바생(4번) 로그인
+GET http://localhost:8080/api/test-login/4
+
+### 8. 출금 300,000
+POST http://localhost:8080/api/wallet/withdrawal-requests
+Content-Type: application/json
+Idempotency-Key: WDR-001
+
+{
+  "bankAccountId": 2,
+  "amount": 300000
+}
