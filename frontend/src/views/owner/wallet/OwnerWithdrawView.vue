@@ -108,6 +108,7 @@ async function onSubmit() {
         label="출금 금액"
         :error="amountError"
         :fill-amount="balance"
+        :max="balance"
       />
 
       <BaseButton

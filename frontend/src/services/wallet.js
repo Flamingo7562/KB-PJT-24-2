@@ -103,11 +103,11 @@ export async function fetchTransactions(params = {}) {
 /**
  * 충전 → { balance, txId } (명세 16). 사장 전용, Mock 승인.
  * 추후 PortOne 교체 지점(클라이언트 금액 불신 — 서버 재검증).
- * @param {object} payload bankCode, amount
+ * @param {object} payload bankCode, accountNo, amount
  */
-export async function chargeWallet({ bankCode, amount }) {
+export async function chargeWallet({ bankCode, accountNo, amount }) {
   if (USE_MOCK) return { balance: mockWallet.balance + Number(amount), txId: Date.now() }
-  const { data } = await http.post('/wallet/charge', { bankCode, amount })
+  const { data } = await http.post('/wallet/charge', { bankCode, accountNo, amount })
   return data
 }
 

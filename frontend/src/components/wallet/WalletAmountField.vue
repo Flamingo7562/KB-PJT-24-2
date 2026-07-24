@@ -16,7 +16,9 @@ const props = defineProps({
   placeholder: { type: String, default: '금액을 입력하세요' },
   quickAmounts: { type: Array, default: () => [10000, 50000, 100000, 1000000] },
   // '전액' 버튼에 채울 금액(출금 화면용). null 이면 버튼을 숨긴다.
-  fillAmount: { type: Number, default: null }
+  fillAmount: { type: Number, default: null },
+  // 빠른금액 칩의 상한(출금 화면의 가용 잔액). null 이면 상한 없음(충전).
+  max: { type: Number, default: null }
 })
 
 const emit = defineEmits(['update:modelValue'])
@@ -31,7 +33,11 @@ function quickLabel(v) {
 }
 
 function setAmount(v) {
-  emit('update:modelValue', String(Math.max(0, Math.floor(v))))
+  let next = Math.max(0, Math.floor(v))
+  // 빠른금액 칩/전액은 상한(가용 잔액)을 넘지 않게 자른다. 직접 타이핑(onInput)은 자르지 않고
+  // 상위에서 초과 에러로 안내한다(타이핑 도중 값이 튀는 것을 막기 위함).
+  if (props.max != null) next = Math.min(next, props.max)
+  emit('update:modelValue', String(next))
 }
 
 function addAmount(v) {
