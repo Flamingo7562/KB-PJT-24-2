@@ -1,9 +1,9 @@
 <script setup>
 /**
- * [F] 임금분쟁 신고  ·  /worker/work/shifts/:shiftId/report  ·  WORKER(본인 근무)
+ * [F] 임금분쟁 신고  ·  /worker/work/work-cases/:workCaseId/report  ·  WORKER(본인 근무)
  * 경위서 작성·제출. 기록·알림용 — 정산 영향 없음. 제출 시 사장 알림(WAGE_REPORTED).
- * 연계 API: POST /worker/shifts/{id}/reports  →  @/services/shifts (createReport)
- * route.params.shiftId 사용. 공통: BaseButton · 제출 후 useUiStore().toast + 뒤로가기.
+ * 연계 API: POST /work-cases/{id}/disputes  →  @/services/workCases (createReport)
+ * route.params.workCaseId 사용. 공통: BaseButton · 제출 후 useUiStore().toast + 뒤로가기.
  */
 import { Info } from 'lucide-vue-next'
 import { computed, ref } from 'vue'
@@ -11,7 +11,7 @@ import { useRoute, useRouter } from 'vue-router'
 
 import AppBackHeader from '@/components/common/AppBackHeader.vue'
 import BaseButton from '@/components/common/BaseButton.vue'
-import { createReport } from '@/services/shifts'
+import { createReport } from '@/services/workCases'
 import { useUiStore } from '@/stores/ui'
 
 const MIN_LENGTH = 10
@@ -20,7 +20,7 @@ const route = useRoute()
 const router = useRouter()
 const ui = useUiStore()
 
-const shiftId = route.params.shiftId
+const workCaseId = route.params.workCaseId
 const content = ref('')
 const submitting = ref(false)
 
@@ -35,7 +35,7 @@ async function onSubmit() {
 
   submitting.value = true
   try {
-    await createReport(shiftId, { content: content.value.trim() })
+    await createReport(workCaseId, { content: content.value.trim() })
     ui.toast('신고가 접수되었습니다.', { type: 'success' })
     router.back()
   } catch {

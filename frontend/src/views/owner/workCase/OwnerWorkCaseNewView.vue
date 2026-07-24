@@ -1,9 +1,9 @@
 <script setup>
 /**
- * [C] 근무 포지션 등록  ·  /owner/attendance/shifts/new  ·  OWNER
- * 제목·날짜·시작/종료시간·휴게시간(유급/무급)·일급 입력 → status=OPEN 생성.
+ * [C] 근무 포지션 등록  ·  /owner/attendance/work-cases/new  ·  OWNER
+ * 제목·날짜·시작/종료시간·휴게시간(유급/무급)·일급 입력 → status=DRAFT 생성.
  * 지점 컨텍스트: useWorkplaceStore().selectedId.
- * 연계 API: POST /workplaces/{id}/shifts  →  @/services/shifts (createShift)
+ * 연계 API: POST /workplaces/{id}/work-cases  →  @/services/workCases (createWorkCase)
  * 공통: AppField · BaseButton · @/utils/validators
  */
 import { onMounted, reactive, ref } from 'vue'
@@ -12,7 +12,7 @@ import { useRouter } from 'vue-router'
 import AppBackHeader from '@/components/common/AppBackHeader.vue'
 import AppField from '@/components/common/AppField.vue'
 import BaseButton from '@/components/common/BaseButton.vue'
-import { createShift } from '@/services/shifts'
+import { createWorkCase } from '@/services/workCases'
 import { useUiStore } from '@/stores/ui'
 import { useWorkplaceStore } from '@/stores/workplace'
 import { formatKRW } from '@/utils/format'
@@ -86,7 +86,7 @@ async function onSubmit() {
 
   submitting.value = true
   try {
-    await createShift(workplaceId, {
+    await createWorkCase(workplaceId, {
       title: form.title.trim(),
       workDate: form.workDate,
       startTime: form.startTime,

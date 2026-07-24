@@ -4,7 +4,7 @@
  * 사업장 목록·추가(+)·수정·삭제. 진행 중 근무 있는 지점 삭제 제한(409).
  * 연계 API: GET/POST /workplaces · PATCH/DELETE /workplaces/{id}
  *   →  @/services/workplaces (list, create, update, remove)
- * 진행 중 근무 건수: GET /workplaces/{id}/shifts/summary → @/services/shifts (getShiftSummary)
+ * 진행 중 근무 건수: GET /workplaces/{id}/work-cases/summary → @/services/workCases (getWorkCaseSummary)
  * 변경 후 useWorkplaceStore().load({force:true}) 로 네비 select 갱신.
  */
 import { Building2 } from 'lucide-vue-next'
@@ -17,7 +17,7 @@ import AppField from '@/components/common/AppField.vue'
 import BaseButton from '@/components/common/BaseButton.vue'
 import BaseModal from '@/components/common/BaseModal.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
-import { getShiftSummary } from '@/services/shifts'
+import { getWorkCaseSummary } from '@/services/workCases'
 import { deleteWorkplace, updateWorkplace } from '@/services/workplaces'
 import { useUiStore } from '@/stores/ui'
 import { useWorkplaceStore } from '@/stores/workplace'
@@ -52,8 +52,8 @@ onMounted(async () => {
   await workplaceStore.load()
   await Promise.all(
     workplaces.value.map(async (w) => {
-      const summary = await getShiftSummary(w.workplaceId)
-      workingCounts[w.workplaceId] = summary.workingCount
+      const summary = await getWorkCaseSummary(w.workplaceId)
+      workingCounts[w.workplaceId] = summary.inProgress
     })
   )
 })
