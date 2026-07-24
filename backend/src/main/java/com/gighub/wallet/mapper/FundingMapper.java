@@ -8,7 +8,7 @@ import org.apache.ibatis.annotations.Param;
 @Mapper
 public interface FundingMapper {
 
-    FundingOrder findByIdempotencyKey(@Param("idempotencyKey") String idempotencyKey);
+    FundingOrder findByIdempotencyKeyForShare(@Param("idempotencyKey") String idempotencyKey);
 
     int insertFundingOrder(FundingOrderParam param);
 

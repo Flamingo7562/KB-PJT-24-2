@@ -8,6 +8,8 @@ import lombok.Value;
 public class BankTransferResult {
     Long bankTransactionId;
     String bankTranId;
+    String status;
+    Long transferredAmount;
     Long balanceBefore;
     Long balanceAfter;
 }
