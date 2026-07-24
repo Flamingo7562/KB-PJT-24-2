@@ -2,8 +2,10 @@
 # UPDATE wallets SET available_balance = 700000, locked_balance = 0 WHERE user_id = 3;
 # UPDATE wallets SET available_balance = 0, locked_balance = 0 WHERE user_id = 4;
 # DELETE FROM wallet_transactions WHERE work_case_id = 1;
+# DELETE FROM settlements WHERE work_case_id = 1;
 # DELETE FROM escrows WHERE work_case_id = 1;
 # UPDATE work_cases SET status = 'INVITED', worker_id = 4 WHERE id = 1;
+# INSERT INTO settlements (work_case_id, amount, status) VALUES (1, 300000, 'WAITING');
 #
 # [확인] 아래 agreed_wage 값과 2번 요청의 amount가 같아야 합니다.
 # SELECT id, employer_id, worker_id, agreed_wage, status FROM work_cases WHERE id = 1;
@@ -37,7 +39,8 @@ GET http://localhost:8080/api/test-login/3
 
 ### =================================================================
 
-### 4. 정산 승인(Release) 요청 (Body 없음)
+### 4. 정산 승인 요청 (Body 없음)
+# 응답 data: settlementId, status, completedAt
 POST http://localhost:8080/api/work-cases/1/settlement/approve
 Idempotency-Key: TEST-RELEASE-008
 

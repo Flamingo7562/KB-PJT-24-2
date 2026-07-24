@@ -1,9 +1,12 @@
 package com.gighub.wallet.controller;
 
+import com.gighub.settlement.dto.SettlementApproveResponse;
+import com.gighub.settlement.service.SettlementService;
+import com.gighub.settlement.service.command.SettlementApproveCommand;
+import com.gighub.settlement.service.result.SettlementResult;
 import com.gighub.wallet.dto.EscrowHoldRequest;
 import com.gighub.wallet.service.EscrowService;
 import com.gighub.wallet.service.command.EscrowHoldCommand;
-import com.gighub.wallet.service.command.EscrowReleaseCommand;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -23,6 +26,7 @@ public class EscrowController {
     private static final String LOGIN_USER = "LOGIN_USER";
 
     private final EscrowService escrowService;
+    private final SettlementService settlementService;
 
      //예치 API (근로자가 초대를 수락할 때 호출).
      //TODO(후속): token에서 employer/worker/workCase/amount를 서버가 도출하도록 교체.
@@ -57,7 +61,7 @@ public class EscrowController {
 
     /** 정산 API (사장님 수동 승인 또는 향후 자동 정산 작업에서 호출). */
     @PostMapping("/api/work-cases/{workCaseId}/settlement/approve")
-    public ResponseEntity<Map<String, Object>> release(
+    public ResponseEntity<Map<String, Object>> approveSettlement(
             @PathVariable Long workCaseId,
             @RequestHeader("Idempotency-Key") String idempotencyKey,
             HttpSession session) {
@@ -68,13 +72,16 @@ public class EscrowController {
                     .body(Map.of("code", "AUTH_REQUIRED", "message", "로그인이 필요합니다."));
         }
 
-        // 수령자와 금액은 서비스가 DB에서 도출한다.
-        escrowService.release(EscrowReleaseCommand.builder()
-                .workCaseId(workCaseId)
-                .employerId(loginUserId)
-                .idempotencyKey(idempotencyKey)
-                .build());
+        SettlementResult result =
+                settlementService.approve(SettlementApproveCommand.builder()
+                        .workCaseId(workCaseId)
+                        .approverUserId(loginUserId)
+                        .idempotencyKey(idempotencyKey)
+                        .build());
 
-        return ResponseEntity.ok(Map.of("data", Map.of("status", "COMPLETED")));
+        return ResponseEntity.ok(Map.of(
+                "data",
+                SettlementApproveResponse.from(result)
+        ));
     }
 }
