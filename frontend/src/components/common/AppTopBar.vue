@@ -9,7 +9,7 @@
 import { Bell, CircleUser } from 'lucide-vue-next'
 import { storeToRefs } from 'pinia'
 import { computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 
 import LogoSymbol from '@/assets/images/logo/logo-symbol.svg'
 import { useNotificationsStore } from '@/stores/notifications'
@@ -20,7 +20,11 @@ const props = defineProps({
 })
 
 const router = useRouter()
+const route = useRoute()
 const isOwner = computed(() => props.role === 'OWNER')
+
+// 사장 홈(지갑)은 전 지점 합산이라 지점 선택이 무의미하다 → select 대신 '전체지점' 고정 표시.
+const isOwnerHome = computed(() => isOwner.value && route.path === '/owner/home')
 
 const workplace = useWorkplaceStore()
 const { workplaces, selectedId } = storeToRefs(workplace)
@@ -56,8 +60,9 @@ function goMyPage() {
     </span>
 
     <div class="right">
+      <span v-if="isOwnerHome" class="branch branch--all">전체지점</span>
       <select
-        v-if="isOwner && workplaces.length"
+        v-else-if="isOwner && workplaces.length"
         v-model="branch"
         class="branch"
         aria-label="지점 선택"
@@ -127,6 +132,12 @@ function goMyPage() {
   font-size: var(--text-sm);
   color: var(--color-text);
   background: var(--color-surface);
+}
+/* 사장 홈 전용 — 선택 불가한 '전체지점' 라벨 */
+.branch--all {
+  display: inline-flex;
+  align-items: center;
+  color: var(--color-text-sub);
 }
 .icon-btn {
   position: relative;
