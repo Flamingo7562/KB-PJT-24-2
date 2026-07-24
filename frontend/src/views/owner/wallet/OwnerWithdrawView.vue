@@ -91,7 +91,7 @@ async function onSubmit() {
     <AppBackHeader title="출금" />
     <main class="screen-body">
       <p class="balance-line">
-        출금 가능 금액 <strong>{{ formatKRW(balance) }}</strong>
+        가용 잔액 <strong>{{ formatKRW(balance) }}</strong>
       </p>
 
       <BankSelect v-model="bankCode" label="입금 은행" />
@@ -108,6 +108,7 @@ async function onSubmit() {
         label="출금 금액"
         :error="amountError"
         :fill-amount="balance"
+        :max="balance"
       />
 
       <BaseButton

@@ -7,6 +7,14 @@
  *
  * 아이콘 매핑(lucide)은 이 파일이 아니라 StatusChip.vue 가 담당한다(여기는 순수 데이터).
  */
+import bankHana from '@/assets/images/banks/hana.png'
+import bankIbk from '@/assets/images/banks/ibk.png'
+import bankKakao from '@/assets/images/banks/kakao.png'
+import bankKb from '@/assets/images/banks/kb.png'
+import bankNh from '@/assets/images/banks/nh.png'
+import bankShinhan from '@/assets/images/banks/shinhan.png'
+import bankToss from '@/assets/images/banks/toss.png'
+import bankWoori from '@/assets/images/banks/woori.png'
 
 /* ---- 근무(shift) 상태 : OPEN→MATCHED→IN_PROGRESS→COMPLETED / MATCHED→NO_SHOW ---- */
 export const SHIFT_STATUS = {
@@ -105,18 +113,17 @@ export const SCAN_TYPE = {
 
 /**
  * 은행 목록(충전·출금 은행 선택).
- * 실제 은행 로고는 상표 이슈로 사용하지 않고, 이름 + 색칩(chip)으로 표시한다.
- * (assets/README.md 은행 로고 항목 참조)
+ * `logo`: assets/images/banks/*.png 로고. `chip`: 로고 로드 실패 시 폴백 색.
  */
 export const BANKS = [
-  { code: 'KB', name: '국민은행', chip: '#FFCC00' },
-  { code: 'SHINHAN', name: '신한은행', chip: '#0046FF' },
-  { code: 'WOORI', name: '우리은행', chip: '#0067AC' },
-  { code: 'HANA', name: '하나은행', chip: '#008485' },
-  { code: 'NH', name: '농협은행', chip: '#19A94B' },
-  { code: 'IBK', name: '기업은행', chip: '#004C97' },
-  { code: 'KAKAO', name: '카카오뱅크', chip: '#FFE300' },
-  { code: 'TOSS', name: '토스뱅크', chip: '#0064FF' }
+  { code: 'KB', name: '국민은행', logo: bankKb, chip: '#FFCC00' },
+  { code: 'SHINHAN', name: '신한은행', logo: bankShinhan, chip: '#0046FF' },
+  { code: 'WOORI', name: '우리은행', logo: bankWoori, chip: '#0067AC' },
+  { code: 'HANA', name: '하나은행', logo: bankHana, chip: '#008485' },
+  { code: 'NH', name: '농협은행', logo: bankNh, chip: '#19A94B' },
+  { code: 'IBK', name: '기업은행', logo: bankIbk, chip: '#004C97' },
+  { code: 'KAKAO', name: '카카오뱅크', logo: bankKakao, chip: '#FFE300' },
+  { code: 'TOSS', name: '토스뱅크', logo: bankToss, chip: '#0064FF' }
 ]
 
 /** 은행 코드 → 은행 객체 조회 */
