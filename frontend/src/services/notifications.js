@@ -21,7 +21,7 @@ const mockNotifications = [
   },
   {
     notificationId: 4,
-    notiType: 'SHIFT_CONFIRMED',
+    notiType: 'WORK_CASE_CONFIRMED',
     title: '근무 확정',
     content: '이알바님이 근로계약서에 날인했습니다.',
     isRead: false,
@@ -43,8 +43,8 @@ export async function listNotifications(params = {}) {
     const content = mockNotifications.map((n) => ({ ...n }))
     return { content, unreadCount: content.filter((n) => !n.isRead).length }
   }
-  const { data } = await http.get('/notifications', { params })
-  return data
+  // 페이지 응답 { content, unreadCount, ... } 은 data 래핑이 없어 본문을 그대로 반환.
+  return http.get('/notifications', { params })
 }
 
 /** 알림 읽음 처리 (명세 46) */

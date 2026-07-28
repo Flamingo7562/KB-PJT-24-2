@@ -1,10 +1,12 @@
 <script setup>
 /**
  * 은행 선택 그리드 — 충전·출금 공용.
- * 상표 이슈로 은행 로고 대신 이름 + 색칩(chip)으로 표시한다(assets/README.md 참조).
+ * assets/images/banks 로고 + 이름으로 표시한다(로고 로드 실패 시 색칩으로 폴백).
  *
  * v-model 은 은행 코드(BANKS[].code) 문자열이다.
  */
+import { ref } from 'vue'
+
 import { BANKS } from '@/utils/constants'
 
 defineProps({
@@ -13,6 +15,12 @@ defineProps({
 })
 
 defineEmits(['update:modelValue'])
+
+// 로고 로드 실패한 은행 코드 — 해당 은행만 색칩으로 폴백한다.
+const failed = ref(new Set())
+function onLogoError(code) {
+  failed.value = new Set(failed.value).add(code)
+}
 </script>
 
 <template>
@@ -28,7 +36,14 @@ defineEmits(['update:modelValue'])
         :aria-pressed="modelValue === bank.code"
         @click="$emit('update:modelValue', bank.code)"
       >
-        <span class="dot" :style="{ background: bank.chip }" />
+        <img
+          v-if="bank.logo && !failed.has(bank.code)"
+          :src="bank.logo"
+          :alt="`${bank.name} 로고`"
+          class="logo"
+          @error="onLogoError(bank.code)"
+        />
+        <span v-else class="dot" :style="{ background: bank.chip }" />
         <span class="name">{{ bank.name }}</span>
       </button>
     </div>
@@ -62,6 +77,13 @@ defineEmits(['update:modelValue'])
   border-color: var(--color-owner);
   background: var(--color-owner-weak);
   font-weight: var(--weight-medium);
+}
+.logo {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  object-fit: contain;
+  border-radius: var(--radius-xs, 4px);
 }
 .dot {
   width: 14px;

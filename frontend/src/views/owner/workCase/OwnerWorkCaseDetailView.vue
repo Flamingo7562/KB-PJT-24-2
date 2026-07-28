@@ -1,11 +1,11 @@
 <script setup>
 /**
- * [C] 근무 상세  ·  /owner/attendance/shifts/:shiftId  ·  OWNER
- * 근무 상세 + 매칭 알바생 성실 뱃지. 수정·삭제·연결 링크 복사는 매칭전(OPEN)만.
- * 확정(날인) 후 수정·삭제 버튼 숨김 — 서버도 409.
- * 연계 API: GET /shifts/{id} · PATCH /shifts/{id} · DELETE /shifts/{id} · POST /shifts/{id}/invites
- *   →  @/services/shifts (getShift, updateShift, deleteShift, createInvite)
- * route.params.shiftId 사용. 공통: TrustBadge(알바생 뱃지) · StatusChip · BaseModal(삭제 확인)
+ * [C] 근무 상세  ·  /owner/attendance/work-cases/:workCaseId  ·  OWNER
+ * 근무 상세 + 매칭 알바생 성실 뱃지. 수정·삭제·연결 링크 복사는 작성중(DRAFT)만.
+ * 확정(날인) 후 수정·삭제 버튼 숨김 — 서버도 409 WORK_CASE_LOCKED.
+ * 연계 API: GET /work-cases/{id} · PATCH /work-cases/{id} · DELETE /work-cases/{id} · POST /work-cases/{id}/invitations
+ *   →  @/services/workCases (getWorkCase, updateWorkCase, deleteWorkCase, createInvite)
+ * route.params.workCaseId 사용. 공통: TrustBadge(알바생 뱃지) · StatusChip · BaseModal(삭제 확인)
  */
 import { Link2, Pencil, Trash2 } from 'lucide-vue-next'
 import { computed, onMounted, reactive, ref } from 'vue'
@@ -18,7 +18,8 @@ import BaseModal from '@/components/common/BaseModal.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import StatusChip from '@/components/common/StatusChip.vue'
 import TrustBadge from '@/components/common/TrustBadge.vue'
-import { createInvite, deleteShift, getShift, updateShift } from '@/services/shifts'
+import { isDraft } from '@/constants/workCaseStatus'
+import { createInvite, deleteWorkCase, getWorkCase, updateWorkCase } from '@/services/workCases'
 import { useUiStore } from '@/stores/ui'
 import { copyText } from '@/utils/clipboard'
 import { formatDate, formatDuration, formatKRW, formatTimeRange } from '@/utils/format'
@@ -28,7 +29,7 @@ const route = useRoute()
 const router = useRouter()
 const ui = useUiStore()
 
-const shift = ref(null)
+const workCase = ref(null)
 const loading = ref(true)
 const editing = ref(false)
 const submitting = ref(false)
@@ -36,10 +37,10 @@ const deleteOpen = ref(false)
 const copying = ref(false) // 연결 링크 생성 중(중복 클릭 방지)
 
 /**
- * 매칭전(OPEN)에서만 수정·삭제·연결 링크 생성이 가능하다.
- * 알바생이 확정(날인)하면 에스크로 예치가 걸리므로 서버가 409 로 막는다 — 화면도 버튼을 숨긴다.
+ * 작성중(DRAFT)에서만 수정·삭제·연결 링크 생성이 가능하다.
+ * 초대·확정(날인) 이후에는 에스크로 예치가 걸리므로 서버가 409 로 막는다 — 화면도 버튼을 숨긴다.
  */
-const canModify = computed(() => shift.value?.status === 'OPEN')
+const canModify = computed(() => isDraft(workCase.value?.status))
 
 const form = reactive({
   title: '',
@@ -55,7 +56,7 @@ const errors = reactive({ title: '', workDate: '', startTime: '', endTime: '', d
 async function load() {
   loading.value = true
   try {
-    shift.value = await getShift(route.params.shiftId)
+    workCase.value = await getWorkCase(route.params.workCaseId)
   } catch {
     ui.toast('근무 정보를 불러오지 못했어요.', { type: 'danger' })
   } finally {
@@ -66,7 +67,7 @@ async function load() {
 onMounted(load)
 
 function startEdit() {
-  const s = shift.value
+  const s = workCase.value
   form.title = s.title ?? ''
   form.workDate = s.workDate ?? ''
   form.startTime = s.startTime ?? ''
@@ -99,7 +100,7 @@ async function onSave() {
 
   submitting.value = true
   try {
-    await updateShift(shift.value.shiftId, {
+    await updateWorkCase(workCase.value.workCaseId, {
       title: form.title.trim(),
       workDate: form.workDate,
       startTime: form.startTime,
@@ -122,7 +123,7 @@ async function onSave() {
 async function onDelete() {
   submitting.value = true
   try {
-    await deleteShift(shift.value.shiftId)
+    await deleteWorkCase(workCase.value.workCaseId)
     ui.toast('근무를 삭제했어요.', { type: 'success' })
     // 모달을 닫지 않은 채로 화면을 떠난다.
     // 닫기 트랜지션 도중에 이 화면이 unmount 되면 Teleport 로 body 에 붙은
@@ -139,7 +140,7 @@ async function onDelete() {
 async function onCopyInvite() {
   copying.value = true
   try {
-    const { inviteUrl } = await createInvite(shift.value.shiftId)
+    const { inviteUrl } = await createInvite(workCase.value.workCaseId)
     if (await copyText(inviteUrl)) {
       ui.toast('연결 링크를 복사했어요.', { type: 'success' })
     } else {
@@ -160,52 +161,52 @@ async function onCopyInvite() {
     <main class="screen-body">
       <p v-if="loading" class="loading">불러오는 중…</p>
 
-      <EmptyState v-else-if="!shift" message="근무 정보를 찾을 수 없습니다." />
+      <EmptyState v-else-if="!workCase" message="근무 정보를 찾을 수 없습니다." />
 
       <template v-else>
         <!-- ---- 보기 모드 ---- -->
         <template v-if="!editing">
           <header class="head">
-            <h2 class="title">{{ shift.title }}</h2>
-            <StatusChip :status="shift.status" kind="shift" />
+            <h2 class="title">{{ workCase.title }}</h2>
+            <StatusChip :status="workCase.status" kind="workCase" />
           </header>
-          <p class="place">{{ shift.workplaceName }}</p>
+          <p class="place">{{ workCase.workplaceName }}</p>
 
           <dl class="detail">
             <div class="detail-row">
               <dt>근무 날짜</dt>
-              <dd>{{ formatDate(shift.workDate) }}</dd>
+              <dd>{{ formatDate(workCase.workDate) }}</dd>
             </div>
             <div class="detail-row">
               <dt>근무 시간</dt>
-              <dd>{{ formatTimeRange(shift.startTime, shift.endTime) }}</dd>
+              <dd>{{ formatTimeRange(workCase.startTime, workCase.endTime) }}</dd>
             </div>
             <div class="detail-row">
               <dt>휴게시간</dt>
               <dd>
-                {{ formatDuration(shift.breakMinutes) }}
-                <span class="sub">({{ shift.breakPaid ? '유급' : '무급' }})</span>
+                {{ formatDuration(workCase.breakMinutes) }}
+                <span class="sub">({{ workCase.breakPaid ? '유급' : '무급' }})</span>
               </dd>
             </div>
             <div class="detail-row">
               <dt>일급</dt>
-              <dd class="wage">{{ formatKRW(shift.dailyWage) }}</dd>
+              <dd class="wage">{{ formatKRW(workCase.dailyWage) }}</dd>
             </div>
             <div class="detail-row">
               <dt>정산 상태</dt>
-              <dd><StatusChip :status="shift.settleStatus" kind="settle" /></dd>
+              <dd><StatusChip :status="workCase.settleStatus" kind="settle" /></dd>
             </div>
           </dl>
 
-          <section v-if="shift.worker" class="worker">
+          <section v-if="workCase.worker" class="worker">
             <h3 class="section-title">매칭된 알바생</h3>
             <div class="worker-card">
-              <TrustBadge role="worker" :level="shift.worker.badgeLevel" :size="40" />
-              <span class="worker-name">{{ shift.worker.name }}</span>
+              <TrustBadge role="worker" :level="workCase.worker.badgeLevel" :size="40" />
+              <span class="worker-name">{{ workCase.worker.name }}</span>
             </div>
           </section>
 
-          <!-- 매칭전(OPEN)에서만 노출 — 확정 후에는 서버도 409 로 막는다 -->
+          <!-- 작성중(DRAFT)에서만 노출 — 확정 후에는 서버도 409 로 막는다 -->
           <section v-if="canModify" class="actions">
             <BaseButton variant="secondary" block :disabled="copying" @click="onCopyInvite">
               <Link2 :size="16" />

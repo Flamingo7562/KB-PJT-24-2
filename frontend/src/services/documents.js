@@ -3,7 +3,7 @@
  *
  * 업로드 역할 규칙(서버 검증, 위반 403): 알바생=HEALTH_CERT 만 / 사장=CONTRACT 스캔본만.
  * 삭제: 보건증 상시 / 계약서는 연결 근무 종료 후(위반 409). 허용 형식 jpg/png/pdf.
- * 보건증 공유 대상 = MATCHED 근무 보유 지점만. 원본 삭제 시 공유 CASCADE 해제.
+ * 보건증 공유 대상 = 확정·시작 전(ACCEPTED/READY) 근무 보유 지점만. 원본 삭제 시 공유 REVOKED.
  *
  * 관련 API(명세 37~44):
  *   GET/POST /api/documents   PATCH/DELETE /api/documents/{documentId}
@@ -16,7 +16,7 @@ import http from '@/services/http'
 const USE_MOCK = true
 
 // source: OWN(내 문서) / SHARED(공유받음, 사장 문서함). expiryDate = 보건증 발급일+1년(표시 계산)
-// shiftStatus: 연결된 근무(work_case)의 상태 스냅샷 — 계약서 삭제 가능 여부 판단용(mock 전용 필드).
+// workCaseStatus: 연결된 근무(work_case)의 상태 스냅샷 — 계약서 삭제 가능 여부 판단용(mock 전용 필드).
 //   실제 API 연동 시 서버가 이미 계산해 내려주는 값으로 교체될 수 있다(교체 지점: isContractDeletable).
 const mockDocuments = [
   {
@@ -30,7 +30,7 @@ const mockDocuments = [
     expiryDate: null,
     source: 'OWN',
     sharedByName: null,
-    shiftStatus: 'MATCHED', // 근무 시작 전 — 삭제 잠금
+    workCaseStatus: 'READY', // 근무 시작 전 — 삭제 잠금
     createdAt: '2026-07-22T09:20:00'
   },
   {
@@ -44,7 +44,7 @@ const mockDocuments = [
     expiryDate: null,
     source: 'OWN',
     sharedByName: null,
-    shiftStatus: 'COMPLETED', // 근무 종료 — 삭제 가능
+    workCaseStatus: 'COMPLETED', // 근무 종료 — 삭제 가능
     createdAt: '2026-06-10T09:00:00'
   },
   {
@@ -58,7 +58,7 @@ const mockDocuments = [
     expiryDate: '2027-06-01',
     source: 'SHARED',
     sharedByName: '김알바',
-    shiftStatus: null,
+    workCaseStatus: null,
     createdAt: '2026-06-05T10:00:00'
   }
 ]
@@ -71,7 +71,9 @@ const mockShares = [{ workplaceId: 1, workplaceName: '강남점', sharedAt: '202
  * 실제 API 연동 시 서버가 최종 검증(409)하므로, 이 함수는 버튼 노출용 UI 힌트로만 쓴다 — 교체 지점.
  */
 export function isContractDeletable(document) {
-  return document.docType === 'CONTRACT' && ['COMPLETED', 'NO_SHOW'].includes(document.shiftStatus)
+  return (
+    document.docType === 'CONTRACT' && ['COMPLETED', 'NO_SHOW'].includes(document.workCaseStatus)
+  )
 }
 
 /**
@@ -80,8 +82,8 @@ export function isContractDeletable(document) {
  */
 export async function listDocuments(params = {}) {
   if (USE_MOCK) return { content: mockDocuments.map((d) => ({ ...d })) }
-  const { data } = await http.get('/documents', { params })
-  return data
+  // 페이지 응답 { content, ... } 은 data 래핑이 없어 본문을 그대로 반환.
+  return http.get('/documents', { params })
 }
 
 /**
@@ -126,7 +128,7 @@ export async function getDocumentShares(documentId) {
   return data
 }
 
-/** 보건증 공유 → { shareId } (명세 42). MATCHED 지점만, 중복 409 */
+/** 보건증 공유 → { shareId } (명세 42). 확정·시작 전(ACCEPTED/READY) 지점만, 중복 409 */
 export async function shareDocument(documentId, { workplaceId }) {
   if (USE_MOCK) return { shareId: Date.now() }
   const { data } = await http.post(`/documents/${documentId}/shares`, { workplaceId })

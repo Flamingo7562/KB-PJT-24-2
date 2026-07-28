@@ -1,12 +1,12 @@
 <script setup>
 /**
  * [C] 사장 근태관리  ·  /owner/attendance  ·  OWNER  (탭 화면)
- * 근태 현황(채용중·근무중) + 근무 리스트(최신순·검색) + '근무 포지션 추가'(→ /owner/attendance/shifts/new).
+ * 근태 현황(채용중·근무중) + 근무 리스트(최신순·검색) + '근무 포지션 추가'(→ /owner/attendance/work-cases/new).
  * 지점 컨텍스트: useWorkplaceStore().selectedId 기준.
- * 연계 API: GET /workplaces/{id}/shifts/summary · GET /workplaces/{id}/shifts
- *          POST /shifts/{id}/invites (매칭전 항목의 연결 링크 복사)
- *   →  @/services/shifts (getShiftSummary, listShifts, createInvite)
- * 공통: StatusChip(근무 상태) · EmptyState · 항목 클릭 → /owner/attendance/shifts/:shiftId
+ * 연계 API: GET /workplaces/{id}/work-cases/summary · GET /workplaces/{id}/work-cases
+ *          POST /work-cases/{id}/invitations (매칭전 항목의 연결 링크 복사)
+ *   →  @/services/workCases (getWorkCaseSummary, listWorkCases, createInvite)
+ * 공통: StatusChip(근무 상태) · EmptyState · 항목 클릭 → /owner/attendance/work-cases/:workCaseId
  */
 import { Link2, Plus, Search } from 'lucide-vue-next'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
@@ -14,7 +14,14 @@ import { useRouter } from 'vue-router'
 
 import EmptyState from '@/components/common/EmptyState.vue'
 import StatusChip from '@/components/common/StatusChip.vue'
-import { createInvite, getShiftSummary, listShifts } from '@/services/shifts'
+import {
+  WORK_CASE_SUMMARY,
+  emptyWorkCaseSummary,
+  isDraft,
+  workCaseStatusColor,
+  workCaseStatusLabel
+} from '@/constants/workCaseStatus'
+import { createInvite, getWorkCaseSummary, listWorkCases } from '@/services/workCases'
 import { useUiStore } from '@/stores/ui'
 import { useWorkplaceStore } from '@/stores/workplace'
 import { copyText } from '@/utils/clipboard'
@@ -24,11 +31,11 @@ const router = useRouter()
 const ui = useUiStore()
 const workplaceStore = useWorkplaceStore()
 
-const summary = ref({ recruitingCount: 0, workingCount: 0 })
-const shifts = ref([])
+const summary = ref(emptyWorkCaseSummary())
+const workCases = ref([])
 const loading = ref(false)
 const keyword = ref('')
-const statusFilter = ref(null) // null(전체) | 'OPEN'(채용중) | 'IN_PROGRESS'(근무중)
+const statusFilter = ref(null) // null(전체) | 8단계 상태 enum 중 하나(요약 카드 선택)
 
 /**
  * 선택 지점 기준으로 요약·리스트를 다시 조회한다.
@@ -42,14 +49,14 @@ async function load() {
   loading.value = true
   try {
     const [summaryRes, listRes] = await Promise.all([
-      getShiftSummary(workplaceId),
-      listShifts(workplaceId, {
+      getWorkCaseSummary(workplaceId),
+      listWorkCases(workplaceId, {
         keyword: keyword.value.trim() || undefined,
         status: statusFilter.value ?? undefined
       })
     ])
     summary.value = summaryRes
-    shifts.value = listRes.content ?? []
+    workCases.value = listRes.content ?? []
   } catch {
     ui.toast('근태 정보를 불러오지 못했어요.', { type: 'danger' })
   } finally {
@@ -84,11 +91,13 @@ function toggleStatus(status) {
 const isSearching = computed(() => keyword.value.trim() !== '')
 const isFiltered = computed(() => isSearching.value || statusFilter.value !== null)
 
-const listTitle = computed(() => {
-  if (statusFilter.value === 'OPEN') return '채용중 근무'
-  if (statusFilter.value === 'IN_PROGRESS') return '근무중 근무'
-  return '근무 목록'
-})
+// 상태 라벨·색은 상수 단일 소스만 사용(컴포넌트에 문자열 하드코딩 금지).
+const statusLabel = (status) => workCaseStatusLabel(status)
+const statusColor = (status) => workCaseStatusColor(status)
+
+const listTitle = computed(() =>
+  statusFilter.value ? `${statusLabel(statusFilter.value)} 근무` : '근무 목록'
+)
 
 const copyingId = ref(null) // 링크 생성 중인 근무(중복 클릭 방지)
 
@@ -96,10 +105,10 @@ const copyingId = ref(null) // 링크 생성 중인 근무(중복 클릭 방지)
  * 매칭전 근무의 알바생 연결 링크를 만들어 클립보드에 복사한다.
  * 링크는 1회성·유효기간이며, 확정 후에는 서버가 생성을 막는다(docs/rules/api.md).
  */
-async function onCopyInvite(shiftId) {
-  copyingId.value = shiftId
+async function onCopyInvite(workCaseId) {
+  copyingId.value = workCaseId
   try {
-    const { inviteUrl } = await createInvite(shiftId)
+    const { inviteUrl } = await createInvite(workCaseId)
     if (await copyText(inviteUrl)) {
       ui.toast('연결 링크를 복사했어요.', { type: 'success' })
     } else {
@@ -113,33 +122,27 @@ async function onCopyInvite(shiftId) {
   }
 }
 
-const goDetail = (shiftId) => router.push(`/owner/attendance/shifts/${shiftId}`)
-const goNew = () => router.push('/owner/attendance/shifts/new')
+const goDetail = (workCaseId) => router.push(`/owner/attendance/work-cases/${workCaseId}`)
+const goNew = () => router.push('/owner/attendance/work-cases/new')
 </script>
 
 <template>
   <div class="attendance">
-    <!-- 카드를 누르면 해당 상태만, 다시 누르면 전체를 본다 -->
+    <!-- 상태별 요약 6종 — 카드를 누르면 해당 상태만, 다시 누르면 전체를 본다 -->
     <section class="summary">
       <button
+        v-for="bucket in WORK_CASE_SUMMARY"
+        :key="bucket.key"
         type="button"
         class="stat"
-        :class="{ active: statusFilter === 'OPEN' }"
-        :aria-pressed="statusFilter === 'OPEN'"
-        @click="toggleStatus('OPEN')"
+        :class="{ active: statusFilter === bucket.status }"
+        :aria-pressed="statusFilter === bucket.status"
+        @click="toggleStatus(bucket.status)"
       >
-        <span class="stat-label">채용중</span>
-        <strong class="stat-value">{{ summary.recruitingCount }}</strong>
-      </button>
-      <button
-        type="button"
-        class="stat"
-        :class="{ active: statusFilter === 'IN_PROGRESS' }"
-        :aria-pressed="statusFilter === 'IN_PROGRESS'"
-        @click="toggleStatus('IN_PROGRESS')"
-      >
-        <span class="stat-label">근무중</span>
-        <strong class="stat-value is-working">{{ summary.workingCount }}</strong>
+        <span class="stat-label">{{ statusLabel(bucket.status) }}</span>
+        <strong class="stat-value" :style="{ color: statusColor(bucket.status) }">
+          {{ summary[bucket.key] ?? 0 }}
+        </strong>
       </button>
     </section>
 
@@ -160,42 +163,42 @@ const goNew = () => router.push('/owner/attendance/shifts/new')
       <p v-if="loading" class="loading">불러오는 중…</p>
 
       <EmptyState
-        v-else-if="shifts.length === 0 && isFiltered"
+        v-else-if="workCases.length === 0 && isFiltered"
         message="조건에 맞는 근무가 없습니다."
       >
         검색어를 바꾸거나 위 카드를 다시 눌러 전체를 확인해보세요.
       </EmptyState>
 
-      <EmptyState v-else-if="shifts.length === 0" message="등록된 근무가 없습니다.">
+      <EmptyState v-else-if="workCases.length === 0" message="등록된 근무가 없습니다.">
         아래 버튼으로 첫 근무 포지션을 추가해보세요.
       </EmptyState>
 
       <ul v-else class="list">
-        <li v-for="shift in shifts" :key="shift.shiftId" class="item">
-          <button type="button" class="item-btn" @click="goDetail(shift.shiftId)">
+        <li v-for="workCase in workCases" :key="workCase.workCaseId" class="item">
+          <button type="button" class="item-btn" @click="goDetail(workCase.workCaseId)">
             <div class="item-head">
-              <span class="item-title">{{ shift.title }}</span>
-              <StatusChip :status="shift.status" kind="shift" />
+              <span class="item-title">{{ workCase.title }}</span>
+              <StatusChip :status="workCase.status" kind="workCase" />
             </div>
             <p class="item-when">
-              {{ formatDate(shift.workDate) }} ·
-              {{ formatTimeRange(shift.startTime, shift.endTime) }}
+              {{ formatDate(workCase.workDate) }} ·
+              {{ formatTimeRange(workCase.startTime, workCase.endTime) }}
             </p>
             <p class="item-worker">
-              {{ shift.workerName ?? '아직 매칭된 알바생이 없어요' }}
+              {{ workCase.workerName ?? '아직 매칭된 알바생이 없어요' }}
             </p>
           </button>
 
-          <!-- 매칭전(OPEN)에서만 노출 — 확정 후에는 서버가 링크 생성을 막는다 -->
+          <!-- 작성중(DRAFT)에서만 노출 — 확정 후에는 서버가 링크 생성을 막는다 -->
           <button
-            v-if="shift.status === 'OPEN'"
+            v-if="isDraft(workCase.status)"
             type="button"
             class="copy-btn"
-            :disabled="copyingId === shift.shiftId"
-            @click="onCopyInvite(shift.shiftId)"
+            :disabled="copyingId === workCase.workCaseId"
+            @click="onCopyInvite(workCase.workCaseId)"
           >
             <Link2 :size="14" />
-            {{ copyingId === shift.shiftId ? '링크 만드는 중…' : '연결 링크 복사' }}
+            {{ copyingId === workCase.workCaseId ? '링크 만드는 중…' : '연결 링크 복사' }}
           </button>
         </li>
       </ul>
@@ -215,18 +218,18 @@ const goNew = () => router.push('/owner/attendance/shifts/new')
   gap: var(--space-lg);
 }
 
-/* ---- 근태 현황 요약 ---- */
+/* ---- 근태 현황 요약(6종 그리드) ---- */
 .summary {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
   gap: var(--space-sm);
 }
 .stat {
-  flex: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: var(--space-xs);
-  padding: var(--space-lg);
+  padding: var(--space-md);
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
@@ -240,13 +243,10 @@ const goNew = () => router.push('/owner/attendance/shifts/new')
   font-size: var(--text-sm);
   color: var(--color-text-sub);
 }
+/* 값 색은 상태색(상수)으로 인라인 바인딩한다 */
 .stat-value {
-  font-size: var(--text-2xl);
+  font-size: var(--text-xl);
   font-weight: var(--weight-bold);
-  color: var(--color-owner);
-}
-.stat-value.is-working {
-  color: var(--color-primary);
 }
 
 /* ---- 검색 ---- */

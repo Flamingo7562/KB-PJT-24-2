@@ -5,53 +5,64 @@
  * 라벨·색은 utils/constants 의 단일 소스에서, 아이콘은 여기서 매핑한다
  * (assets/README.md 리스트 상태 표시 규약 준수).
  *
- * 사용: <StatusChip :status="shift.status" kind="shift" />
- *   kind: 'shift' | 'tx' | 'settle' | 'today'
+ * 사용: <StatusChip :status="workCase.status" kind="workCase" />
+ *   kind: 'workCase' | 'tx' | 'settle' | 'today'
  */
 import {
+  Ban,
   CircleCheck,
   Clock,
+  FileCheck,
+  FileText,
   Loader,
   Lock,
   Minus,
   RotateCcw,
+  Send,
   TriangleAlert,
   UserX
 } from 'lucide-vue-next'
 import { computed } from 'vue'
 
-import { SHIFT_STATUS, SETTLE_STATUS, TODAY_SHIFT_STATUS, TX_STATUS } from '@/utils/constants'
+import { WORK_CASE_STATUS } from '@/constants/workCaseStatus'
+import { SETTLE_STATUS, TODAY_WORK_CASE_STATUS, TX_STATUS } from '@/utils/constants'
 
 const props = defineProps({
   status: { type: String, required: true },
-  kind: { type: String, default: 'shift' }
+  kind: { type: String, default: 'workCase' }
 })
 
 const LABEL_MAPS = {
-  shift: SHIFT_STATUS,
+  workCase: WORK_CASE_STATUS,
   tx: TX_STATUS,
   settle: SETTLE_STATUS,
-  today: TODAY_SHIFT_STATUS
+  today: TODAY_WORK_CASE_STATUS
 }
 
 // 상태값(enum) → lucide 아이콘. 서로 다른 kind 가 같은 상태값을 공유한다.
 const ICONS = {
-  OPEN: Clock,
-  MATCHED: Clock,
+  // 근무(work_case) 8단계
+  DRAFT: FileText,
+  INVITED: Send,
+  ACCEPTED: FileCheck,
+  READY: Clock,
   IN_PROGRESS: Loader,
   COMPLETED: CircleCheck,
   NO_SHOW: UserX,
+  CANCELED: Ban,
+  // 정산·거래
   HOLD: Lock,
   SETTLED: CircleCheck,
   REFUNDED: RotateCcw,
   DONE: CircleCheck,
+  // 오늘의 알바 카드
   BEFORE_WORK: Clock,
   LATE: TriangleAlert,
   NONE: Minus
 }
 
 const meta = computed(() => {
-  const map = LABEL_MAPS[props.kind] ?? SHIFT_STATUS
+  const map = LABEL_MAPS[props.kind] ?? WORK_CASE_STATUS
   return map[props.status] ?? { label: props.status, color: 'var(--color-text-sub)' }
 })
 const icon = computed(() => ICONS[props.status] ?? Clock)

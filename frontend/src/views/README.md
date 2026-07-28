@@ -26,7 +26,7 @@
 | `BaseButton`                   | 버튼 (variant: primary·owner·worker·danger·secondary·ghost) |
 | `AppField`                     | 라벨+입력+에러 (`v-model`, `#suffix` 슬롯=중복확인 버튼)    |
 | `BaseBottomSheet`, `BaseModal` | 바텀시트(필터·공유·등록·문의) / 중앙 모달(확인·경고)        |
-| `StatusChip`                   | 상태 칩 (`kind`: shift·tx·settle·today)                     |
+| `StatusChip`                   | 상태 칩 (`kind`: workCase·tx·settle·today)                  |
 | `TrustBadge`                   | 신뢰 뱃지 (`role`: owner·worker, `level` 0~3)               |
 | `EmptyState`                   | 빈 리스트·자리표시                                          |
 
@@ -34,16 +34,16 @@
 
 ## 화면 분담 (8 패키지)
 
-| 패키지                      | 화면(파일)                                                                                                                                           |
-| --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **A. 인증/온보딩**          | `OnboardingView` · `auth/OwnerLoginView` · `auth/OwnerSignupView` · `auth/WorkerLoginView` · `auth/WorkerSignupView`                                 |
-| **B. 사장 지갑**            | `owner/OwnerHomeView`(본문 완성됨·필터시트 TODO) · `owner/wallet/OwnerChargeView` · `owner/wallet/OwnerWithdrawView`                                 |
-| **C. 사장 근태/QR**         | `owner/OwnerAttendanceView` · `owner/shift/OwnerShiftNewView` · `owner/shift/OwnerShiftDetailView` · `owner/OwnerQrView`                             |
-| **D. 사장 문서/사업장**     | `owner/OwnerDocumentsView` · `owner/OwnerDocumentViewerView` · `owner/workplace/OwnerWorkplaceNewView` · `owner/workplace/OwnerWorkplaceManageView`  |
-| **E. 사장 마이**            | `owner/OwnerMyPageView` · `owner/mypage/OwnerProfileEditView` · `owner/mypage/OwnerPasswordEditView`                                                 |
-| **F. 알바생 홈/근로**       | `worker/WorkerHomeView` · `worker/WorkerWorkView` · `worker/shift/WorkerShiftDetailView` · `worker/shift/WorkerReportView` · `worker/WorkerScanView` |
-| **G. 알바생 문서**          | `worker/WorkerDocumentsView` · `worker/WorkerDocumentViewerView` (+ 보건증 공유·등록 모달은 BaseBottomSheet 로 조립)                                 |
-| **H. 알바생 마이 + 딥링크** | `worker/WorkerMyPageView` · `worker/mypage/WorkerProfileEditView` · `worker/mypage/WorkerPasswordEditView` · `invite/InviteConfirmView`              |
+| 패키지                      | 화면(파일)                                                                                                                                                    |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **A. 인증/온보딩**          | `OnboardingView` · `auth/OwnerLoginView` · `auth/OwnerSignupView` · `auth/WorkerLoginView` · `auth/WorkerSignupView`                                          |
+| **B. 사장 지갑**            | `owner/OwnerHomeView`(본문 완성됨·필터시트 TODO) · `owner/wallet/OwnerChargeView` · `owner/wallet/OwnerWithdrawView`                                          |
+| **C. 사장 근태/QR**         | `owner/OwnerAttendanceView` · `owner/workCase/OwnerWorkCaseNewView` · `owner/workCase/OwnerWorkCaseDetailView` · `owner/OwnerQrView`                          |
+| **D. 사장 문서/사업장**     | `owner/OwnerDocumentsView` · `owner/OwnerDocumentViewerView` · `owner/workplace/OwnerWorkplaceNewView` · `owner/workplace/OwnerWorkplaceManageView`           |
+| **E. 사장 마이**            | `owner/OwnerMyPageView` · `owner/mypage/OwnerProfileEditView` · `owner/mypage/OwnerPasswordEditView`                                                          |
+| **F. 알바생 홈/근로**       | `worker/WorkerHomeView` · `worker/WorkerWorkView` · `worker/workCase/WorkerWorkCaseDetailView` · `worker/workCase/WorkerReportView` · `worker/WorkerScanView` |
+| **G. 알바생 문서**          | `worker/WorkerDocumentsView` · `worker/WorkerDocumentViewerView` (+ 보건증 공유·등록 모달은 BaseBottomSheet 로 조립)                                          |
+| **H. 알바생 마이 + 딥링크** | `worker/WorkerMyPageView` · `worker/mypage/WorkerProfileEditView` · `worker/mypage/WorkerPasswordEditView` · `invite/InviteConfirmView`                       |
 
 ## 화면 개발 팁
 
