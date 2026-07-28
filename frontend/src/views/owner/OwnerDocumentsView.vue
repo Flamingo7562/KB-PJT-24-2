@@ -1,11 +1,11 @@
 <script setup>
 /**
  * [D] 사장 문서함  ·  /owner/documents  ·  OWNER  (탭 화면)
- * 지점 문서: 자동 생성 계약서 + 직접 업로드(계약서 스캔) + 공유받은 보건증(읽기 전용).
+ * 지점 문서: 자동 생성 계약서 + 직접 업로드(계약서 스캔) + 공유받은 보건증.
  * 지점 컨텍스트: useWorkplaceStore().selectedId (AppTopBar 의 전역 지점 select 를 그대로 구독).
  * 연계 API: GET /documents?workplaceId · POST /documents · DELETE /documents/{id}
- *   →  @/services/documents (listDocuments, uploadDocument, deleteDocument, isContractDeletable)
- * 규칙: 계약서 삭제는 근무 종료 후만(서버 409 최종 검증). 보건증 직접 업로드 없음, 삭제 불가.
+ *   →  @/services/documents (listDocuments, uploadDocument, deleteDocument, isDocumentDeletable)
+ * 규칙: 삭제는 계약서·보건증 모두 근무 종료 후만(서버 409 최종 검증). 보건증 직접 업로드 없음.
  * 공통: 카드 클릭 → /owner/documents/:documentId
  */
 import { FileText, Image as ImageIcon, Lock, Plus, Trash2 } from 'lucide-vue-next'
@@ -16,7 +16,7 @@ import { useRouter } from 'vue-router'
 import EmptyState from '@/components/common/EmptyState.vue'
 import {
   deleteDocument,
-  isContractDeletable,
+  isDocumentDeletable,
   listDocuments,
   uploadDocument
 } from '@/services/documents'
@@ -162,26 +162,21 @@ async function onDelete(doc) {
             <span class="doc-meta">
               {{ formatDate(doc.issuedDate) }} ·
               {{ doc.docType === 'CONTRACT' ? '근로계약서' : '보건증' }}
-              <template v-if="doc.docType === 'HEALTH_CERT'">
-                · 만료 예정 {{ formatDate(doc.expiryDate) }}
-              </template>
+            </span>
+            <span v-if="doc.docType === 'HEALTH_CERT'" class="doc-expiry">
+              만료 예정 {{ formatDate(doc.expiryDate) }}
             </span>
           </span>
         </button>
 
         <div class="doc-side">
-          <span
-            v-if="doc.docType === 'CONTRACT'"
-            class="badge"
-            :class="isContractDeletable(doc) ? 'badge--ok' : 'badge--locked'"
-          >
-            <Lock v-if="!isContractDeletable(doc)" :size="12" />
-            {{ isContractDeletable(doc) ? '삭제 가능' : '삭제 잠금' }}
+          <span class="badge" :class="isDocumentDeletable(doc) ? 'badge--ok' : 'badge--locked'">
+            <Lock v-if="!isDocumentDeletable(doc)" :size="12" />
+            {{ isDocumentDeletable(doc) ? '삭제 가능' : '삭제 잠금' }}
           </span>
-          <span v-else class="badge badge--shared">공유받음 · 읽기 전용</span>
 
           <button
-            v-if="doc.docType === 'CONTRACT' && isContractDeletable(doc)"
+            v-if="isDocumentDeletable(doc)"
             type="button"
             class="delete-btn"
             aria-label="문서 삭제"
@@ -194,8 +189,8 @@ async function onDelete(doc) {
     </ul>
 
     <p class="notice">
-      계약서 삭제는 해당 근무 종료 후 가능 · 공유받은 보건증은 읽기 전용(공유 취소는 알바생 권한) ·
-      보건증 직접 업로드 없음
+      문서 삭제는 해당 근무 종료 후 가능 · 공유받은 보건증을 지워도 알바생 원본은 남음 · 보건증 직접
+      업로드 없음
     </p>
   </div>
 </template>
@@ -310,6 +305,13 @@ async function onDelete(doc) {
   color: var(--color-text-sub);
   word-break: keep-all;
 }
+/* 만료일은 놓치면 안 되는 정보라 한 줄 내려 주의 색으로 강조한다. */
+.doc-expiry {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--color-warning);
+  word-break: keep-all;
+}
 
 .doc-side {
   display: flex;
@@ -333,10 +335,6 @@ async function onDelete(doc) {
 .badge--locked {
   color: var(--color-text-sub);
   background: var(--color-bg);
-}
-.badge--shared {
-  color: var(--color-worker);
-  background: var(--color-worker-weak);
 }
 .delete-btn {
   color: var(--color-danger);

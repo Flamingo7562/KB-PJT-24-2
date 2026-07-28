@@ -2,7 +2,7 @@
  * 문서함 API 서비스 — 근로계약서(자동 생성) + 보건증(업로드·공유).
  *
  * 업로드 역할 규칙(서버 검증, 위반 403): 알바생=HEALTH_CERT 만 / 사장=CONTRACT 스캔본만.
- * 삭제: 보건증 상시 / 계약서는 연결 근무 종료 후(위반 409). 허용 형식 jpg/png/pdf.
+ * 삭제: 연결 근무 종료 후만(위반 409) — 사장 문서함은 계약서·보건증 동일. 허용 형식 jpg/png/pdf.
  * 보건증 공유 대상 = MATCHED 근무 보유 지점만. 원본 삭제 시 공유 CASCADE 해제.
  *
  * 관련 API(명세 37~44):
@@ -16,8 +16,8 @@ import http from '@/services/http'
 const USE_MOCK = true
 
 // source: OWN(내 문서) / SHARED(공유받음, 사장 문서함). expiryDate = 보건증 발급일+1년(표시 계산)
-// shiftStatus: 연결된 근무(work_case)의 상태 스냅샷 — 계약서 삭제 가능 여부 판단용(mock 전용 필드).
-//   실제 API 연동 시 서버가 이미 계산해 내려주는 값으로 교체될 수 있다(교체 지점: isContractDeletable).
+// shiftStatus: 연결된 근무(work_case)의 상태 스냅샷 — 문서 삭제 가능 여부 판단용(mock 전용 필드).
+//   실제 API 연동 시 서버가 이미 계산해 내려주는 값으로 교체될 수 있다(교체 지점: isDocumentDeletable).
 const mockDocuments = [
   {
     documentId: 1,
@@ -58,20 +58,34 @@ const mockDocuments = [
     expiryDate: '2027-06-01',
     source: 'SHARED',
     sharedByName: '김알바',
-    shiftStatus: null,
+    shiftStatus: 'MATCHED', // 근무 시작 전 — 삭제 잠금
     createdAt: '2026-06-05T10:00:00'
+  },
+  {
+    documentId: 4,
+    docType: 'HEALTH_CERT',
+    workplaceId: 1,
+    workCaseId: 189,
+    fileName: '보건증_박알바',
+    fileExt: 'jpg',
+    issuedDate: '2026-05-20',
+    expiryDate: '2027-05-20',
+    source: 'SHARED',
+    sharedByName: '박알바',
+    shiftStatus: 'COMPLETED', // 근무 종료 — 삭제 가능
+    createdAt: '2026-06-01T10:00:00'
   }
 ]
 
 const mockShares = [{ workplaceId: 1, workplaceName: '강남점', sharedAt: '2026-07-20T10:00:00' }]
 
 /**
- * 계약서 삭제 가능 여부(연결 근무 종료 후만, 도메인 규칙).
- * 보건증은 사장 쪽에서 항상 삭제 불가(원본 삭제는 알바생 권한).
+ * 사장 문서함의 문서 삭제 가능 여부 — 계약서·보건증 모두 연결 근무 종료(COMPLETED/NO_SHOW) 후만.
+ * 공유받은 보건증을 지워도 원본은 알바생 문서함에 남는다(내 문서함에서만 제거).
  * 실제 API 연동 시 서버가 최종 검증(409)하므로, 이 함수는 버튼 노출용 UI 힌트로만 쓴다 — 교체 지점.
  */
-export function isContractDeletable(document) {
-  return document.docType === 'CONTRACT' && ['COMPLETED', 'NO_SHOW'].includes(document.shiftStatus)
+export function isDocumentDeletable(document) {
+  return ['COMPLETED', 'NO_SHOW'].includes(document.shiftStatus)
 }
 
 /**
