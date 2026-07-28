@@ -1,7 +1,7 @@
 <script setup>
 /**
  * [D] 사장 문서함  ·  /owner/documents  ·  OWNER  (탭 화면)
- * 지점 문서: 자동 생성 계약서 + 직접 업로드(계약서 스캔) + 공유받은 보건증.
+ * 지점 문서: 자동 생성 계약서 + 계약서 직접 업로드 + 공유받은 보건증.
  * 지점 컨텍스트: useWorkplaceStore().selectedId (AppTopBar 의 전역 지점 select 를 그대로 구독).
  * 연계 API: GET /documents?workplaceId · POST /documents · DELETE /documents/{id}
  *   →  @/services/documents (listDocuments, uploadDocument, deleteDocument, isDocumentDeletable)
@@ -74,7 +74,7 @@ function triggerUpload() {
   fileInput.value?.click()
 }
 
-/* ---- 계약서 스캔 업로드(확인 모달) ---- */
+/* ---- 계약서 직접 업로드(확인 모달) ---- */
 const pendingFile = ref(null)
 const uploadConfirmOpen = ref(false)
 
@@ -115,7 +115,7 @@ async function confirmUpload() {
       },
       ...documents.value
     ]
-    ui.toast('계약서 스캔본을 업로드했어요.', { type: 'success' })
+    ui.toast('계약서를 업로드했어요.', { type: 'success' })
     uploadConfirmOpen.value = false
     pendingFile.value = null
   } catch (err) {
@@ -176,7 +176,7 @@ async function confirmDelete() {
       </div>
 
       <button type="button" class="upload-btn" :disabled="uploading" @click="triggerUpload">
-        <Plus :size="16" /> 계약서 스캔 업로드
+        <Plus :size="16" /> 계약서 직접 업로드
       </button>
       <input
         ref="fileInput"
@@ -240,7 +240,7 @@ async function confirmDelete() {
       @close="uploadConfirmOpen = false"
     >
       <p class="modal-msg">
-        <strong>{{ pendingFile?.name }}</strong> 파일을 계약서 스캔본으로 등록합니다.
+        <strong>{{ pendingFile?.name }}</strong> 파일을 계약서로 등록합니다.
       </p>
       <template #footer>
         <BaseButton variant="secondary" block @click="uploadConfirmOpen = false">취소</BaseButton>
