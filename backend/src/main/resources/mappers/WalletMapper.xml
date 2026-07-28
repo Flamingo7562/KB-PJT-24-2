@@ -157,6 +157,7 @@
         FROM wallet_transactions wt
         JOIN wallets w ON w.id = wt.wallet_id
         WHERE wt.idempotency_key = #{idempotencyKey}
+        FOR SHARE
     </select>
 
     <select id="findFundingTransactionSnapshot"

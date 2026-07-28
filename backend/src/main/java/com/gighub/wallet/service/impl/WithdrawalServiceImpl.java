@@ -249,8 +249,6 @@ public class WithdrawalServiceImpl implements WithdrawalService {
         if (snapshot == null
                 || snapshot.getId() == null
                 || snapshot.getId() <= 0
-                || !Objects.equals(snapshot.getWalletId(), order.getWalletId())
-                || !Objects.equals(snapshot.getWalletUserId(), order.getUserId())
                 || snapshot.getWorkCaseId() != null
                 || !TX_WITHDRAWAL.equals(snapshot.getTransactionType())
                 || !REF_WITHDRAWAL_REQUEST.equals(snapshot.getReferenceType())
@@ -269,9 +267,10 @@ public class WithdrawalServiceImpl implements WithdrawalService {
         }
 
         try {
-            return Math.subtractExact(
+            long expectedAfter = Math.subtractExact(
                     snapshot.getAvailableBefore(), order.getAmount()
-            ) == snapshot.getAvailableAfter();
+            );
+            return expectedAfter == snapshot.getAvailableAfter().longValue();
         } catch (ArithmeticException overflow) {
             return false;
         }
