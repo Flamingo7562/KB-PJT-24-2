@@ -2,8 +2,9 @@
 /**
  * [D] 사업장 등록  ·  /owner/workplaces/new  ·  OWNER
  * 폼: 사업자등록번호·상호명·대표자명·사업장 주소·사업장 전화번호.
- * 주소는 다음 우편번호 검색(모달 내 embed, @/utils/daumPostcode) 또는 직접 입력. 좌표 자동
- * 변환은 별도 지오코딩 API 필요(미구현). 인증 반경은 기본값(100).
+ * 주소는 도로명(다음 우편번호 검색 embed, @/utils/daumPostcode · 실패 시 직접 입력)과 세부주소를
+ * 나눠 입력받고, 전송할 때 합쳐 서버의 단일 address 필드로 보낸다.
+ * 좌표 자동 변환은 별도 지오코딩 API 필요(미구현). 인증 반경은 기본값(100).
  * 진입 경로 2가지: ① 첫 로그인(G7, 사업장 0개) 강제 진입 ② /owner/mypage/workplaces 에서 수동 추가.
  * 연계 API: POST /workplaces  →  @/services/workplaces (createWorkplace)
  * 등록 성공 후: useWorkplaceStore().load({force:true}) 갱신 →
@@ -40,6 +41,7 @@ const businessNumber = ref('')
 const name = ref('')
 const representativeName = ref('')
 const address = ref('')
+const detailAddress = ref('')
 const phone = ref('')
 
 const businessNumberError = ref('')
@@ -55,6 +57,11 @@ function onBusinessNumberInput(v) {
 
 function onPhoneInput(v) {
   phone.value = formatPhoneInput(v)
+}
+
+/** 서버 address 는 단일 필드 — 도로명과 세부주소를 공백으로 이어 보낸다. */
+function fullAddress() {
+  return [address.value.trim(), detailAddress.value.trim()].filter(Boolean).join(' ')
 }
 
 const addressSearchOpen = ref(false)
@@ -101,7 +108,7 @@ async function handleSubmit() {
       businessNumber: businessNumber.value,
       name: name.value,
       representativeName: representativeName.value,
-      address: address.value,
+      address: fullAddress(),
       phone: phone.value,
       radiusM: 100
     })
@@ -154,7 +161,7 @@ async function handleSubmit() {
         />
         <AppField
           v-model="address"
-          label="사업장 주소"
+          label="사업장 주소 (도로명)"
           placeholder="주소 검색을 이용하거나 직접 입력하세요"
           required
           :error="addressError"
@@ -163,6 +170,11 @@ async function handleSubmit() {
             <BaseButton type="button" variant="secondary" @click="searchAddress">검색</BaseButton>
           </template>
         </AppField>
+        <AppField
+          v-model="detailAddress"
+          label="세부 주소"
+          placeholder="건물명·동·호수 등을 입력하세요"
+        />
         <AppField
           :model-value="phone"
           label="사업장 전화번호 (지역번호 포함 9~11자리)"

@@ -37,6 +37,10 @@ const editOpen = ref(false)
 const editTarget = ref(null)
 const editName = ref('')
 const editAddress = ref('')
+// 저장된 주소는 도로명+세부가 합쳐진 한 문자열이라 되쪼갤 수 없다.
+// 그래서 세부주소 입력란은 검색으로 도로명을 새로 고른 뒤에만 연다.
+const editDetailAddress = ref('')
+const editDetailOpen = ref(false)
 const editPhone = ref('')
 const editNameError = ref('')
 const editAddressError = ref('')
@@ -66,6 +70,8 @@ function openEdit(workplace) {
   editTarget.value = workplace
   editName.value = workplace.name
   editAddress.value = workplace.address
+  editDetailAddress.value = ''
+  editDetailOpen.value = false
   editPhone.value = workplace.phone ? formatPhoneInput(workplace.phone) : ''
   editNameError.value = ''
   editAddressError.value = ''
@@ -86,7 +92,10 @@ async function searchEditAddress() {
   embedAddressSearch(
     addressSearchContainer.value,
     (result) => {
+      // 도로명이 통째로 바뀌므로 이전 세부주소는 버리고 입력란을 연다.
       editAddress.value = result.address
+      editDetailAddress.value = ''
+      editDetailOpen.value = true
       editAddressError.value = ''
       addressSearchOpen.value = false
     },
@@ -95,6 +104,11 @@ async function searchEditAddress() {
       ui.toast('주소 검색을 불러오지 못했어요. 직접 입력해주세요.', { type: 'danger' })
     }
   )
+}
+
+/** 서버 address 는 단일 필드 — 도로명과 세부주소를 공백으로 이어 보낸다(검색 전이면 기존 주소 그대로). */
+function fullEditAddress() {
+  return [editAddress.value.trim(), editDetailAddress.value.trim()].filter(Boolean).join(' ')
 }
 
 async function confirmEdit() {
@@ -110,7 +124,7 @@ async function confirmEdit() {
   try {
     await updateWorkplace(editTarget.value.workplaceId, {
       name: editName.value,
-      address: editAddress.value,
+      address: fullEditAddress(),
       phone: editPhone.value
     })
     await workplaceStore.load({ force: true })
@@ -193,13 +207,24 @@ async function confirmDelete() {
     <BaseModal :open="editOpen" title="사업장 수정" @close="editOpen = false">
       <div class="edit-form">
         <AppField v-model="editName" label="상호명" required :error="editNameError" />
-        <AppField v-model="editAddress" label="사업장 주소" required :error="editAddressError">
+        <AppField
+          v-model="editAddress"
+          :label="editDetailOpen ? '사업장 주소 (도로명)' : '사업장 주소'"
+          required
+          :error="editAddressError"
+        >
           <template #suffix>
             <BaseButton type="button" variant="secondary" @click="searchEditAddress"
               >검색</BaseButton
             >
           </template>
         </AppField>
+        <AppField
+          v-if="editDetailOpen"
+          v-model="editDetailAddress"
+          label="세부 주소"
+          placeholder="건물명·동·호수 등을 입력하세요"
+        />
         <AppField
           :model-value="editPhone"
           label="사업장 전화번호 (지역번호 포함 9~11자리)"
