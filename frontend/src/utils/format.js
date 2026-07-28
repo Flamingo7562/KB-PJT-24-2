@@ -58,6 +58,11 @@ export function formatTimeRange(start, end) {
   return `${s} ~ ${e}`
 }
 
+/** 숫자 외 문자를 모두 제거한다(계좌번호·금액 등 숫자 전용 입력의 붙여넣기/IME 대비). */
+export function onlyDigits(value) {
+  return String(value).replace(/\D/g, '')
+}
+
 /** 입력 중인 사업자등록번호에 하이픈을 자동으로 채운다. "1234567890" → "123-45-67890" */
 export function formatBusinessNumberInput(value) {
   const digits = String(value).replace(/\D/g, '').slice(0, 10)

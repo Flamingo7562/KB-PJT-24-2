@@ -7,7 +7,7 @@
 import { computed } from 'vue'
 
 import AppField from '@/components/common/AppField.vue'
-import { formatKRW } from '@/utils/format'
+import { blockNonDigitKeydown, formatKRW } from '@/utils/format'
 
 const props = defineProps({
   modelValue: { type: [String, Number], default: '' },
@@ -55,10 +55,11 @@ function onInput(v) {
     <AppField
       :label="label"
       :model-value="modelValue"
-      type="text"
+      type="tel"
       :placeholder="placeholder"
       :error="error"
       :hint="hint"
+      @keydown="blockNonDigitKeydown"
       @update:model-value="onInput"
     />
 
