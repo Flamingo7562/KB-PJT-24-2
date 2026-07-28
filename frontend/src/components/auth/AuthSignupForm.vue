@@ -14,6 +14,7 @@ import AppField from '@/components/common/AppField.vue'
 import BaseButton from '@/components/common/BaseButton.vue'
 import { checkEmail, checkLoginId, signup } from '@/services/auth'
 import { useUiStore } from '@/stores/ui'
+import { formatPhoneInput } from '@/utils/format'
 import {
   isEmail,
   isPhone,
@@ -67,6 +68,13 @@ watch(
     emailCheck.available = false
   }
 )
+
+// 입력 중 하이픈을 자동으로 채운다(010-1234-5678). 숫자 외 입력은 AppField 의 digits-only 가 막는다.
+// v-model 은 입력값을 그대로 대입해 가공할 틈이 없다. 그래서 템플릿에서 축약을 풀어
+// :model-value + @update:model-value 로 쓰고, 대입 자리에 이 함수를 끼워 포맷을 거치게 한다.
+function onPhoneInput(v) {
+  form.phone = formatPhoneInput(v)
+}
 
 async function onCheckLoginId() {
   const rule = loginIdRule(form.loginId)
@@ -198,11 +206,14 @@ async function onSubmit() {
     </AppField>
 
     <AppField
-      v-model="form.phone"
+      :model-value="form.phone"
       type="tel"
       label="전화번호"
       placeholder="010-0000-0000 (선택)"
+      digits-only
+      maxlength="13"
       :error="errors.phone"
+      @update:model-value="onPhoneInput"
     />
 
     <BaseButton
