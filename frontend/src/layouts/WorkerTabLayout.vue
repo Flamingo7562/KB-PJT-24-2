@@ -1,7 +1,7 @@
 <script setup>
 /**
  * 알바생 탭 화면 레이아웃 — 상단바 + 본문(RouterView) + 하단 탭.
- * 라우터에서 알바생 탭 화면(안심지갑·근로관리·QR·문서함)의 부모로 쓴다.
+ * 라우터에서 알바생 탭 화면(안심지갑·근로관리·문서함·QR)의 부모로 쓴다.
  * 각 view 는 본문(screen-body 안)만 작성한다 — chrome 은 여기서 담당.
  */
 import { RouterView } from 'vue-router'
