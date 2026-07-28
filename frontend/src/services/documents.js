@@ -18,6 +18,12 @@ const USE_MOCK = true
 // source: OWN(내 문서) / SHARED(공유받음, 사장 문서함). expiryDate = 보건증 발급일+1년(표시 계산)
 // workCaseStatus: 연결된 근무(work_case)의 상태 스냅샷 — 문서 삭제 가능 여부 판단용(mock 전용 필드).
 //   실제 API 연동 시 서버가 이미 계산해 내려주는 값으로 교체될 수 있다(교체 지점: isDocumentDeletable).
+//
+// DB(documents 테이블) ↔ 이 mock 필드 대응 — 서버 연동 시 이름이 달라 매핑이 필요하다:
+//   issuedDate  ↔ issued_on (NULL 허용 — 직접 업로드본은 서버가 안 채우면 화면 날짜가 빈다)
+//   expiryDate  ↔ expires_on (실제 컬럼 존재. domain.md 의 "컬럼 없음" 서술과 어긋나 확인 필요)
+//   docType     ↔ document_type ('CONTRACT'↔'EMPLOYMENT_CONTRACT', 'HEALTH_CERT'↔'HEALTH_CERTIFICATE')
+//   workCaseId  ↔ work_case_id (NULL = 근무 미연결 직접 업로드본 → 상시 삭제 가능)
 const mockDocuments = [
   {
     documentId: 1,

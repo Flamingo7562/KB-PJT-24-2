@@ -199,6 +199,7 @@ async function confirmDelete() {
 
           <span class="doc-info">
             <span class="doc-name">{{ doc.fileName }}</span>
+            <!-- 발급일(documents.issued_on) · 만료 예정일(documents.expires_on) -->
             <span class="doc-meta">
               {{ formatDate(doc.issuedDate) }} ·
               {{ doc.docType === 'CONTRACT' ? '근로계약서' : '보건증' }}
