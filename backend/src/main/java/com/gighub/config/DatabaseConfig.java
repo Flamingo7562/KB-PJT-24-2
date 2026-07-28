@@ -24,7 +24,12 @@ import org.springframework.transaction.annotation.EnableTransactionManagement;
 @Configuration
 @EnableTransactionManagement
 @PropertySource(value = "file:${gighub.database.config}", encoding = "UTF-8")
-@MapperScan(basePackages = {"com.gighub.wallet.mapper", "com.gighub.work.mapper", "com.gighub.bank.mapper"})
+@MapperScan(basePackages = {
+        "com.gighub.wallet.mapper",
+        "com.gighub.work.mapper",
+        "com.gighub.bank.mapper",
+        "com.gighub.settlement.mapper"
+})
 public class DatabaseConfig {
 
     private static final String MAPPER_LOCATIONS = "classpath*:mappers/**/*.xml";

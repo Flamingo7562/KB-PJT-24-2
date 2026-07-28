@@ -12,7 +12,6 @@ import com.gighub.wallet.mapper.WalletMapper;
 import com.gighub.wallet.mapper.param.WalletTransactionParam;
 import com.gighub.wallet.service.EscrowService;
 import com.gighub.wallet.service.command.EscrowHoldCommand;
-import com.gighub.wallet.service.command.EscrowReleaseCommand;
 import com.gighub.work.dto.WorkCaseEscrowContext;
 import com.gighub.work.mapper.WorkMapper;
 import lombok.RequiredArgsConstructor;
@@ -20,23 +19,16 @@ import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
 public class EscrowServiceImpl implements EscrowService {
 
     private static final String ESCROW_UNFUNDED = "UNFUNDED";
-    private static final String ESCROW_HELD = "HELD";
     private static final String WORK_ACCEPTED = "ACCEPTED";
-    private static final String WORK_COMPLETED = "COMPLETED";
     private static final List<String> HOLDABLE_STATUSES = List.of("INVITED");
-    private static final List<String> RELEASABLE_STATUSES =
-            List.of("ACCEPTED", "READY", "IN_PROGRESS");
     private static final String TX_ESCROW_HOLD = "ESCROW_HOLD";
-    private static final String TX_ESCROW_RELEASE = "ESCROW_RELEASE";
     private static final String REF_ESCROW = "ESCROW";
 
     private final WalletMapper walletMapper;
@@ -134,114 +126,6 @@ public class EscrowServiceImpl implements EscrowService {
         insertWalletTransaction(transaction, "에스크로 예치 원장을 기록하지 못했습니다.");
     }
 
-    @Override
-    @Transactional
-    public void release(EscrowReleaseCommand command) {
-        validateReleaseCommand(command);
-        String outKey =
-                WalletIdempotencyKeys.escrowReleaseEmployer(command.getIdempotencyKey());
-        String inKey =
-                WalletIdempotencyKeys.escrowReleaseWorker(command.getIdempotencyKey());
-
-        WorkCaseEscrowContext context =
-                workMapper.getEscrowContextForUpdate(command.getWorkCaseId());
-        validateReleaseContext(context, command);
-
-        WalletTransactionSnapshot existingOut =
-                walletMapper.findTransactionByIdempotencyKey(outKey);
-        WalletTransactionSnapshot existingIn =
-                walletMapper.findTransactionByIdempotencyKey(inKey);
-        if (existingOut != null || existingIn != null) {
-            validateReleaseReplay(existingOut, existingIn, context);
-            return;
-        }
-
-        if (!RELEASABLE_STATUSES.contains(context.getStatus())) {
-            throw new InvalidEscrowStateException("정산할 수 없는 근무 건 상태입니다.");
-        }
-
-        Map<Long, WalletBalanceSnapshot> wallets =
-                lockWalletSnapshotsInOrder(context.getEmployerId(), context.getWorkerId());
-        WalletBalanceSnapshot employerWallet = wallets.get(context.getEmployerId());
-        WalletBalanceSnapshot workerWallet = wallets.get(context.getWorkerId());
-
-        String escrowStatus =
-                walletMapper.getEscrowStatusForUpdate(context.getWorkCaseId());
-        if (!ESCROW_HELD.equals(escrowStatus)) {
-            throw new InvalidEscrowStateException("정산 가능한 에스크로가 없습니다.");
-        }
-
-        Long amount = walletMapper.getHeldEscrowAmount(context.getWorkCaseId());
-        if (!context.getAgreedWage().equals(amount)) {
-            throw new EscrowIntegrityException("에스크로 금액이 약정 임금과 일치하지 않습니다.");
-        }
-        if (employerWallet.getLockedBalance() < amount) {
-            throw new EscrowIntegrityException("고용주 잠금 잔액이 정산 금액보다 적습니다.");
-        }
-        Long employerLockedAfter = subtractExactly(
-                employerWallet.getLockedBalance(),
-                amount,
-                "정산 후 고용주 잠금 잔액이 허용 범위를 벗어났습니다."
-        );
-        Long workerAvailableAfter = addExactly(
-                workerWallet.getAvailableBalance(),
-                amount,
-                "정산 후 근로자 잔액이 허용 범위를 벗어났습니다."
-        );
-
-        Long escrowId = requireEscrowId(context.getWorkCaseId());
-        validateHeldEscrowOwnership(
-                walletMapper.findEscrowHoldTransactionSnapshot(
-                        context.getWorkCaseId(), escrowId),
-                context,
-                escrowId
-        );
-
-        if (walletMapper.releaseEscrow(context.getWorkCaseId()) != 1) {
-            throw new EscrowIntegrityException("에스크로 정산 상태를 반영하지 못했습니다.");
-        }
-        if (walletMapper.releaseLockedFunds(context.getEmployerId(), amount) != 1) {
-            throw new EscrowIntegrityException("고용주 잠금 잔액을 차감하지 못했습니다.");
-        }
-        if (walletMapper.addAvailableBalance(context.getWorkerId(), amount) != 1) {
-            throw new EscrowIntegrityException("근로자 지갑에 정산금을 반영하지 못했습니다.");
-        }
-        if (workMapper.updateWorkStatus(
-                context.getWorkCaseId(), RELEASABLE_STATUSES, WORK_COMPLETED) != 1) {
-            throw new EscrowIntegrityException("근무 건 완료 상태를 반영하지 못했습니다.");
-        }
-
-        WalletTransactionParam employerTransaction = WalletTransactionParam.builder()
-                .walletId(employerWallet.getWalletId())
-                .workCaseId(context.getWorkCaseId())
-                .transactionType(TX_ESCROW_RELEASE)
-                .amount(amount)
-                .availableBefore(employerWallet.getAvailableBalance())
-                .availableAfter(employerWallet.getAvailableBalance())
-                .lockedBefore(employerWallet.getLockedBalance())
-                .lockedAfter(employerLockedAfter)
-                .referenceType(REF_ESCROW)
-                .referenceId(escrowId)
-                .idempotencyKey(outKey)
-                .build();
-        insertWalletTransaction(employerTransaction, "고용주 정산 원장을 기록하지 못했습니다.");
-
-        WalletTransactionParam workerTransaction = WalletTransactionParam.builder()
-                .walletId(workerWallet.getWalletId())
-                .workCaseId(context.getWorkCaseId())
-                .transactionType(TX_ESCROW_RELEASE)
-                .amount(amount)
-                .availableBefore(workerWallet.getAvailableBalance())
-                .availableAfter(workerAvailableAfter)
-                .lockedBefore(workerWallet.getLockedBalance())
-                .lockedAfter(workerWallet.getLockedBalance())
-                .referenceType(REF_ESCROW)
-                .referenceId(escrowId)
-                .idempotencyKey(inKey)
-                .build();
-        insertWalletTransaction(workerTransaction, "근로자 정산 원장을 기록하지 못했습니다.");
-    }
-
     private void insertWalletTransaction(
             WalletTransactionParam transaction, String failureMessage) {
         try {
@@ -255,24 +139,6 @@ public class EscrowServiceImpl implements EscrowService {
         }
     }
 
-    private Map<Long, WalletBalanceSnapshot> lockWalletSnapshotsInOrder(
-            Long employerId, Long workerId) {
-        long firstUserId = Math.min(employerId, workerId);
-        long secondUserId = Math.max(employerId, workerId);
-
-        Map<Long, WalletBalanceSnapshot> snapshots = new HashMap<>();
-        WalletBalanceSnapshot first =
-                walletMapper.getWalletSnapshotForUpdate(firstUserId);
-        validateWalletSnapshot(first, firstUserId);
-        snapshots.put(firstUserId, first);
-
-        WalletBalanceSnapshot second =
-                walletMapper.getWalletSnapshotForUpdate(secondUserId);
-        validateWalletSnapshot(second, secondUserId);
-        snapshots.put(secondUserId, second);
-        return snapshots;
-    }
-
     private void validateHoldCommand(EscrowHoldCommand command) {
         if (command == null
                 || command.getWorkCaseId() == null
@@ -282,16 +148,6 @@ public class EscrowServiceImpl implements EscrowService {
                 || command.getWorkerId() == null
                 || command.getWorkerId() <= 0) {
             throw new InvalidEscrowStateException("에스크로 예치 요청 정보를 확인해 주세요.");
-        }
-    }
-
-    private void validateReleaseCommand(EscrowReleaseCommand command) {
-        if (command == null
-                || command.getWorkCaseId() == null
-                || command.getWorkCaseId() <= 0
-                || command.getEmployerId() == null
-                || command.getEmployerId() <= 0) {
-            throw new InvalidEscrowStateException("에스크로 정산 요청 정보를 확인해 주세요.");
         }
     }
 
@@ -307,14 +163,6 @@ public class EscrowServiceImpl implements EscrowService {
             throw new InvalidEscrowStateException(
                     "요청 금액이 근무 건의 약정 임금과 일치하지 않습니다."
             );
-        }
-    }
-
-    private void validateReleaseContext(
-            WorkCaseEscrowContext context, EscrowReleaseCommand command) {
-        validateContext(context, command.getWorkCaseId());
-        if (!context.getEmployerId().equals(command.getEmployerId())) {
-            throw new EscrowAccessDeniedException("근무 건을 정산할 권한이 없습니다.");
         }
     }
 
@@ -354,37 +202,6 @@ public class EscrowServiceImpl implements EscrowService {
         }
     }
 
-    private void validateReleaseReplay(
-            WalletTransactionSnapshot existingOut,
-            WalletTransactionSnapshot existingIn,
-            WorkCaseEscrowContext context) {
-        if (existingOut == null || existingIn == null) {
-            throw new EscrowIntegrityException("정산 원장 쌍이 완전하지 않습니다.");
-        }
-        validateReplay(
-                existingOut,
-                context.getEmployerId(),
-                context.getWorkCaseId(),
-                context.getAgreedWage(),
-                TX_ESCROW_RELEASE
-        );
-        validateReplay(
-                existingIn,
-                context.getWorkerId(),
-                context.getWorkCaseId(),
-                context.getAgreedWage(),
-                TX_ESCROW_RELEASE
-        );
-        if (!existingOut.getReferenceId().equals(existingIn.getReferenceId())) {
-            throw new EscrowIntegrityException("정산 원장 쌍의 에스크로 참조가 일치하지 않습니다.");
-        }
-        Long escrowId = requireEscrowId(context.getWorkCaseId());
-        validateEscrowReference(existingOut, escrowId);
-        validateEscrowReference(existingIn, escrowId);
-        validateEmployerReleaseLedgerInvariant(existingOut, context.getAgreedWage());
-        validateWorkerReleaseLedgerInvariant(existingIn, context.getAgreedWage());
-    }
-
     private void validateReplay(
             WalletTransactionSnapshot snapshot,
             Long walletUserId,
@@ -419,26 +236,6 @@ public class EscrowServiceImpl implements EscrowService {
         }
     }
 
-    private void validateHeldEscrowOwnership(
-            WalletTransactionSnapshot snapshot,
-            WorkCaseEscrowContext context,
-            Long escrowId) {
-        if (snapshot == null
-                || snapshot.getId() == null
-                || snapshot.getId() <= 0
-                || snapshot.getWalletId() == null
-                || snapshot.getWalletId() <= 0
-                || !context.getEmployerId().equals(snapshot.getWalletUserId())
-                || !context.getWorkCaseId().equals(snapshot.getWorkCaseId())
-                || !context.getAgreedWage().equals(snapshot.getAmount())
-                || !TX_ESCROW_HOLD.equals(snapshot.getTransactionType())
-                || !REF_ESCROW.equals(snapshot.getReferenceType())
-                || !escrowId.equals(snapshot.getReferenceId())) {
-            throw new EscrowIntegrityException("예치 원장과 현재 정산 대상의 소유권이 일치하지 않습니다.");
-        }
-        validateHoldLedgerInvariant(snapshot, context.getAgreedWage());
-    }
-
     private void validateEscrowReference(
             WalletTransactionSnapshot snapshot, Long escrowId) {
         if (!escrowId.equals(snapshot.getReferenceId())) {
@@ -452,26 +249,6 @@ public class EscrowServiceImpl implements EscrowService {
             throw new EscrowIntegrityException("근무 건의 에스크로를 찾을 수 없습니다.");
         }
         return escrowId;
-    }
-
-    private void validateEmployerReleaseLedgerInvariant(
-            WalletTransactionSnapshot snapshot, Long amount) {
-        if (!hasCompleteBalances(snapshot)
-                || !snapshot.getAvailableBefore().equals(snapshot.getAvailableAfter())
-                || !matchesSubtract(
-                        snapshot.getLockedBefore(), amount, snapshot.getLockedAfter())) {
-            throw new EscrowIntegrityException("저장된 고용주 정산 원장 잔액이 올바르지 않습니다.");
-        }
-    }
-
-    private void validateWorkerReleaseLedgerInvariant(
-            WalletTransactionSnapshot snapshot, Long amount) {
-        if (!hasCompleteBalances(snapshot)
-                || !matchesAdd(
-                        snapshot.getAvailableBefore(), amount, snapshot.getAvailableAfter())
-                || !snapshot.getLockedBefore().equals(snapshot.getLockedAfter())) {
-            throw new EscrowIntegrityException("저장된 근로자 정산 원장 잔액이 올바르지 않습니다.");
-        }
     }
 
     private boolean hasCompleteBalances(WalletTransactionSnapshot snapshot) {
