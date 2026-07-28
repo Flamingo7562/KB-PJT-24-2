@@ -2,19 +2,25 @@
 
 KB IT's Your Life 7기 24-2팀 프로젝트입니다.
 
-## 프로젝트 운영 문서
+Vue.js와 Spring Framework Legacy를 사용하는 Gig Hub 모노레포입니다.
 
-- [개발 문서 색인](docs/README.md)
-- [시작 가이드](docs/GETTING_STARTED.md)
-- [프로젝트 관리 가이드](docs/PROJECT_MANAGEMENT_GUIDE.md)
-- [Monorepo 구조 가이드](docs/MONOREPO_STRUCTURE_GUIDE.md)
-- [이슈 작성 템플릿 가이드](docs/ISSUE_WRITING_GUIDE.md)
-- [커밋 컨벤션](docs/COMMIT_CONVENTION.md)
-- [Git Hook 및 Husky 가이드](docs/GIT_HOOKS_HUSKY_GUIDE.md)
-- [Lint 가이드](docs/LINT_GUIDE.md)
-- [GitHub Projects 패널 운영 가이드](docs/GITHUB_PROJECTS_PANEL_GUIDE.md)
-- [커밋 amend 가이드](docs/AMEND_GUIDE.md)
-- [Docker Compose DB Schema 공유 가이드](docs/DOCKER_DATABASE_SCHEMA_GUIDE.md)
+## 시작하기
+
+```sh
+npm install
+npm run prepare
+npm run check
+```
+
+처음 개발 환경을 준비할 때 필요한 상세 절차는 아래 개발 문서 진입점에서 확인합니다.
+
+## 문서 진입점
+
+- [전체 개발 문서](docs/README.md)
+- [프론트엔드 개발 안내](frontend/README.md)
+- [백엔드 개발 안내](backend/README.md)
+
+문서의 상태와 작업별 가이드 목록은 `docs/README.md`에서만 관리합니다.
 
 ## 프로젝트 구조
 
@@ -30,16 +36,9 @@ KB-PJT-24-2/
 
 ## 기술 제약
 
-- Frontend: Vue.js
-- Backend: Spring Framework legacy
-- Persistence: MyBatis
-- 사용 금지: React, Spring Boot, JPA
+- Frontend: Vue.js, JavaScript
+- Backend: Java 17, Spring Framework 5, 외부 Tomcat 9
+- Persistence: MyBatis, MySQL
+- 사용 금지: React, TypeScript, Spring Boot, JPA
 
-## 공통 명령
-
-```sh
-npm install
-npm run prepare
-npm run check
-npm run lint
-```
+세부 버전과 구현 규칙은 전체 개발 문서와 각 애플리케이션 README를 확인합니다.
