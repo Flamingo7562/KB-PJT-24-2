@@ -4,6 +4,7 @@ KB IT's Your Life 7기 24-2팀 프로젝트입니다.
 
 ## 프로젝트 운영 문서
 
+- [개발 문서 색인](docs/README.md)
 - [시작 가이드](docs/GETTING_STARTED.md)
 - [프로젝트 관리 가이드](docs/PROJECT_MANAGEMENT_GUIDE.md)
 - [Monorepo 구조 가이드](docs/MONOREPO_STRUCTURE_GUIDE.md)

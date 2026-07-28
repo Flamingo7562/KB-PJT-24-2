@@ -80,3 +80,13 @@ replay_pid*.log
 /.agents/
 /.codex/
 /scripts/check-agent-docs.js
+
+# Shared cross-agent harness
+!/CLAUDE.md
+!/docs/README.md
+!/docs/agent/
+!/docs/agent/PROJECT_RULES.md
+
+# Per-user Claude Code preferences and permissions
+/CLAUDE.local.md
+/.claude/settings.local.json
