@@ -150,7 +150,7 @@ function onApply() {
     <template #footer>
       <div class="actions">
         <BaseButton variant="secondary" class="reset" @click="onReset">초기화</BaseButton>
-        <BaseButton variant="owner" block @click="onApply">적용</BaseButton>
+        <BaseButton variant="owner" class="apply" @click="onApply">적용</BaseButton>
       </div>
     </template>
   </BaseBottomSheet>
@@ -202,9 +202,12 @@ function onApply() {
   display: flex;
   gap: var(--space-sm);
 }
-/* 초기화는 좁아져도 줄바꿈 없이 한 줄로 유지(적용 버튼이 block 이라 폭을 차지함). */
+/* 초기화는 내용 폭으로 한 줄 유지, 적용이 남은 폭을 채우는 주 버튼. */
 .reset {
-  flex-shrink: 0;
+  flex: 0 0 auto;
   white-space: nowrap;
+}
+.apply {
+  flex: 1;
 }
 </style>
