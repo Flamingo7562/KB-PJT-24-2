@@ -9,11 +9,23 @@
  *
  * 근무(work_case) 8단계 상태 매핑은 여기가 아니라 `@/constants/workCaseStatus` 단일 소스에 있다.
  */
+import bankBusan from '@/assets/images/banks/busan.png'
+import bankCity from '@/assets/images/banks/city.png'
+import bankCu from '@/assets/images/banks/cu.png'
+import bankDgb from '@/assets/images/banks/dgb.png'
+import bankGwangju from '@/assets/images/banks/gwangju.png'
 import bankHana from '@/assets/images/banks/hana.png'
 import bankIbk from '@/assets/images/banks/ibk.png'
+import bankIm from '@/assets/images/banks/im.png'
+import bankK from '@/assets/images/banks/k.png'
 import bankKakao from '@/assets/images/banks/kakao.png'
 import bankKb from '@/assets/images/banks/kb.png'
+import bankKdb from '@/assets/images/banks/kdb.png'
+import bankMg from '@/assets/images/banks/mg.png'
 import bankNh from '@/assets/images/banks/nh.png'
+import bankPost from '@/assets/images/banks/post.png'
+import bankSc from '@/assets/images/banks/sc.png'
+import bankSh from '@/assets/images/banks/sh.png'
 import bankShinhan from '@/assets/images/banks/shinhan.png'
 import bankToss from '@/assets/images/banks/toss.png'
 import bankWoori from '@/assets/images/banks/woori.png'
@@ -43,17 +55,24 @@ export const TX_STATUS = {
   REFUNDED: { label: '환불완료', color: 'var(--color-text-sub)' }
 }
 
-/* ---- 송금상세 필터(GET /api/wallet/transactions) 선택지 ---- */
+/* ---- 송금상세 필터(GET /api/wallet/transactions) 선택지 ----
+ * 화면(송금상세 리스트)에 실제로 노출되는 거래 구분과 필터 유형을 통일한 목록.
+ * txType 은 서버 파라미터로만 전달된다(프론트 재계산 없음 — docs/rules/domain.md).
+ * 주의(명세 WALLET-004): 공식 txType 화이트리스트는 ALL/PAID/REFUND/HOLD 이며
+ * CHARGE·WITHDRAW 는 화면 파생값이다. BE 연동 시 필터 화이트리스트를 함께 넓혀야 한다. */
 export const TX_TYPE_FILTER = [
   { value: 'ALL', label: '전체' },
-  { value: 'PAID', label: '지급완료' },
-  { value: 'REFUND', label: '환불' },
-  { value: 'HOLD', label: '예치중' }
+  { value: 'PAID', label: '정산완료' },
+  { value: 'HOLD', label: '예치중' },
+  { value: 'CHARGE', label: '충전' },
+  { value: 'WITHDRAW', label: '출금' },
+  { value: 'REFUND', label: '환불' }
 ]
 export const TX_SORT = [
   { value: 'LATEST', label: '최신순' },
   { value: 'OLDEST', label: '오래된순' },
-  { value: 'AMOUNT', label: '금액순' }
+  { value: 'AMOUNT_DESC', label: '금액 높은순' },
+  { value: 'AMOUNT_ASC', label: '금액 낮은순' }
 ]
 
 /* ---- 오늘의 알바 일정 카드(GET /api/worker/home todayWorkCase.status) ---- */
@@ -107,6 +126,10 @@ export const SCAN_TYPE = {
 /**
  * 은행 목록(충전·출금 은행 선택).
  * `logo`: assets/images/banks/*.png 로고. `chip`: 로고 로드 실패 시 폴백 색.
+ *
+ * BANKS       = 은행 선택 그리드에 바로 노출하는 주요 은행.
+ * BANKS_EXTRA = "기타 은행" 시트에서만 추가로 노출하는 은행.
+ * BANKS_ALL   = 전체(주요 + 기타). 코드→은행 조회는 이 전체 목록에서 한다.
  */
 export const BANKS = [
   { code: 'KB', name: '국민은행', logo: bankKb, chip: '#FFCC00' },
@@ -119,7 +142,25 @@ export const BANKS = [
   { code: 'TOSS', name: '토스뱅크', logo: bankToss, chip: '#0064FF' }
 ]
 
-/** 은행 코드 → 은행 객체 조회 */
+/* 기타 은행 — "기타 은행" 시트에서 노출. dgb/im/cu 는 로고 매핑이 확실치 않아 추후 확인 필요. */
+export const BANKS_EXTRA = [
+  { code: 'KBANK', name: '케이뱅크', logo: bankK, chip: '#2A2A2A' },
+  { code: 'BUSAN', name: '부산은행', logo: bankBusan, chip: '#E60012' },
+  { code: 'DGB', name: 'DGB대구은행', logo: bankDgb, chip: '#005BAC' }, // ⚠️ iM뱅크로 리브랜딩 — im 과 중복 확인
+  { code: 'IM', name: 'iM뱅크', logo: bankIm, chip: '#E4002B' }, // ⚠️ dgb 와 동일 은행일 수 있음
+  { code: 'GWANGJU', name: '광주은행', logo: bankGwangju, chip: '#009999' },
+  { code: 'SC', name: 'SC제일은행', logo: bankSc, chip: '#0B7A75' },
+  { code: 'CITI', name: '씨티은행', logo: bankCity, chip: '#003B70' },
+  { code: 'KDB', name: 'KDB산업은행', logo: bankKdb, chip: '#003DA5' },
+  { code: 'SH', name: '수협은행', logo: bankSh, chip: '#0089CF' },
+  { code: 'MG', name: '새마을금고', logo: bankMg, chip: '#00A6E2' },
+  { code: 'CU', name: '신협', logo: bankCu, chip: '#0069B4' }, // ⚠️ 로고가 신협인지 확인 필요
+  { code: 'POST', name: '우체국', logo: bankPost, chip: '#E5001E' }
+]
+
+export const BANKS_ALL = [...BANKS, ...BANKS_EXTRA]
+
+/** 은행 코드 → 은행 객체 조회(전체 목록 기준) */
 export function findBank(code) {
-  return BANKS.find((b) => b.code === code) ?? null
+  return BANKS_ALL.find((b) => b.code === code) ?? null
 }

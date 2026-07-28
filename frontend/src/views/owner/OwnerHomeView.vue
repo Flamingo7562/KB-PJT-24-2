@@ -5,7 +5,7 @@
  * 연계 API: GET /wallet · GET /wallet/transactions  →  @/services/wallet
  * TODO(담당 B): 송금상세 필터 바텀시트(BaseBottomSheet) 연결.
  */
-import { Lock } from 'lucide-vue-next'
+import { Info, Lock } from 'lucide-vue-next'
 import { storeToRefs } from 'pinia'
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
@@ -22,6 +22,10 @@ const { availableBalance, lockedBalance, transactions, loading } = storeToRefs(w
 
 const filterOpen = ref(false)
 const appliedFilter = ref({}) // 현재 적용 중인 송금상세 필터(서버 파라미터)
+
+// 예치중(에스크로) 안내 — 홈의 예치중 요약 옆 물음표 아이콘 호버 문구.
+const HELD_TOOLTIP =
+  '근무 계약 시 지급 예정 임금을 미리 안전하게 보관(에스크로)하는 금액입니다. 정산이 완료되면 알바생에게 지급되고, 노쇼 시 환불됩니다.'
 
 onMounted(() => {
   walletStore.loadHome()
@@ -51,7 +55,12 @@ function onApplyFilter(params) {
         <Lock :size="16" />
         예치중
       </span>
-      <strong class="held-amount">{{ formatKRW(lockedBalance) }}</strong>
+      <div class="held-right">
+        <strong class="held-amount">{{ formatKRW(lockedBalance) }}</strong>
+        <button type="button" class="held-info" :title="HELD_TOOLTIP" aria-label="예치중 안내">
+          <Info :size="16" />
+        </button>
+      </div>
     </div>
 
     <TransactionList :transactions="transactions" :loading="loading" @open-filter="onOpenFilter" />
@@ -84,9 +93,19 @@ function onApplyFilter(params) {
   font-size: var(--text-md);
   color: var(--color-text-sub);
 }
+.held-right {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
 .held-amount {
   font-size: var(--text-lg);
   font-weight: var(--weight-bold);
   color: var(--color-owner);
+}
+.held-info {
+  display: inline-flex;
+  color: var(--color-text-sub);
+  cursor: help;
 }
 </style>

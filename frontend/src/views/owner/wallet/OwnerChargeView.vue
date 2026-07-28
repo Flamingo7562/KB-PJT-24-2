@@ -16,7 +16,7 @@ import WalletAmountField from '@/components/wallet/WalletAmountField.vue'
 import { chargeWallet } from '@/services/wallet'
 import { useUiStore } from '@/stores/ui'
 import { useWalletStore } from '@/stores/wallet'
-import { formatKRW } from '@/utils/format'
+import { blockNonDigitKeydown, formatKRW, onlyDigits } from '@/utils/format'
 import { isPositiveAmount } from '@/utils/validators'
 
 const router = useRouter()
@@ -79,10 +79,14 @@ async function onSubmit() {
       <BankSelect v-model="bankCode" label="출금 은행" />
 
       <AppField
-        v-model="accountNo"
+        :model-value="accountNo"
         label="계좌번호"
+        type="tel"
         placeholder="'-' 없이 숫자만 입력"
+        maxlength="20"
         :error="accountError"
+        @keydown="blockNonDigitKeydown"
+        @update:model-value="(v) => (accountNo = onlyDigits(v))"
       />
 
       <WalletAmountField v-model="amount" label="충전 금액" :error="amountError" />
