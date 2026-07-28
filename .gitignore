@@ -86,6 +86,9 @@ replay_pid*.log
 !/docs/README.md
 !/docs/agent/
 !/docs/agent/PROJECT_RULES.md
+!/docs/agent/SCHEMA_OVERVIEW.md
+!/docs/runbooks/
+!/docs/runbooks/DATABASE_RUNBOOK.md
 
 # Shared documentation archive
 !/docs/archive/

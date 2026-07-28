@@ -1,5 +1,12 @@
 # 현재 빌드 기준 Docker Compose·Flyway DB 가이드
 
+> [!WARNING]
+> 이 문서는 현재 개발 기준이 아닌 보관 문서입니다.
+>
+> - 보관일: 2026-07-28
+> - 보관 사유: 실행 전 설계안이 남아 있어 현재 Docker Compose, Flyway Migration과 Spring DB 구성을 설명하지 못함
+> - 현재 문서: [`../runbooks/DATABASE_RUNBOOK.md`](../runbooks/DATABASE_RUNBOOK.md), [`../agent/SCHEMA_OVERVIEW.md`](../agent/SCHEMA_OVERVIEW.md)
+
 > 적용 기준: 2026-07-20의 실제 Gradle 빌드와 `docs/DEPENDENCY_SPECIFICATION.md`의 DB 인프라 기준
 >
 > 한 줄 원칙: **MySQL 실행 환경은 Docker Compose로 고정하고, 스키마 변경은 WAR가 아닌 Flyway CLI 컨테이너가 적용합니다.**

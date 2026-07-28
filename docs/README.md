@@ -16,11 +16,12 @@
 
 ## 에이전트 진입점
 
-| 대상          | 진입 파일                                          | 역할                                                                   |
-| ------------- | -------------------------------------------------- | ---------------------------------------------------------------------- |
-| 모든 에이전트 | [`agent/PROJECT_RULES.md`](agent/PROJECT_RULES.md) | 기술 제약, 구현 경계, 공통 검증 기준의 단일 원본                       |
-| Claude Code   | [`../CLAUDE.md`](../CLAUDE.md)                     | 공통 규칙을 가져오는 추적 대상 어댑터                                  |
-| Codex 사용자  | 로컬 `AGENTS.md`                                   | 공통 규칙을 읽고 개인 보고서·메모리·Notion 절차를 추가하는 비공유 파일 |
+| 대상          | 진입 파일                                              | 역할                                                                   |
+| ------------- | ------------------------------------------------------ | ---------------------------------------------------------------------- |
+| 모든 에이전트 | [`agent/PROJECT_RULES.md`](agent/PROJECT_RULES.md)     | 기술 제약, 구현 경계, 공통 검증 기준의 단일 원본                       |
+| DB 관련 작업  | [`agent/SCHEMA_OVERVIEW.md`](agent/SCHEMA_OVERVIEW.md) | Migration, 관계, 불변식과 애플리케이션 책임 경계의 간결한 현재 요약    |
+| Claude Code   | [`../CLAUDE.md`](../CLAUDE.md)                         | 공통 규칙을 가져오는 추적 대상 어댑터                                  |
+| Codex 사용자  | 로컬 `AGENTS.md`                                       | 공통 규칙을 읽고 개인 보고서·메모리·Notion 절차를 추가하는 비공유 파일 |
 
 `AGENTS.md`, `docs/memory/`, `docs/reports/`, `NOTICE.md`는 현재 Codex 사용자의 로컬 운영 파일입니다. 다른 에이전트는 `docs/memory/`와 `docs/reports/`를 생성·조회·수정·삭제하지 않습니다. Notion 동기화는 팀 공통 요구사항이 아니며, 현재 사용자가 명시적으로 요청하고 연결 기능을 사용할 수 있을 때만 선택적으로 수행합니다.
 
@@ -34,6 +35,15 @@
 | Backend  | [`../backend/README.md`](../backend/README.md)   | Spring Legacy WAR, DB 연결, 검증과 패키지 구조 |
 
 ## 현재 개발 가이드
+
+### 데이터베이스
+
+| 작업                                          | 먼저 읽을 문서                                                                                                         |
+| --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| 로컬 MySQL 시작·Migration·연결 검증·장애 대응 | [`runbooks/DATABASE_RUNBOOK.md`](runbooks/DATABASE_RUNBOOK.md)                                                         |
+| Migration·Mapper·영속 도메인·트랜잭션 변경    | [`agent/SCHEMA_OVERVIEW.md`](agent/SCHEMA_OVERVIEW.md), [`runbooks/DATABASE_RUNBOOK.md`](runbooks/DATABASE_RUNBOOK.md) |
+
+DB 스키마의 단일 원본은 `backend/src/main/resources/db/migration/V*.sql`입니다. Runbook과 Schema Overview는 코드를 대체하지 않으며 Migration 또는 DB 설정을 변경한 PR에서 함께 갱신합니다.
 
 ### 개발 환경과 저장소 구조
 
@@ -65,12 +75,6 @@
 | 회원가입·사업장 스키마 변경      | [`SIGNUP_DATABASE_SCHEMA.md`](SIGNUP_DATABASE_SCHEMA.md)     |
 | 계약·에스크로 테스트 데이터 준비 | [`TEST_CONTRACT_SEED_GUIDE.md`](TEST_CONTRACT_SEED_GUIDE.md) |
 
-## 재검토가 필요한 문서
-
-| 문서                                                                 | 현재 상태                                                                                                  | 다음 작업                                                               |
-| -------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
-| [`DOCKER_DATABASE_SCHEMA_GUIDE.md`](DOCKER_DATABASE_SCHEMA_GUIDE.md) | Compose가 비어 있고 Migration과 Spring DB 설정이 없던 시점의 설명이 남아 있어 현재 기준으로 사용할 수 없음 | 실제 설정으로 검증한 DB Runbook과 스키마 요약을 먼저 작성한 뒤 아카이브 |
-
 ## 아카이브
 
 - [문서 아카이브 정책과 목록](archive/README.md)
@@ -81,12 +85,11 @@
 
 다음 문서는 별도 이슈와 작은 PR로 작성합니다.
 
-1. 현재 DB Runbook과 간결한 스키마 요약
-2. 기술 스택과 허용·금지 의존성
-3. 현재 스프린트 목표와 역할 분담
-4. 테스트 작성 규칙과 coverage 기준
-5. 공통 API 규약과 생성된 OpenAPI
-6. 도메인별 상태 전이와 불변식
-7. 수직 기능 개발 플레이북과 전체 로컬 실행 Runbook
+1. 기술 스택과 허용·금지 의존성
+2. 현재 스프린트 목표와 역할 분담
+3. 테스트 작성 규칙과 coverage 기준
+4. 공통 API 규약과 생성된 OpenAPI
+5. 도메인별 상태 전이와 불변식
+6. 수직 기능 개발 플레이북과 전체 로컬 실행 Runbook
 
 새 공유 문서는 실제 내용과 검증 방법을 완성한 뒤 이 색인에 상태와 진입 경로를 추가합니다.
