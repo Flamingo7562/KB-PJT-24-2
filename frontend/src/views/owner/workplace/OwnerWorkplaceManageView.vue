@@ -204,6 +204,7 @@ async function confirmDelete() {
           :model-value="editPhone"
           label="사업장 전화번호 (지역번호 포함 9~11자리)"
           type="tel"
+          digits-only
           required
           maxlength="13"
           :error="editPhoneError"

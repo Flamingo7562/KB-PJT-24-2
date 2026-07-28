@@ -130,6 +130,7 @@ async function handleSubmit() {
         <AppField
           :model-value="businessNumber"
           label="사업자등록번호 (숫자 10자리)"
+          digits-only
           placeholder="000-00-00000"
           required
           maxlength="12"
@@ -166,6 +167,7 @@ async function handleSubmit() {
           :model-value="phone"
           label="사업장 전화번호 (지역번호 포함 9~11자리)"
           type="tel"
+          digits-only
           placeholder="02-0000-0000"
           required
           maxlength="13"
