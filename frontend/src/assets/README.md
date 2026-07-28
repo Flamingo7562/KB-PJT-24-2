@@ -49,7 +49,7 @@ assets/
 | 사장 글로벌 헤더     | 로고 심볼                     | `logo/logo-symbol.svg`                  | 자체 제작        |
 | 헤더 알림·마이       | 종·사람 아이콘                | lucide `Bell` · `CircleUser`            | 라이브러리       |
 | 사장 바텀 네비       | 홈·근태·문서·QR               | lucide (아래 매핑)                      | 라이브러리       |
-| 알바생 바텀 네비     | 안심지갑·근로·QR·문서         | lucide (문서·QR **재사용**)             | 라이브러리       |
+| 알바생 바텀 네비     | 안심지갑·근로·문서·QR         | lucide (문서·QR **재사용**)             | 라이브러리       |
 | 알바생 로고          | GigHub 로고 (앰버)            | 위 `logo-gighub.svg` 재사용, 색만       | 자체 제작        |
 | 충전 화면 은행       | 은행 표시                     | lucide `Landmark` + 이름 + 색칩 (권장)  | §은행            |
 | 마이 이름 옆         | 프로필 대용                   | lucide `CircleUser` (공통)              | 라이브러리       |
