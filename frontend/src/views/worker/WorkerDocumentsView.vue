@@ -2,15 +2,15 @@
 /**
  * [G] 알바생 문서함  ·  /worker/documents  ·  WORKER  (탭 화면)
  * 근로계약서(자동 저장) + 보건증(업로드·발급일 수정·삭제·공유·공유 취소).
+ * 레이아웃은 사장 문서함과 동일(탭 + 썸네일 카드). 등록·삭제는 확인 모달을 거친다.
  * 업로드=보건증만. 계약서 삭제=근무 종료 후. 카드에 공유중 지점 표시.
  * 연계 API: GET/POST/PATCH/DELETE /documents · GET/POST/DELETE /documents/{id}/shares
  *   →  @/services/documents (전부)
- * 공통: BaseBottomSheet(보건증 등록/공유 모달) · 카드 클릭 → /worker/documents/:documentId
+ * 공통: BaseBottomSheet(보건증 등록/공유) · BaseModal(발급일·삭제 확인) · 카드 클릭 → 뷰어
  */
 import {
-  BadgeCheck,
-  ChevronRight,
   FileText,
+  Image as ImageIcon,
   MapPin,
   Pencil,
   Share2,
@@ -46,8 +46,18 @@ const ALLOWED_EXT = ['jpg', 'jpeg', 'png', 'pdf']
 const docs = ref([])
 const loading = ref(true)
 
-const contracts = computed(() => docs.value.filter((d) => d.docType === 'CONTRACT'))
-const healthCerts = computed(() => docs.value.filter((d) => d.docType === 'HEALTH_CERT'))
+const TABS = [
+  { value: 'ALL', label: '전체' },
+  { value: 'CONTRACT', label: '근로계약서' },
+  { value: 'HEALTH_CERT', label: '보건증' }
+]
+const activeTab = ref('ALL')
+const filteredDocs = computed(() => {
+  if (activeTab.value === 'ALL') return docs.value
+  return docs.value.filter((d) => d.docType === activeTab.value)
+})
+
+const IMAGE_EXT = ['jpg', 'jpeg', 'png']
 
 onMounted(load)
 
@@ -268,85 +278,85 @@ async function doRevoke(share) {
 
 <template>
   <div class="worker-docs">
-    <header class="head">
-      <h1 class="page-title">문서함</h1>
-      <BaseButton variant="worker" @click="openRegister">
-        <Upload :size="16" />
-        보건증 등록
-      </BaseButton>
-    </header>
+    <div class="toolbar">
+      <div class="tabs" role="tablist" aria-label="문서 유형">
+        <button
+          v-for="tab in TABS"
+          :key="tab.value"
+          type="button"
+          class="tab"
+          :class="{ active: activeTab === tab.value }"
+          @click="activeTab = tab.value"
+        >
+          {{ tab.label }}
+        </button>
+      </div>
+
+      <button type="button" class="upload-btn" @click="openRegister">
+        <Upload :size="16" /> 보건증 등록
+      </button>
+    </div>
 
     <p v-if="loading" class="loading">불러오는 중…</p>
 
     <template v-else>
-      <EmptyState v-if="docs.length === 0" message="아직 등록된 문서가 없어요.">
+      <EmptyState v-if="filteredDocs.length === 0" message="표시할 문서가 없어요.">
         보건증을 등록하거나, 근무를 시작하면 근로계약서가 자동 저장돼요.
       </EmptyState>
 
-      <template v-else>
-        <section v-if="contracts.length" class="doc-section">
-          <h2 class="section-title">근로계약서</h2>
-          <ul class="doc-list">
-            <li v-for="doc in contracts" :key="doc.documentId" class="doc-card">
-              <button type="button" class="doc-main" @click="goViewer(doc)">
-                <FileText :size="22" class="doc-icon" />
-                <div class="doc-info">
-                  <p class="doc-name">{{ doc.fileName }}</p>
-                  <p class="doc-meta">발급일 {{ formatDate(doc.issuedDate) }}</p>
-                </div>
-                <ChevronRight :size="18" class="chevron" />
-              </button>
-              <div class="doc-actions">
-                <button type="button" class="act act--danger" @click="openDelete(doc)">
-                  <Trash2 :size="15" />
-                  삭제
-                </button>
-              </div>
-            </li>
-          </ul>
-        </section>
+      <ul v-else class="doc-list">
+        <li v-for="doc in filteredDocs" :key="doc.documentId" class="doc-card">
+          <button type="button" class="doc-main" @click="goViewer(doc)">
+            <span class="thumb">
+              <ImageIcon v-if="IMAGE_EXT.includes(doc.fileExt)" :size="20" />
+              <FileText v-else :size="20" />
+            </span>
 
-        <section v-if="healthCerts.length" class="doc-section">
-          <h2 class="section-title">보건증</h2>
-          <ul class="doc-list">
-            <li v-for="doc in healthCerts" :key="doc.documentId" class="doc-card">
-              <button type="button" class="doc-main" @click="goViewer(doc)">
-                <BadgeCheck :size="22" class="doc-icon" />
-                <div class="doc-info">
-                  <p class="doc-name">{{ doc.fileName }}</p>
-                  <p class="doc-meta">
-                    발급일 {{ formatDate(doc.issuedDate) }}
-                    <span v-if="doc.expiryDate"> · 만료 {{ formatDate(doc.expiryDate) }}</span>
-                  </p>
-                  <p class="doc-share">
-                    <Share2 :size="13" />
-                    <template v-if="doc.shares?.length">
-                      공유중 · {{ doc.shares.map((s) => s.workplaceName).join(', ') }}
-                    </template>
-                    <template v-else>공유 안 함</template>
-                  </p>
-                </div>
-                <ChevronRight :size="18" class="chevron" />
+            <span class="doc-info">
+              <span class="doc-name">{{ doc.fileName }}</span>
+              <span class="doc-meta">
+                {{ formatDate(doc.issuedDate) }} ·
+                {{ doc.docType === 'CONTRACT' ? '근로계약서' : '보건증' }}
+                <template v-if="doc.docType === 'HEALTH_CERT' && doc.expiryDate">
+                  · 만료 {{ formatDate(doc.expiryDate) }}
+                </template>
+              </span>
+              <span v-if="doc.docType === 'HEALTH_CERT'" class="doc-share">
+                <Share2 :size="13" />
+                <template v-if="doc.shares?.length">
+                  공유중 · {{ doc.shares.map((s) => s.workplaceName).join(', ') }}
+                </template>
+                <template v-else>공유 안 함</template>
+              </span>
+            </span>
+          </button>
+
+          <div class="doc-side">
+            <template v-if="doc.docType === 'HEALTH_CERT'">
+              <button type="button" class="act-btn" aria-label="공유 관리" @click="openShare(doc)">
+                <Share2 :size="16" />
               </button>
-              <div class="doc-actions">
-                <button type="button" class="act" @click="openShare(doc)">
-                  <Share2 :size="15" />
-                  공유 관리
-                </button>
-                <button type="button" class="act" @click="openEdit(doc)">
-                  <Pencil :size="15" />
-                  발급일
-                </button>
-                <button type="button" class="act act--danger" @click="openDelete(doc)">
-                  <Trash2 :size="15" />
-                  삭제
-                </button>
-              </div>
-            </li>
-          </ul>
-        </section>
-      </template>
+              <button type="button" class="act-btn" aria-label="발급일 수정" @click="openEdit(doc)">
+                <Pencil :size="16" />
+              </button>
+            </template>
+            <button
+              type="button"
+              class="act-btn act-btn--danger"
+              aria-label="문서 삭제"
+              @click="openDelete(doc)"
+            >
+              <Trash2 :size="16" />
+            </button>
+          </div>
+        </li>
+      </ul>
     </template>
+
+    <p class="notice">
+      보건증은 직접 등록·공유할 수 있어요 · 근로계약서는 근무 시작 시 자동 저장 · 계약서 삭제는 근무
+      종료 후 가능
+    </p>
 
     <!-- 보건증 등록 -->
     <BaseBottomSheet :open="registerOpen" title="보건증 등록" @close="registerOpen = false">
@@ -436,17 +446,51 @@ async function doRevoke(share) {
 </template>
 
 <style scoped>
-.head {
+.worker-docs {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+}
+
+/* 툴바(탭 + 등록 버튼) — 사장 문서함과 동일 */
+.toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-md);
+  gap: var(--space-sm);
 }
-.page-title {
-  font-size: var(--text-xl);
-  font-weight: var(--weight-bold);
-  color: var(--color-text);
+.tabs {
+  display: inline-flex;
+  gap: var(--space-xs);
+  padding: 4px;
+  background: var(--color-bg);
+  border-radius: var(--radius-pill);
 }
+.tab {
+  padding: var(--space-xs) var(--space-md);
+  border-radius: var(--radius-pill);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--color-text-sub);
+}
+.tab.active {
+  background: var(--color-worker);
+  color: var(--color-on-primary);
+}
+.upload-btn {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 4px;
+  padding: var(--space-xs) var(--space-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--color-worker);
+  background: var(--color-surface);
+}
+
 .loading {
   margin-top: var(--space-xl);
   text-align: center;
@@ -454,86 +498,92 @@ async function doRevoke(share) {
   color: var(--color-text-sub);
 }
 
-.doc-section {
-  margin-top: var(--space-lg);
-}
-.section-title {
-  font-size: var(--text-md);
-  font-weight: var(--weight-medium);
-  color: var(--color-text-sub);
-}
+/* 카드 리스트 — 사장 문서함과 동일한 썸네일 카드 */
 .doc-list {
-  margin-top: var(--space-sm);
   display: flex;
   flex-direction: column;
-  gap: var(--space-md);
+  gap: var(--space-sm);
 }
 .doc-card {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-md);
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
-  overflow: hidden;
 }
 .doc-main {
   display: flex;
+  flex: 1;
+  min-width: 0;
   align-items: center;
   gap: var(--space-md);
-  width: 100%;
-  padding: var(--space-lg);
   text-align: left;
 }
-.doc-icon {
+.thumb {
+  display: inline-flex;
   flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
   color: var(--color-worker);
+  background: var(--color-worker-weak);
+  border-radius: var(--radius-sm);
 }
 .doc-info {
-  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
   min-width: 0;
 }
 .doc-name {
-  font-size: var(--text-lg);
+  overflow: hidden;
+  font-size: var(--text-md);
   font-weight: var(--weight-medium);
   color: var(--color-text);
-  overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .doc-meta {
-  margin-top: var(--space-xs);
   font-size: var(--text-sm);
   color: var(--color-text-sub);
+  word-break: keep-all;
 }
 .doc-share {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 4px;
-  margin-top: var(--space-xs);
   font-size: var(--text-sm);
   color: var(--color-worker);
 }
-.chevron {
-  flex-shrink: 0;
-  color: var(--color-text-sub);
-}
-.doc-actions {
+
+.doc-side {
   display: flex;
-  border-top: 1px solid var(--color-border);
+  flex-shrink: 0;
+  align-items: center;
+  gap: var(--space-xs);
 }
-.act {
-  flex: 1;
+.act-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
-  padding: var(--space-md);
-  font-size: var(--text-sm);
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
   color: var(--color-text-sub);
 }
-.act + .act {
-  border-left: 1px solid var(--color-border);
-}
-.act--danger {
+.act-btn--danger {
   color: var(--color-danger);
+}
+
+.notice {
+  padding: var(--space-md);
+  background: var(--color-bg);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  color: var(--color-text-sub);
 }
 
 /* 등록 시트 */

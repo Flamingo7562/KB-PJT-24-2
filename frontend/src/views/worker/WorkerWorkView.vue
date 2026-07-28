@@ -2,9 +2,9 @@
 /**
  * [F] 알바생 근로관리  ·  /worker/work  ·  WORKER  (탭 화면)
  * 근무 히스토리 리스트(상태 뱃지, ? 아이콘 → 문의/신고).
- * 연계 API: GET /worker/shifts  →  @/services/worker (listWorkerShifts)
+ * 연계 API: GET /worker/work-cases  →  @/services/worker (listWorkerWorkCases)
  *   ? 아이콘 → 문의하기 시트(BaseBottomSheet, getOwnerContact) / 신고 → report 라우트
- * 공통: StatusChip(근무/정산 상태) · 항목 클릭 → /worker/work/shifts/:shiftId
+ * 공통: StatusChip(근무/정산 상태) · 항목 클릭 → /worker/work/work-cases/:workCaseId
  */
 import { CircleHelp, Phone } from 'lucide-vue-next'
 import { onMounted, ref } from 'vue'
@@ -14,15 +14,15 @@ import BaseBottomSheet from '@/components/common/BaseBottomSheet.vue'
 import BaseButton from '@/components/common/BaseButton.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import StatusChip from '@/components/common/StatusChip.vue'
-import { getOwnerContact } from '@/services/shifts'
-import { listWorkerShifts } from '@/services/worker'
+import { getOwnerContact } from '@/services/workCases'
+import { listWorkerWorkCases } from '@/services/worker'
 import { useUiStore } from '@/stores/ui'
 import { formatDate, formatKRW } from '@/utils/format'
 
 const router = useRouter()
 const ui = useUiStore()
 
-const shifts = ref([])
+const workCases = ref([])
 const loading = ref(true)
 
 onMounted(load)
@@ -30,8 +30,8 @@ onMounted(load)
 async function load() {
   loading.value = true
   try {
-    const { content } = await listWorkerShifts()
-    shifts.value = content ?? []
+    const { content } = await listWorkerWorkCases()
+    workCases.value = content ?? []
   } catch {
     ui.toast('근무 내역을 불러오지 못했습니다.', { type: 'danger' })
   } finally {
@@ -39,23 +39,23 @@ async function load() {
   }
 }
 
-function goDetail(shift) {
-  router.push(`/worker/work/shifts/${shift.shiftId}`)
+function goDetail(workCase) {
+  router.push(`/worker/work/work-cases/${workCase.workCaseId}`)
 }
 
 /* ---- 문의 · 신고 시트 ---- */
 const helpOpen = ref(false)
-const helpShift = ref(null)
+const helpWorkCase = ref(null)
 const contact = ref(null)
 const contactLoading = ref(false)
 
-async function openHelp(shift) {
-  helpShift.value = shift
+async function openHelp(workCase) {
+  helpWorkCase.value = workCase
   contact.value = null
   helpOpen.value = true
   contactLoading.value = true
   try {
-    contact.value = await getOwnerContact(shift.shiftId)
+    contact.value = await getOwnerContact(workCase.workCaseId)
   } catch {
     ui.toast('연락처를 불러오지 못했습니다.', { type: 'warning' })
   } finally {
@@ -64,9 +64,9 @@ async function openHelp(shift) {
 }
 
 function goReport() {
-  const id = helpShift.value?.shiftId
+  const id = helpWorkCase.value?.workCaseId
   helpOpen.value = false
-  if (id != null) router.push(`/worker/work/shifts/${id}/report`)
+  if (id != null) router.push(`/worker/work/work-cases/${id}/report`)
 }
 </script>
 
@@ -76,26 +76,31 @@ function goReport() {
 
     <p v-if="loading" class="loading">불러오는 중…</p>
 
-    <EmptyState v-else-if="shifts.length === 0" message="아직 근무 내역이 없어요." />
+    <EmptyState v-else-if="workCases.length === 0" message="아직 근무 내역이 없어요." />
 
-    <ul v-else class="shift-list">
-      <li v-for="shift in shifts" :key="shift.shiftId" class="shift">
-        <button type="button" class="shift-main" @click="goDetail(shift)">
-          <div class="shift-head">
-            <span class="workplace">{{ shift.workplaceName }}</span>
-            <span class="date">{{ formatDate(shift.workDate) }}</span>
+    <ul v-else class="work-case-list">
+      <li v-for="workCase in workCases" :key="workCase.workCaseId" class="work-case">
+        <button type="button" class="work-case-main" @click="goDetail(workCase)">
+          <div class="work-case-head">
+            <span class="workplace">{{ workCase.workplaceName }}</span>
+            <span class="date">{{ formatDate(workCase.workDate) }}</span>
           </div>
-          <div class="shift-sub">
-            <span class="time">{{ shift.time }}</span>
-            <span class="wage">{{ formatKRW(shift.dailyWage) }}</span>
+          <div class="work-case-sub">
+            <span class="time">{{ workCase.time }}</span>
+            <span class="wage">{{ formatKRW(workCase.dailyWage) }}</span>
           </div>
-          <div class="shift-status">
-            <StatusChip :status="shift.status" kind="shift" />
-            <StatusChip :status="shift.settleStatus" kind="settle" />
+          <div class="work-case-status">
+            <StatusChip :status="workCase.status" kind="workCase" />
+            <StatusChip :status="workCase.settleStatus" kind="settle" />
           </div>
         </button>
 
-        <button type="button" class="help-btn" aria-label="문의 또는 신고" @click="openHelp(shift)">
+        <button
+          type="button"
+          class="help-btn"
+          aria-label="문의 또는 신고"
+          @click="openHelp(workCase)"
+        >
           <CircleHelp :size="20" />
         </button>
       </li>
@@ -104,7 +109,7 @@ function goReport() {
     <BaseBottomSheet :open="helpOpen" title="문의 · 신고" @close="helpOpen = false">
       <div class="help-body">
         <p class="help-target">
-          {{ helpShift?.workplaceName }} · {{ formatDate(helpShift?.workDate) }}
+          {{ helpWorkCase?.workplaceName }} · {{ formatDate(helpWorkCase?.workDate) }}
         </p>
 
         <section class="contact">
@@ -140,13 +145,13 @@ function goReport() {
   font-size: var(--text-sm);
   color: var(--color-text-sub);
 }
-.shift-list {
+.work-case-list {
   margin-top: var(--space-md);
   display: flex;
   flex-direction: column;
   gap: var(--space-md);
 }
-.shift {
+.work-case {
   display: flex;
   align-items: stretch;
   gap: var(--space-sm);
@@ -155,12 +160,12 @@ function goReport() {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
 }
-.shift-main {
+.work-case-main {
   flex: 1;
   min-width: 0;
   text-align: left;
 }
-.shift-head {
+.work-case-head {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
@@ -175,7 +180,7 @@ function goReport() {
   font-size: var(--text-sm);
   color: var(--color-text-sub);
 }
-.shift-sub {
+.work-case-sub {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
@@ -190,7 +195,7 @@ function goReport() {
   font-weight: var(--weight-bold);
   color: var(--color-text);
 }
-.shift-status {
+.work-case-status {
   display: flex;
   gap: var(--space-md);
   margin-top: var(--space-sm);

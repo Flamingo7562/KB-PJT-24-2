@@ -4,7 +4,7 @@ import { ArrowUpRight, Plus } from 'lucide-vue-next'
 import { formatKRW } from '@/utils/format'
 
 defineProps({
-  balance: { type: Number, default: 0 }
+  availableBalance: { type: Number, default: 0 }
 })
 
 defineEmits(['charge', 'withdraw'])
@@ -13,7 +13,7 @@ defineEmits(['charge', 'withdraw'])
 <template>
   <section class="wallet-card">
     <p class="label">가용 잔액</p>
-    <p class="balance">{{ formatKRW(balance) }}</p>
+    <p class="balance">{{ formatKRW(availableBalance) }}</p>
 
     <div class="actions">
       <button type="button" class="btn" @click="$emit('charge')">

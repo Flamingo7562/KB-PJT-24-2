@@ -3,14 +3,14 @@ import { CalendarX, Clock, TriangleAlert, UserX } from 'lucide-vue-next'
 import { computed } from 'vue'
 
 const props = defineProps({
-  shift: { type: Object, default: null }
+  workCase: { type: Object, default: null }
 })
 
-const isEmpty = computed(() => !props.shift || props.shift.status === 'NONE')
+const isEmpty = computed(() => !props.workCase || props.workCase.status === 'NONE')
 
 // 상태 → 뱃지 라벨·색·아이콘
 const meta = computed(() => {
-  switch (props.shift?.status) {
+  switch (props.workCase?.status) {
     case 'BEFORE_WORK':
       return {
         label: '출근 전',
@@ -47,14 +47,14 @@ const meta = computed(() => {
       <span>오늘은 예정된 알바가 없어요.</span>
     </div>
 
-    <div v-else class="shift">
+    <div v-else class="work-case">
       <span class="badge" :style="{ color: meta.color, background: meta.bg }">
         <component :is="meta.icon" :size="14" />
         {{ meta.label }}
       </span>
-      <p class="shift-title">{{ shift.title }}</p>
-      <p class="shift-info">
-        {{ shift.workplaceName }} · {{ shift.startTime }}–{{ shift.endTime }}
+      <p class="work-case-title">{{ workCase.title }}</p>
+      <p class="work-case-info">
+        {{ workCase.workplaceName }} · {{ workCase.startTime }}–{{ workCase.endTime }}
       </p>
     </div>
   </section>
@@ -94,14 +94,14 @@ const meta = computed(() => {
   font-weight: var(--weight-medium);
 }
 
-.shift-title {
+.work-case-title {
   margin-top: var(--space-sm);
   font-size: var(--text-lg);
   font-weight: var(--weight-medium);
   color: var(--color-text);
 }
 
-.shift-info {
+.work-case-info {
   margin-top: var(--space-xs);
   font-size: var(--text-md);
   color: var(--color-text-sub);

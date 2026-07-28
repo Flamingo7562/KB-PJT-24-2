@@ -104,8 +104,42 @@ async function runDetect() {
   }
 }
 
+/**
+ * 근태 스캔 실패를 서버 상태코드별로 구분해 안내한다(docs/rules/api.md·domain.md):
+ *   410 만료   → QR 유효시간 만료 → 재발급 요청 안내
+ *   409 상태충돌 → 이미 처리됐거나 지금 스캔 불가한 근무 상태
+ *   422 검증거부 → 위치(GPS 반경)·QR 인증 실패 → 반경·QR 재확인
+ * (400 등 그 외는 일반 안내) 상태는 서버가 최종 판단하므로 프론트는 문구만 분기한다.
+ */
+function scanErrorInfo(error) {
+  const status = error?.response?.status
+  if (status === 410) {
+    return {
+      message: 'QR 코드가 만료됐어요. 사장님께 QR을 다시 요청해 새로 스캔해주세요.',
+      type: 'warning'
+    }
+  }
+  if (status === 409) {
+    return {
+      message: '이미 처리됐거나 지금은 스캔할 수 없는 근무예요. 근무 상태를 확인해주세요.',
+      type: 'warning'
+    }
+  }
+  if (status === 422) {
+    return {
+      message: '위치·QR 인증에 실패했어요. 사업장 반경 안에서 올바른 QR을 다시 스캔해주세요.',
+      type: 'danger'
+    }
+  }
+  return {
+    message: '스캔에 실패했어요. 잠시 후 QR·위치를 확인해 다시 시도해주세요.',
+    type: 'danger'
+  }
+}
+
 async function submitScan(qrToken) {
   if (!qrToken) return
+  errorMsg.value = ''
   phase.value = 'processing'
   try {
     const res = await scan({
@@ -115,8 +149,10 @@ async function submitScan(qrToken) {
     })
     result.value = res
     phase.value = 'result'
-  } catch {
-    ui.toast('스캔에 실패했습니다. QR·위치를 확인해주세요.', { type: 'danger' })
+  } catch (error) {
+    const info = scanErrorInfo(error)
+    errorMsg.value = info.message
+    ui.toast(info.message, { type: info.type })
     phase.value = 'idle'
   }
 }
@@ -197,6 +233,7 @@ onBeforeUnmount(stopCamera)
       <h1 class="intro-title">QR 토큰 입력</h1>
       <p class="intro-desc">카메라를 사용할 수 없어 QR 토큰을 직접 입력합니다.</p>
       <AppField v-model="manualToken" label="QR 토큰" placeholder="QR에 포함된 토큰" />
+      <p v-if="errorMsg" class="error">{{ errorMsg }}</p>
       <BaseButton variant="worker" size="lg" block @click="onManualSubmit">인증하기</BaseButton>
       <button type="button" class="manual-link" @click="reset">뒤로</button>
     </section>
