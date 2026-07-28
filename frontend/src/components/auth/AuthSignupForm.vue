@@ -7,7 +7,8 @@
  *   → @/services/auth (checkLoginId, checkEmail, signup)
  * 성공 후: role 에 맞는 로그인 화면으로 이동.
  */
-import { reactive, ref, watch } from 'vue'
+import { Check } from 'lucide-vue-next'
+import { computed, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
 import AppField from '@/components/common/AppField.vue'
@@ -52,6 +53,11 @@ const errors = reactive({
 const loginIdCheck = reactive({ done: false, available: false })
 const emailCheck = reactive({ done: false, available: false })
 const submitting = ref(false)
+
+// 중복확인을 통과한 상태 — 버튼 자리를 '확인완료' 표시로 바꾼다.
+// 값이 바뀌면 아래 watch 가 done 을 내려 자동으로 버튼이 돌아온다.
+const loginIdVerified = computed(() => loginIdCheck.done && loginIdCheck.available)
+const emailVerified = computed(() => emailCheck.done && emailCheck.available)
 
 // 값이 바뀌면 이전 중복확인 결과는 무효화한다.
 watch(
@@ -168,7 +174,10 @@ async function onSubmit() {
       :error="errors.loginId"
     >
       <template #suffix>
-        <BaseButton type="button" variant="secondary" @click="onCheckLoginId">중복확인</BaseButton>
+        <span v-if="loginIdVerified" class="verified"><Check :size="16" /> 확인완료</span>
+        <BaseButton v-else type="button" variant="secondary" @click="onCheckLoginId">
+          중복확인
+        </BaseButton>
       </template>
     </AppField>
 
@@ -201,7 +210,10 @@ async function onSubmit() {
       :error="errors.email"
     >
       <template #suffix>
-        <BaseButton type="button" variant="secondary" @click="onCheckEmail">중복확인</BaseButton>
+        <span v-if="emailVerified" class="verified"><Check :size="16" /> 확인완료</span>
+        <BaseButton v-else type="button" variant="secondary" @click="onCheckEmail">
+          중복확인
+        </BaseButton>
       </template>
     </AppField>
 
@@ -233,5 +245,18 @@ async function onSubmit() {
   display: flex;
   flex-direction: column;
   gap: var(--space-lg);
+}
+/* 중복확인 완료 표시 — 버튼과 같은 높이를 유지해 입력란 우측 정렬이 흔들리지 않게 한다. */
+.verified {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 var(--space-md);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--color-success);
+  background: var(--color-success-bg);
+  white-space: nowrap;
 }
 </style>
