@@ -1,12 +1,21 @@
 # Shared Repository Agent Contract
 
-## Mandatory task startup
+## Context loading
+
+1. Read this contract completely for the first repository task in a new agent conversation, after a context reset or agent handoff, after switching branches, or when this file changes.
+2. Reuse the unchanged contract within the same conversation instead of reopening it on every turn.
+3. Read `docs/agent/ARCHITECTURE_OVERVIEW.md` once in each agent conversation before material implementation for an issue or branch. Read it again after a context reset or agent handoff, when it changes, or when the work crosses an architecture boundary.
+4. Use `docs/README.md` only when the relevant task-specific document is not already known or when the task moves to a different area.
+5. Load detailed domain, runbook, schema, API, and testing documents only when the current change touches that subject. Do not preload the documentation tree.
+6. Treat executable code, configuration, migrations, and current verification results as authoritative when documentation may be stale.
+7. General questions, status checks, and narrow read-only inspection do not require the architecture overview or unrelated task documents.
+
+## Task startup
 
 1. Inspect `git status` and the files relevant to the request before editing.
 2. Preserve unrelated user changes.
 3. Treat Vue.js, Spring Framework 5 non-Boot, MyBatis, MySQL, Java 17, and Tomcat 9 as fixed constraints.
 4. Define the smallest reviewable task boundary and its verification before editing.
-5. Use `docs/README.md` to locate additional task-specific documentation.
 
 ## Implementation rules
 
