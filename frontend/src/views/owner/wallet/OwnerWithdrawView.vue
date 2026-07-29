@@ -14,10 +14,12 @@ import AppField from '@/components/common/AppField.vue'
 import BaseButton from '@/components/common/BaseButton.vue'
 import BankSelect from '@/components/wallet/BankSelect.vue'
 import WalletAmountField from '@/components/wallet/WalletAmountField.vue'
+import WithdrawConfirmModal from '@/components/wallet/WithdrawConfirmModal.vue'
 import { withdrawWallet } from '@/services/wallet'
 import { useUiStore } from '@/stores/ui'
 import { useWalletStore } from '@/stores/wallet'
-import { formatKRW } from '@/utils/format'
+import { findBank } from '@/utils/constants'
+import { blockNonDigitKeydown, formatKRW, onlyDigits } from '@/utils/format'
 import { isPositiveAmount } from '@/utils/validators'
 
 const router = useRouter()
@@ -31,6 +33,9 @@ const amount = ref('')
 const accountError = ref('')
 const amountError = ref('')
 const submitting = ref(false)
+const confirmOpen = ref(false)
+
+const bankName = computed(() => findBank(bankCode.value)?.name ?? '')
 
 onMounted(() => {
   // 전액 버튼·잔액 초과 가드에 필요하므로 항상 최신 잔액을 로드한다.
@@ -59,7 +64,8 @@ const canSubmit = computed(
   () => !!bankCode.value && accountCheck.value.valid && amountCheck.value.valid && !submitting.value
 )
 
-async function onSubmit() {
+// 출금하기 클릭 → 검증 후 확인 모달을 연다(실제 출금은 모달 확인 시).
+function onRequestConfirm() {
   if (!bankCode.value) {
     ui.toast('은행을 선택해주세요.', { type: 'warning' })
     return
@@ -67,7 +73,10 @@ async function onSubmit() {
   accountError.value = accountCheck.value.valid ? '' : accountCheck.value.message
   amountError.value = amountCheck.value.valid ? '' : amountCheck.value.message
   if (accountError.value || amountError.value) return
+  confirmOpen.value = true
+}
 
+async function onSubmit() {
   submitting.value = true
   try {
     await withdrawWallet({
@@ -76,6 +85,7 @@ async function onSubmit() {
       amount: Number(amount.value)
     })
     await walletStore.loadWallet()
+    confirmOpen.value = false
     ui.toast(`${formatKRW(Number(amount.value))} 출금 신청이 완료되었습니다.`, { type: 'success' })
     router.back()
   } catch {
@@ -97,10 +107,14 @@ async function onSubmit() {
       <BankSelect v-model="bankCode" label="입금 은행" />
 
       <AppField
-        v-model="accountNo"
+        :model-value="accountNo"
         label="계좌번호"
+        type="tel"
         placeholder="'-' 없이 숫자만 입력"
+        maxlength="20"
         :error="accountError"
+        @keydown="blockNonDigitKeydown"
+        @update:model-value="(v) => (accountNo = onlyDigits(v))"
       />
 
       <WalletAmountField
@@ -117,11 +131,22 @@ async function onSubmit() {
         size="lg"
         block
         :disabled="!canSubmit"
-        @click="onSubmit"
+        @click="onRequestConfirm"
       >
-        {{ submitting ? '처리 중…' : '출금하기' }}
+        출금하기
       </BaseButton>
     </main>
+
+    <WithdrawConfirmModal
+      :open="confirmOpen"
+      :bank-name="bankName"
+      :account-no="accountNo"
+      :amount="Number(amount) || 0"
+      variant="owner"
+      :submitting="submitting"
+      @confirm="onSubmit"
+      @close="confirmOpen = false"
+    />
   </div>
 </template>
 

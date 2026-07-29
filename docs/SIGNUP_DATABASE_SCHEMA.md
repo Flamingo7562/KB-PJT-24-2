@@ -126,6 +126,6 @@ erDiagram
 ## 검증 및 보안 기준
 
 - Flyway는 기존 기준 Migration을 수정하지 않고 새 Versioned Migration으로 적용합니다.
-- 빈 MySQL 8.4 스키마에서 전체 `migrate`, `validate`와 23개 도메인 테이블·46개 외래키를 확인합니다.
+- 빈 MySQL 8.4 스키마에서 전체 `migrate`, `validate`와 23개 도메인 테이블·49개 외래키를 확인합니다.
 - `OWNER`가 다른 사장님의 사업장으로 근무 건을 만들 수 없는지 복합 외래키 실패로 확인합니다.
 - 실제 개인정보와 실제 계좌정보를 Seed, 테스트, 로그와 Git에 넣지 않습니다.
