@@ -11,39 +11,49 @@ GitHub Projects는 이슈와 PR을 테이블, 보드, 로드맵 형태로 추적
 
 ## 권장 필드
 
-| 필드 | 타입 | 값 |
-| --- | --- | --- |
-| `Status` | Single select | `Backlog`, `Ready`, `In Progress`, `In Review`, `QA`, `Done`, `Blocked` |
-| `Type` | Single select | `Feature`, `Bug`, `Task`, `Refactor`, `Docs` |
-| `Area` | Single select | `Frontend`, `Backend`, `Database`, `Common`, `Infra`, `Docs` |
-| `Priority` | Single select | `P0`, `P1`, `P2`, `P3` |
-| `Size` | Single select | `XS`, `S`, `M`, `L`, `XL` |
-| `Iteration` | Iteration | 주차 또는 스프린트 |
-| `Target date` | Date | 목표 완료일 |
-| `Risk` | Single select | `Low`, `Medium`, `High` |
+| 필드          | 타입          | 값                                                                             |
+| ------------- | ------------- | ------------------------------------------------------------------------------ |
+| `Status`      | Single select | `Backlog`, `Ready`, `In Progress`, `In Review`, `QA`, `Done`, `Blocked`        |
+| `Type`        | Single select | `Feature`, `Bug`, `Task`, `Refactor`, `Docs`                                   |
+| `Area`        | Single select | `Frontend`, `Backend`, `Database`, `Common`, `Docs`, `GitHub`, `Hook`, `Infra` |
+| `Priority`    | Single select | `P0`, `P1`, `P2`, `P3`                                                         |
+| `Size`        | Single select | `XS`, `S`, `M`, `L`, `XL`                                                      |
+| `Iteration`   | Iteration     | 주차 또는 스프린트                                                             |
+| `Target date` | Date          | 목표 완료일                                                                    |
+| `Risk`        | Single select | `Low`, `Medium`, `High`                                                        |
+
+Issue Form과 Project `Type`은 다음처럼 대응합니다.
+
+| Issue Form  | 선택한 작업 종류 | Project `Type` |
+| ----------- | ---------------- | -------------- |
+| 기능 개발   | `feat`           | `Feature`      |
+| 버그 리포트 | `fix`            | `Bug`          |
+| 작업 태스크 | `docs`           | `Docs`         |
+| 작업 태스크 | `refactor`       | `Refactor`     |
+| 작업 태스크 | 그 외            | `Task`         |
 
 ## Status 정의
 
-| Status | 의미 | 이동 조건 |
-| --- | --- | --- |
-| `Backlog` | 아직 착수하지 않은 후보 작업 | 새 이슈가 생성됨 |
-| `Ready` | 요구사항과 완료 조건이 정리됨 | 담당자, 우선순위, 범위가 명확함 |
-| `In Progress` | 구현 또는 문서 작업 중 | 담당자가 브랜치를 만들고 작업 시작 |
-| `In Review` | PR 리뷰 중 | PR 생성 및 리뷰 요청 |
-| `QA` | 검증 중 | 리뷰 반영 후 동작 확인 필요 |
-| `Done` | 완료 | PR 머지 및 검증 완료 |
-| `Blocked` | 진행 불가 | 외부 의존성 또는 결정이 필요함 |
+| Status        | 의미                          | 이동 조건                          |
+| ------------- | ----------------------------- | ---------------------------------- |
+| `Backlog`     | 아직 착수하지 않은 후보 작업  | 새 이슈가 생성됨                   |
+| `Ready`       | 요구사항과 완료 조건이 정리됨 | 담당자, 우선순위, 범위가 명확함    |
+| `In Progress` | 구현 또는 문서 작업 중        | 담당자가 브랜치를 만들고 작업 시작 |
+| `In Review`   | PR 리뷰 중                    | PR 생성 및 리뷰 요청               |
+| `QA`          | 검증 중                       | 리뷰 반영 후 동작 확인 필요        |
+| `Done`        | 완료                          | PR 머지 및 검증 완료               |
+| `Blocked`     | 진행 불가                     | 외부 의존성 또는 결정이 필요함     |
 
 ## 권장 View
 
-| View | Layout | 용도 |
-| --- | --- | --- |
-| `Board` | Board by Status | 전체 진행 상황 확인 |
-| `Sprint` | Table by Iteration | 이번 주 작업 계획과 담당자 확인 |
-| `Backlog` | Table filtered by Status | 아직 시작하지 않은 작업 정리 |
-| `Bugs` | Table filtered by Type | 버그만 모아 우선 처리 |
-| `Review` | Table filtered by Status | 리뷰 대기 PR 확인 |
-| `Roadmap` | Roadmap | 큰 기능의 목표 일정 확인 |
+| View      | Layout                   | 용도                            |
+| --------- | ------------------------ | ------------------------------- |
+| `Board`   | Board by Status          | 전체 진행 상황 확인             |
+| `Sprint`  | Table by Iteration       | 이번 주 작업 계획과 담당자 확인 |
+| `Backlog` | Table filtered by Status | 아직 시작하지 않은 작업 정리    |
+| `Bugs`    | Table filtered by Type   | 버그만 모아 우선 처리           |
+| `Review`  | Table filtered by Status | 리뷰 대기 PR 확인               |
+| `Roadmap` | Roadmap                  | 큰 기능의 목표 일정 확인        |
 
 ## 운영 규칙
 
@@ -76,4 +86,3 @@ GitHub Projects는 이슈와 PR을 테이블, 보드, 로드맵 형태로 추적
 ## 참고 링크
 
 - [GitHub Docs - About Projects](https://docs.github.com/en/issues/planning-and-tracking-with-projects/learning-about-projects/about-projects)
-

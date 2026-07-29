@@ -1,7 +1,7 @@
 name: 버그 리포트
 description: 재현 가능한 오류나 기대와 다른 동작을 등록합니다.
 title: "fix: [AREA] "
-labels: ["type: bug", "status: triage"]
+labels: ["type: bug"]
 body:
   - type: markdown
     attributes:
@@ -9,7 +9,7 @@ body:
         버그 이슈 제목은 `fix: [AREA] 작업 요약` 형식으로 작성합니다.
         예시: `fix: [BE] 세션 만료 시 리다이렉트 오류`
 
-        AREA tag: `[FE]`, `[BE]`, `[DB]`, `[COMMON]`, `[INFRA]`
+        AREA tag: `[FE]`, `[BE]`, `[DB]`, `[COMMON]`, `[DOCS]`, `[GITHUB]`, `[HOOK]`, `[INFRA]`
   - type: input
     id: summary
     attributes:
@@ -27,6 +27,9 @@ body:
         - "[BE] Backend"
         - "[DB] Database"
         - "[COMMON] Common"
+        - "[DOCS] Docs"
+        - "[GITHUB] GitHub"
+        - "[HOOK] Hook"
         - "[INFRA] Infra"
     validations:
       required: true
@@ -34,11 +37,11 @@ body:
     id: steps
     attributes:
       label: 재현 절차
-      value: |
-        1. 
-        2. 
-        3. 
       description: 누구나 같은 문제를 재현할 수 있도록 단계별로 적습니다.
+      placeholder: |
+        1. 문제가 발생하기 전 상태를 준비한다.
+        2. 문제가 발생하는 동작을 수행한다.
+        3. 화면, 응답 또는 로그를 확인한다.
     validations:
       required: true
   - type: textarea
@@ -53,6 +56,16 @@ body:
     attributes:
       label: 실제 결과
       description: 실제로 발생한 동작, 에러 메시지, 로그를 적습니다.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: 완료 조건
+      description: 문제 해결 여부를 PR 머지 전에 확인할 수 있는 기준을 적습니다.
+      placeholder: |
+        - [ ] 같은 절차에서 문제가 다시 발생하지 않는다.
+        - [ ] 관련 정상 흐름에 회귀가 없다.
     validations:
       required: true
   - type: textarea

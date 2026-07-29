@@ -65,11 +65,12 @@ DB 스키마의 단일 원본은 `backend/src/main/resources/db/migration/V*.sql
 
 ### 협업과 Git
 
-| 작업                 | 먼저 읽을 문서                                                                                                   |
-| -------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| 브랜치·이슈·PR       | [`PROJECT_MANAGEMENT_GUIDE.md`](PROJECT_MANAGEMENT_GUIDE.md), [`ISSUE_WRITING_GUIDE.md`](ISSUE_WRITING_GUIDE.md) |
-| 커밋 작성            | [`COMMIT_CONVENTION.md`](COMMIT_CONVENTION.md)                                                                   |
-| GitHub Projects 운영 | [`GITHUB_PROJECTS_PANEL_GUIDE.md`](GITHUB_PROJECTS_PANEL_GUIDE.md)                                               |
+| 작업                        | 먼저 읽을 문서                                                                                                                                                                         |
+| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 이슈 생성·브랜치·PR         | [`PROJECT_MANAGEMENT_GUIDE.md`](PROJECT_MANAGEMENT_GUIDE.md)                                                                                                                           |
+| 실제 Issue Form 필드·필수값 | [`feature_request.yml`](../.github/ISSUE_TEMPLATE/feature_request.yml), [`bug_report.yml`](../.github/ISSUE_TEMPLATE/bug_report.yml), [`task.yml`](../.github/ISSUE_TEMPLATE/task.yml) |
+| 커밋 작성                   | [`COMMIT_CONVENTION.md`](COMMIT_CONVENTION.md)                                                                                                                                         |
+| GitHub Projects 운영        | [`GITHUB_PROJECTS_PANEL_GUIDE.md`](GITHUB_PROJECTS_PANEL_GUIDE.md)                                                                                                                     |
 
 `GITHUB_PROJECTS_PANEL_GUIDE.md`는 현재 팀이 사용하는 보드를 관리하기 위한 사람 중심 운영 문서입니다. 모든 에이전트가 매 작업마다 읽는 문서는 아닙니다.
 
