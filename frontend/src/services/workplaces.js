@@ -64,18 +64,17 @@ export async function deleteWorkplace(workplaceId) {
 }
 
 /**
- * 지점 출퇴근 QR 발급 → { qrToken, expiresAt }.
+ * 지점 출퇴근 QR 조회 → { qrToken }.
  *
- * 토큰 생성·유효기간 판정은 서버가 한다(1회성·만료 시 410 — docs/rules/api.md).
- * 프론트는 받은 토큰을 표시하고 만료 전에 다시 발급받기만 한다.
+ * 정적 QR — 지점마다 값이 고정이라 만료·재발급 주기가 없다. 출력해 매장에 부착하는 용도.
+ * 프론트는 받은 토큰을 그대로 표시하며, 지점을 바꿀 때만 다시 조회한다.
+ * 토큰 발급·검증은 서버 책임이고, 대리 출근 차단은 스캔 시 GPS 반경 검증이 담당한다.
  * TODO(백엔드 연동): 엔드포인트 위치·응답 필드 확정 후 USE_MOCK 해제.
  */
 export async function getWorkplaceQr(workplaceId) {
   if (USE_MOCK) {
-    return {
-      qrToken: `mock-qr-${workplaceId}-${Date.now().toString(36)}`,
-      expiresAt: new Date(Date.now() + 30_000).toISOString()
-    }
+    // 정적 QR 이므로 같은 지점은 항상 같은 토큰이 나와야 한다(시각 기반 값 금지).
+    return { qrToken: `mock-qr-${workplaceId}` }
   }
   const { data } = await http.get(`/workplaces/${workplaceId}/qr`)
   return data
