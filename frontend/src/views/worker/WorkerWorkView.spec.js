@@ -8,9 +8,7 @@ const push = vi.fn()
 vi.mock('vue-router', () => ({ useRouter: () => ({ push }) }))
 
 vi.mock('@/services/worker', () => ({ listWorkerWorkCases: vi.fn() }))
-vi.mock('@/services/workCases', () => ({ getOwnerContact: vi.fn() }))
 
-import { getOwnerContact } from '@/services/workCases'
 import { listWorkerWorkCases } from '@/services/worker'
 
 const sampleWorkCase = {
@@ -27,7 +25,6 @@ describe('WorkerWorkView', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     push.mockClear()
-    getOwnerContact.mockResolvedValue({ ownerName: '김사장', phone: '010-1234-5678' })
   })
 
   it('근무 내역을 목록으로 렌더한다', async () => {
@@ -58,14 +55,11 @@ describe('WorkerWorkView', () => {
     expect(push).toHaveBeenCalledWith('/worker/work/work-cases/101')
   })
 
-  it('? 아이콘은 문의 시트를 열고 사장 연락처를 불러온다', async () => {
+  it('리스트에는 문의·신고 버튼을 두지 않는다', async () => {
     listWorkerWorkCases.mockResolvedValueOnce({ content: [sampleWorkCase], totalPages: 1 })
     const wrapper = mount(WorkerWorkView)
     await flushPromises()
 
-    await wrapper.find('.help-btn').trigger('click')
-    await flushPromises()
-    expect(getOwnerContact).toHaveBeenCalledWith(101)
-    expect(document.body.textContent).toContain('010-1234-5678')
+    expect(wrapper.find('.help-btn').exists()).toBe(false)
   })
 })
