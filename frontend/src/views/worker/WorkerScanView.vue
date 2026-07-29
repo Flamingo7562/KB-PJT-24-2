@@ -3,6 +3,7 @@
  * [F] 알바생 QR 스캔(탭)  ·  /worker/scan  ·  WORKER  (탭 화면)
  * 카메라 스캔 → GPS 검증 → 출근/퇴근 자동 판별·기록(단일 스캔 API).
  * 카메라·위치 권한 필요. 서버가 QR 유효성·GPS 반경·출퇴근 판별을 최종 검증한다.
+ * QR 이 정적이라 시간 만료로 걸러지지 않는다 — 대리 출근 차단은 서버의 GPS 반경 검증이 전담한다.
  * 연계 API: POST /worker/scan  →  @/services/worker (scan)
  *   요청: { qrToken, latitude, longitude } / 응답: scanType(CHECK_IN/CHECK_OUT), isLate, ...
  * QR 디코딩은 브라우저 내장 BarcodeDetector 사용(미지원·카메라 불가 시 토큰 직접 입력).
@@ -106,7 +107,7 @@ async function runDetect() {
 
 /**
  * 근태 스캔 실패를 서버 상태코드별로 구분해 안내한다(docs/rules/api.md·domain.md):
- *   410 만료   → QR 유효시간 만료 → 재발급 요청 안내
+ *   410 폐기   → 사장이 교체해 더 이상 쓰지 않는 옛 QR (정적 QR 이라 시간 만료는 없다)
  *   409 상태충돌 → 이미 처리됐거나 지금 스캔 불가한 근무 상태
  *   422 검증거부 → 위치(GPS 반경)·QR 인증 실패 → 반경·QR 재확인
  * (400 등 그 외는 일반 안내) 상태는 서버가 최종 판단하므로 프론트는 문구만 분기한다.
@@ -115,7 +116,7 @@ function scanErrorInfo(error) {
   const status = error?.response?.status
   if (status === 410) {
     return {
-      message: 'QR 코드가 만료됐어요. 사장님께 QR을 다시 요청해 새로 스캔해주세요.',
+      message: '더 이상 사용하지 않는 QR이에요. 매장에 붙은 최신 QR을 스캔해주세요.',
       type: 'warning'
     }
   }
