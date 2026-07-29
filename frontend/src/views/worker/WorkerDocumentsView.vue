@@ -3,7 +3,8 @@
  * [G] 알바생 문서함  ·  /worker/documents  ·  WORKER  (탭 화면)
  * 근로계약서(자동 저장) + 보건증(업로드·발급일 수정·삭제·공유·공유 취소).
  * 레이아웃은 사장 문서함과 동일(탭 + 썸네일 카드). 등록·삭제는 확인 모달을 거친다.
- * 업로드=보건증만. 계약서 삭제=근무 종료 후. 카드에 공유중 지점 표시.
+ * 업로드·수정·삭제는 모두 보건증 전용 — 계약서는 3년 보존 대상이라 삭제할 수 없다.
+ * 카드에 공유중 지점 표시.
  * 연계 API: GET/POST/PATCH/DELETE /documents · GET/POST/DELETE /documents/{id}/shares
  *   →  @/services/documents (전부)
  * 공통: BaseBottomSheet(보건증 등록/공유) · BaseModal(발급일·삭제 확인) · 카드 클릭 → 뷰어
@@ -186,7 +187,7 @@ async function saveEdit() {
   }
 }
 
-/* ---- 삭제 확인 모달 (계약서·보건증 공용) ---- */
+/* ---- 삭제 확인 모달 (보건증 전용) ---- */
 const deleteDoc = ref(null)
 const deleteOpen = ref(false)
 const deleting = ref(false)
@@ -203,13 +204,8 @@ async function confirmDelete() {
     ui.toast('문서를 삭제했어요.', { type: 'success' })
     deleteOpen.value = false
     await load()
-  } catch (e) {
-    // 계약서는 근무 종료 후에만 삭제 가능 — 서버가 최종 검증(409).
-    if (e?.response?.status === 409) {
-      ui.toast('진행 중인 근무가 있어 계약서를 삭제할 수 없어요.', { type: 'warning' })
-    } else {
-      ui.toast('삭제에 실패했어요.', { type: 'danger' })
-    }
+  } catch {
+    ui.toast('삭제에 실패했어요.', { type: 'danger' })
   } finally {
     deleting.value = false
   }
@@ -331,15 +327,14 @@ async function doRevoke(share) {
             </span>
           </button>
 
-          <div class="doc-side">
-            <template v-if="doc.docType === 'HEALTH_CERT'">
-              <button type="button" class="act-btn" aria-label="공유 관리" @click="openShare(doc)">
-                <Share2 :size="16" />
-              </button>
-              <button type="button" class="act-btn" aria-label="발급일 수정" @click="openEdit(doc)">
-                <Pencil :size="16" />
-              </button>
-            </template>
+          <!-- 계약서는 3년 보존 대상이라 삭제 진입점을 두지 않는다(공유·수정도 보건증 전용). -->
+          <div v-if="doc.docType === 'HEALTH_CERT'" class="doc-side">
+            <button type="button" class="act-btn" aria-label="공유 관리" @click="openShare(doc)">
+              <Share2 :size="16" />
+            </button>
+            <button type="button" class="act-btn" aria-label="발급일 수정" @click="openEdit(doc)">
+              <Pencil :size="16" />
+            </button>
             <button
               type="button"
               class="act-btn act-btn--danger"
@@ -354,8 +349,8 @@ async function doRevoke(share) {
     </template>
 
     <p class="notice">
-      보건증은 직접 등록·공유할 수 있어요 · 근로계약서는 근무 시작 시 자동 저장 · 계약서 삭제는 근무
-      종료 후 가능
+      보건증은 직접 등록·공유·삭제할 수 있어요 · 근로계약서는 근무 확정 시 자동 저장되며 3년간
+      보관돼요
     </p>
 
     <!-- 보건증 등록 -->
@@ -431,10 +426,7 @@ async function doRevoke(share) {
       <p class="del-msg">
         <strong>{{ deleteDoc?.fileName }}</strong> 문서를 삭제합니다.
       </p>
-      <p v-if="deleteDoc?.docType === 'CONTRACT'" class="del-note">
-        근무가 종료된 계약서만 삭제할 수 있어요.
-      </p>
-      <p v-else class="del-note">공유한 지점에서도 함께 삭제돼요.</p>
+      <p class="del-note">공유한 지점에서도 함께 삭제돼요.</p>
       <template #footer>
         <BaseButton variant="secondary" block @click="deleteOpen = false">취소</BaseButton>
         <BaseButton variant="danger" block :disabled="deleting" @click="confirmDelete"
