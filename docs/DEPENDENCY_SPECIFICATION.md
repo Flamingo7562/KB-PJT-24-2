@@ -91,11 +91,14 @@
 | Routing·상태 | `vue-router`, `pinia`                                                                                  |
 | HTTP         | `axios`                                                                                                |
 | UI·Icon      | `bootstrap`, `@popperjs/core`, `lucide-vue-next`                                                       |
+| QR 생성      | `qrcode`                                                                                               |
 | Build        | `vite`, `@vitejs/plugin-vue`, `vite-svg-loader`                                                        |
 | Lint·Format  | `eslint`, `@eslint/js`, `eslint-plugin-vue`, `vue-eslint-parser`, `prettier`, `eslint-config-prettier` |
 | 테스트       | `vitest`, `@vue/test-utils`, `jsdom`                                                                   |
 
 `package.json`의 버전 범위는 허용 범위이고 `package-lock.json`은 실제 설치 결과를 고정한다. Manifest와 lockfile을 함께 변경하고, 현재 패키지를 과거 문서의 설치 명령으로 다시 설치하지 않는다.
+
+`qrcode`는 사장 QR 화면에서 브라우저가 QR 이미지를 그리는 용도다. Backend의 ZXing은 계약 PDF 등 서버 측 생성에 사용하므로 역할이 겹치지 않는다. 서버가 QR 이미지를 직접 내려주는 방식으로 바꾸면 이 의존성은 제거 대상이 된다.
 
 ### 저장소 공통 도구와 인프라
 
