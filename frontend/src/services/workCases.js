@@ -78,6 +78,50 @@ const mockWorkCaseList = [
     matched: true
   },
   {
+    workCaseId: 106,
+    workplaceId: 1,
+    workerName: '한알바2',
+    title: '토요일 브런치',
+    workDate: '2026-07-26',
+    startTime: '09:00',
+    endTime: '14:00',
+    status: 'INVITED',
+    matched: true
+  },
+  {
+    workCaseId: 107,
+    workplaceId: 1,
+    workerName: '한알바3',
+    title: '토요일 브런치',
+    workDate: '2026-07-26',
+    startTime: '09:00',
+    endTime: '14:00',
+    status: 'COMPLETED',
+    matched: true
+  },
+  {
+    workCaseId: 108,
+    workplaceId: 1,
+    workerName: '박알바2',
+    title: '마감 청소',
+    workDate: '2026-07-21',
+    startTime: '20:00',
+    endTime: '23:00',
+    status: 'COMPLETED',
+    matched: true
+  },
+  {
+    workCaseId: 109,
+    workplaceId: 1,
+    workerName: '한알바4',
+    title: '토요일 브런치',
+    workDate: '2026-07-26',
+    startTime: '09:00',
+    endTime: '14:00',
+    status: 'IN_PROGRESS',
+    matched: true
+  },
+  {
     workCaseId: 201,
     workplaceId: 2,
     workerName: '최알바',
@@ -112,12 +156,17 @@ const mockWorkCaseList = [
   }
 ]
 
-/** 지점 + 검색어(제목·알바생 이름) + 상태로 거르는 mock 필터 */
-function filterMockWorkCases(workplaceId, { keyword = '', status = '' } = {}) {
+/**
+ * 지점 + 검색어(제목·알바생 이름) + 상태 + 기간으로 거르는 mock 필터.
+ * from/to 는 `YYYY-MM-DD` 양끝 포함 구간(캘린더 뷰가 보고 있는 달). 문자열 비교로 충분하다.
+ */
+function filterMockWorkCases(workplaceId, { keyword = '', status = '', from = '', to = '' } = {}) {
   const q = String(keyword).trim().toLowerCase()
   return mockWorkCaseList
     .filter((s) => s.workplaceId === Number(workplaceId))
     .filter((s) => status === '' || s.status === status)
+    .filter((s) => from === '' || s.workDate >= from)
+    .filter((s) => to === '' || s.workDate <= to)
     .filter(
       (s) =>
         q === '' ||
@@ -168,14 +217,19 @@ export async function getWorkCaseSummary(workplaceId) {
 
 /**
  * 근무 리스트 조회 → { content[], totalPages } (WORK-002). 기본 최신순.
+ *
+ * 목록 뷰·캘린더 뷰가 **같은 엔드포인트**를 쓴다. 캘린더 뷰일 때만 보고 있는 달을
+ * from/to 로 좁혀서 요청하고, 결과를 날짜별로 묶어 그린다(@/utils/calendar).
  * @param {number} workplaceId
- * @param {object} params keyword, status, date, page, size
+ * @param {object} params keyword, status, from, to, page, size
  */
 export async function listWorkCases(workplaceId, params = {}) {
   if (USE_MOCK) {
     const content = filterMockWorkCases(workplaceId, {
       keyword: params.keyword,
-      status: params.status
+      status: params.status,
+      from: params.from,
+      to: params.to
     }).map((s) => ({ ...s }))
     return { content, totalPages: 1 }
   }
