@@ -12,7 +12,6 @@
 | 작업별 참고 | 특정 기능이나 작업을 할 때 선택적으로 읽는 문서                                    |
 | 재검토 필요 | 현재 구현과 차이가 있을 수 있어 코드·설정 확인 없이 기준으로 사용하면 안 되는 문서 |
 | 아카이브    | 현재 기준이 아니며 과거 결정이나 절차를 확인할 때만 읽는 문서                      |
-| 예정        | 아직 작성되지 않았으며 관련 이슈에서 추가할 문서                                   |
 
 ## 에이전트 진입점
 
@@ -69,6 +68,7 @@ DB 스키마의 단일 원본은 `backend/src/main/resources/db/migration/V*.sql
 | --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 이슈 생성·브랜치·PR         | [`PROJECT_MANAGEMENT_GUIDE.md`](PROJECT_MANAGEMENT_GUIDE.md)                                                                                                                           |
 | 실제 Issue Form 필드·필수값 | [`feature_request.yml`](../.github/ISSUE_TEMPLATE/feature_request.yml), [`bug_report.yml`](../.github/ISSUE_TEMPLATE/bug_report.yml), [`task.yml`](../.github/ISSUE_TEMPLATE/task.yml) |
+| 실제 PR 양식·체크리스트     | [`pull_request_template.md`](../.github/pull_request_template.md)                                                                                                                      |
 | 커밋 작성                   | [`COMMIT_CONVENTION.md`](COMMIT_CONVENTION.md)                                                                                                                                         |
 | GitHub Projects 운영        | [`GITHUB_PROJECTS_PANEL_GUIDE.md`](GITHUB_PROJECTS_PANEL_GUIDE.md)                                                                                                                     |
 
@@ -93,14 +93,6 @@ DB 스키마의 단일 원본은 `backend/src/main/resources/db/migration/V*.sql
 
 아카이브 문서는 현재 개발 기준이 아닙니다. 이동 기준과 절차는 `docs/archive/README.md`에서만 관리합니다.
 
-## 작성 예정 문서
+## 새 문서 추가 기준
 
-다음 문서는 별도 이슈와 작은 PR로 작성합니다.
-
-1. 현재 스프린트 목표와 역할 분담
-2. 테스트 작성 규칙과 coverage 기준
-3. 공통 API 규약과 생성된 OpenAPI
-4. 도메인별 상태 전이와 불변식
-5. 수직 기능 개발 플레이북과 전체 로컬 실행 Runbook
-
-새 공유 문서는 실제 내용과 검증 방법을 완성한 뒤 이 색인에 상태와 진입 경로를 추가합니다.
+새 공유 문서는 실제 구현이나 반복 운영 절차가 있고 검증 방법을 설명할 수 있을 때 별도 이슈와 PR로 추가합니다. 아직 합의되지 않았거나 구현 근거가 없는 문서 아이디어는 이 색인에 미리 등록하지 않고 관련 이슈에서 관리합니다.

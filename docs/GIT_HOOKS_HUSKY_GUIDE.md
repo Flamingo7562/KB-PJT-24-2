@@ -2,52 +2,40 @@
 
 이 문서는 저장소의 Lint·Guardrail·Git Hook과 PR 전 검증 기준을 설명하는 현재 기준이다. 정확한 실행 명령과 검사 범위는 아래 설정과 스크립트를 우선한다.
 
-| 대상 | 진실 원본 |
-| --- | --- |
-| 루트 검사 명령 | `package.json` |
-| pre-commit 분류와 실행 | `scripts/run-precommit.js` |
-| 기술 제약 검사 | `scripts/check-project-guardrails.js` |
-| Frontend Lint·Format | `frontend/package.json`, `frontend/eslint.config.js` |
-| Backend Lint | `backend/build.gradle`, `backend/config/checkstyle/checkstyle.xml` |
-| Hook 진입점 | `.husky/pre-commit`, `.husky/commit-msg` |
+| 대상                   | 진실 원본                                                          |
+| ---------------------- | ------------------------------------------------------------------ |
+| 루트 검사 명령         | `package.json`                                                     |
+| pre-commit 분류와 실행 | `scripts/run-precommit.js`                                         |
+| 기술 제약 검사         | `scripts/check-project-guardrails.js`                              |
+| Frontend Lint·Format   | `frontend/package.json`, `frontend/eslint.config.js`               |
+| Backend Lint           | `backend/build.gradle`, `backend/config/checkstyle/checkstyle.xml` |
+| Hook 진입점            | `.husky/pre-commit`, `.husky/commit-msg`                           |
 
-## 최초 설정
+## 최초 설정과 복구
 
-저장소 루트에서 lockfile 기준으로 공통 도구를 설치하고 Husky를 활성화한다.
+새 clone의 의존성 설치와 Hook 확인은 [시작 가이드](GETTING_STARTED.md)를 따른다. 루트 `npm ci`가 `prepare` lifecycle을 실행하므로 정상 설치 후 `npm run prepare`를 반복하지 않는다.
 
-```sh
-npm ci
-npm run prepare
-```
-
-Windows PowerShell에서 `npm.ps1` 실행 정책 오류가 발생하면 `npm.cmd`를 사용한다.
-
-```powershell
-npm.cmd ci
-npm.cmd run prepare
-```
-
-설치 후 Husky 9의 Hook 경로가 `.husky/_`인지 확인한다.
+Husky 9의 Hook 경로가 `.husky/_`인지 확인한다.
 
 ```sh
 git config --get core.hooksPath
 ```
 
-Hook shim이 없거나 실행되지 않으면 파일 mode를 직접 바꾸지 말고 `npm run prepare`로 `.husky/_`를 다시 생성한다. 이미 추적 중인 Hook이나 의존성을 `npx husky init`, `npm install husky`로 다시 만들지 않는다.
+Hook shim이 없거나 실행되지 않을 때만 `npm run prepare`로 `.husky/_`를 다시 생성한다. 파일 mode를 직접 바꾸거나 이미 추적 중인 Hook과 의존성을 `npx husky init`, `npm install husky`로 다시 만들지 않는다.
 
 ## 루트 검증 명령
 
-| 명령 | 역할 |
-| --- | --- |
-| `npm run lint` | Frontend ESLint와 Backend Gradle `check` 실행 |
-| `npm run lint:fe` | Frontend ESLint만 실행 |
-| `npm run lint:be` | Backend Gradle `check`만 실행 |
-| `npm run format:staged` | 현재 staged Frontend 대상만 Prettier로 수정 |
-| `npm run test:harness` | Guardrail과 pre-commit 분류 스크립트 테스트 |
-| `npm run check:guardrails` | 추적 파일과 무시되지 않은 작업 트리의 기술 제약 검사 |
-| `npm run check:guardrails:staged` | Git index의 staged 내용만 기술 제약 검사 |
-| `npm run check:precommit` | 실제 pre-commit 실행 계획 수행 |
-| `npm run check` | 전체 Guardrail, 하네스 테스트, Frontend·Backend Lint 실행 |
+| 명령                              | 역할                                                      |
+| --------------------------------- | --------------------------------------------------------- |
+| `npm run lint`                    | Frontend ESLint와 Backend Gradle `check` 실행             |
+| `npm run lint:fe`                 | Frontend ESLint만 실행                                    |
+| `npm run lint:be`                 | Backend Gradle `check`만 실행                             |
+| `npm run format:staged`           | 현재 staged Frontend 대상만 Prettier로 수정               |
+| `npm run test:harness`            | Guardrail과 pre-commit 분류 스크립트 테스트               |
+| `npm run check:guardrails`        | 추적 파일과 무시되지 않은 작업 트리의 기술 제약 검사      |
+| `npm run check:guardrails:staged` | Git index의 staged 내용만 기술 제약 검사                  |
+| `npm run check:precommit`         | 실제 pre-commit 실행 계획 수행                            |
+| `npm run check`                   | 전체 Guardrail, 하네스 테스트, Frontend·Backend Lint 실행 |
 
 `npm run check`는 Frontend build·Vitest나 Backend WAR 생성을 포함하지 않는다. 기능·의존성·패키징 변경은 해당 영역의 build와 test를 별도로 실행한다.
 
@@ -99,10 +87,10 @@ Gradle 실행 권한을 추적하지 못하는 환경에서는 `sh ./gradlew che
 
 ## 포함된 Git Hook
 
-| Hook | 파일 | 역할 |
-| --- | --- | --- |
+| Hook         | 파일                | 역할                                                     |
+| ------------ | ------------------- | -------------------------------------------------------- |
 | `pre-commit` | `.husky/pre-commit` | staged 경로에 맞는 Guardrail, Format과 애플리케이션 Lint |
-| `commit-msg` | `.husky/commit-msg` | 커밋 메시지 형식 검사 |
+| `commit-msg` | `.husky/commit-msg` | 커밋 메시지 형식 검사                                    |
 
 커밋 메시지 형식과 예시는 [`COMMIT_CONVENTION.md`](COMMIT_CONVENTION.md)를 기준으로 한다. Hook은 `scripts/validate-commit-msg.js`를 통해 형식을 검사한다.
 
@@ -126,13 +114,13 @@ npm run check:precommit
 
 `scripts/run-precommit.js`는 삭제와 rename의 이전·이후 경로를 포함한 staged 경로를 분류한다.
 
-| staged 변경 | 실행 |
-| --- | --- |
+| staged 변경                                                                                         | 실행                                                             |
+| --------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
 | 문서 전용 경로(`docs/**`, 루트 `*.md`, 모든 `README.md`)·GitHub Template·허용된 저장소 메타데이터만 | staged Guardrail, 일치하는 staged Format; 애플리케이션 Lint 생략 |
-| Frontend 애플리케이션 파일만 | staged Guardrail, 일치하는 staged Format, Frontend ESLint |
-| Backend 애플리케이션 파일만 | staged Guardrail, 일치하는 staged Format, Backend Gradle `check` |
-| Frontend와 Backend 애플리케이션 파일 | staged Guardrail, staged Format, 하네스 테스트, 두 영역 Lint |
-| Hook·검사 스크립트·루트 설정·분류되지 않은 경로 | staged Guardrail, staged Format, 하네스 테스트, 두 영역 Lint |
+| Frontend 애플리케이션 파일만                                                                        | staged Guardrail, 일치하는 staged Format, Frontend ESLint        |
+| Backend 애플리케이션 파일만                                                                         | staged Guardrail, 일치하는 staged Format, Backend Gradle `check` |
+| Frontend와 Backend 애플리케이션 파일                                                                | staged Guardrail, staged Format, 하네스 테스트, 두 영역 Lint     |
+| Hook·검사 스크립트·루트 설정·분류되지 않은 경로                                                     | staged Guardrail, staged Format, 하네스 테스트, 두 영역 Lint     |
 
 문서 전용 경로와 애플리케이션 파일을 함께 변경하면 문서는 검사 범위를 넓히지 않는다. Frontend·Backend 내부의 일반 Markdown은 해당 애플리케이션 영역으로 분류하며, 알 수 없는 경로는 검사를 생략하지 않고 두 영역 검사로 처리한다.
 

@@ -37,8 +37,8 @@ Issue Form과 Project `Type`은 다음처럼 대응합니다.
 | Status        | 의미                          | 이동 조건                          |
 | ------------- | ----------------------------- | ---------------------------------- |
 | `Backlog`     | 아직 착수하지 않은 후보 작업  | 새 이슈가 생성됨                   |
-| `Ready`       | 요구사항과 완료 조건이 정리됨 | 담당자, 우선순위, 범위가 명확함    |
-| `In Progress` | 구현 또는 문서 작업 중        | 담당자가 브랜치를 만들고 작업 시작 |
+| `Ready`       | 요구사항과 완료 조건이 정리됨 | 우선순위와 범위가 명확함           |
+| `In Progress` | 구현 또는 문서 작업 중        | 작업자가 브랜치를 만들고 작업 시작 |
 | `In Review`   | PR 리뷰 중                    | PR 생성 및 리뷰 요청               |
 | `QA`          | 검증 중                       | 리뷰 반영 후 동작 확인 필요        |
 | `Done`        | 완료                          | PR 머지 및 검증 완료               |
@@ -46,20 +46,20 @@ Issue Form과 Project `Type`은 다음처럼 대응합니다.
 
 ## 권장 View
 
-| View      | Layout                   | 용도                            |
-| --------- | ------------------------ | ------------------------------- |
-| `Board`   | Board by Status          | 전체 진행 상황 확인             |
-| `Sprint`  | Table by Iteration       | 이번 주 작업 계획과 담당자 확인 |
-| `Backlog` | Table filtered by Status | 아직 시작하지 않은 작업 정리    |
-| `Bugs`    | Table filtered by Type   | 버그만 모아 우선 처리           |
-| `Review`  | Table filtered by Status | 리뷰 대기 PR 확인               |
-| `Roadmap` | Roadmap                  | 큰 기능의 목표 일정 확인        |
+| View      | Layout                   | 용도                               |
+| --------- | ------------------------ | ---------------------------------- |
+| `Board`   | Board by Status          | 전체 진행 상황 확인                |
+| `Sprint`  | Table by Iteration       | 이번 주 작업 계획과 진행 상태 확인 |
+| `Backlog` | Table filtered by Status | 아직 시작하지 않은 작업 정리       |
+| `Bugs`    | Table filtered by Type   | 버그만 모아 우선 처리              |
+| `Review`  | Table filtered by Status | 리뷰 대기 PR 확인                  |
+| `Roadmap` | Roadmap                  | 큰 기능의 목표 일정 확인           |
 
 ## 운영 규칙
 
 - 모든 이슈는 Project에 연결합니다.
 - 이슈 생성 직후 상태는 `Backlog` 또는 `Ready`로 둡니다.
-- 담당자가 작업을 시작하면 `In Progress`로 이동합니다.
+- 작업을 시작하면 `In Progress`로 이동합니다.
 - PR을 열면 `In Review`로 이동합니다.
 - 리뷰 반영 후 동작 확인이 필요하면 `QA`로 이동합니다.
 - 머지 후 검증이 끝나면 `Done`으로 이동합니다.

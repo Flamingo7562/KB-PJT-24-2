@@ -5,9 +5,7 @@ Gig Hub의 Vue.js SPA입니다. Vue 3, Vite, Vue Router, Pinia, Axios, Bootstrap
 ## 요구 환경
 
 - Node.js `20.19.0` 이상, `25.0.0` 미만
-- npm `11` 권장
-
-팀 권장 버전은 Node.js `24.18.0` LTS이지만, 현재 개발 PC의 Node.js `20.19.0`도 Vite 8의 공식 요구사항을 충족합니다.
+- npm `11` 이상, `12` 미만
 
 ## 최초 설치
 
@@ -18,7 +16,7 @@ Set-Location frontend
 npm ci
 ```
 
-`npm install vue`는 초기 의존성을 변경할 때만 필요하며, 일반적인 프로젝트 실행 과정에서는 사용하지 않습니다.
+일반 설치는 `npm ci`만 사용합니다. 직접 의존성을 추가하거나 변경할 때는 [의존성 명세](../docs/DEPENDENCY_SPECIFICATION.md)의 변경 절차를 따릅니다.
 
 ## 실행
 
@@ -77,3 +75,4 @@ frontend/
 - Vue 상태는 화면 상태를 관리하며 서버 데이터의 최종 원본으로 취급하지 않습니다.
 - Axios 공통 Client는 `/api`를 사용하고 세션 Cookie와 CSRF Header를 전송할 수 있게 구성되어 있습니다.
 - 로그인·권한 검사는 프론트 Router Guard만 믿지 않고 Spring Service에서도 반드시 수행해야 합니다.
+- 공통 스타일과 SVG 자산 사용법은 [assets 가이드](src/assets/README.md)를 확인합니다.

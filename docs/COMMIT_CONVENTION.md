@@ -83,12 +83,4 @@ docs/5-project-guide
 
 ## 커밋 템플릿 적용
 
-```sh
-git config commit.template .gitmessage.txt
-```
-
-전역으로 적용하려면 다음 명령을 사용합니다.
-
-```sh
-git config --global commit.template "$(pwd)/.gitmessage.txt"
-```
+새 clone에서 저장소 전용 커밋 템플릿을 적용하고 확인하는 절차는 [시작 가이드](GETTING_STARTED.md)를 따릅니다. 개인의 다른 저장소까지 바꾸는 전역 설정은 팀 공통 절차로 사용하지 않습니다.
