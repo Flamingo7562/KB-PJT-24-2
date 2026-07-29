@@ -1,9 +1,11 @@
 /**
  * 문서함 API 서비스 — 근로계약서(자동 생성) + 보건증(업로드·공유).
  *
- * 업로드 역할 규칙(서버 검증, 위반 403): 알바생=HEALTH_CERT 만 / 사장=CONTRACT 스캔본만.
- * 삭제: 연결 근무 종료 후만(위반 409) — 사장 문서함은 계약서·보건증 동일. 허용 형식 jpg/png/pdf.
+ * 업로드(서버 검증, 위반 403): 알바생 HEALTH_CERT 만. 계약서는 확정 시 자동 생성되며 업로드 경로가 없다.
+ * 삭제(위반 403): 알바생 본인 보건증만. 계약서는 3년 보존 대상이라 삭제할 수 없고, 사장 문서함에는
+ *   삭제 기능이 없다. 허용 형식 jpg/png/pdf.
  * 보건증 공유 대상 = 확정·시작 전(ACCEPTED/READY) 근무 보유 지점만. 원본 삭제 시 공유 REVOKED.
+ * 공유는 근무 종료 시 서버가 자동 해제한다(document_shares.expires_at = work_cases.ends_at).
  *
  * 관련 API(명세 37~44):
  *   GET/POST /api/documents   PATCH/DELETE /api/documents/{documentId}
@@ -15,15 +17,13 @@ import http from '@/services/http'
 
 const USE_MOCK = true
 
-// source: OWN(내 문서) / SHARED(공유받음, 사장 문서함). expiryDate = 보건증 발급일+1년(표시 계산)
-// workCaseStatus: 연결된 근무(work_case)의 상태 스냅샷 — 문서 삭제 가능 여부 판단용(mock 전용 필드).
-//   실제 API 연동 시 서버가 이미 계산해 내려주는 값으로 교체될 수 있다(교체 지점: isDocumentDeletable).
+// source: OWN(내 문서) / SHARED(공유받음, 사장 문서함).
 //
 // DB(documents 테이블) ↔ 이 mock 필드 대응 — 서버 연동 시 이름이 달라 매핑이 필요하다:
-//   issuedDate  ↔ issued_on (NULL 허용 — 직접 업로드본은 서버가 안 채우면 화면 날짜가 빈다)
-//   expiryDate  ↔ expires_on (실제 컬럼 존재. domain.md 의 "컬럼 없음" 서술과 어긋나 확인 필요)
+//   issuedDate  ↔ issued_on
+//   expiryDate  ↔ expires_on (보건증 발급일+1년. 서버가 계산해 저장하며 발급일 수정 시 함께 갱신)
 //   docType     ↔ document_type ('CONTRACT'↔'EMPLOYMENT_CONTRACT', 'HEALTH_CERT'↔'HEALTH_CERTIFICATE')
-//   workCaseId  ↔ work_case_id (NULL = 근무 미연결 직접 업로드본 → 상시 삭제 가능)
+//   workCaseId  ↔ work_case_id (계약서는 항상 근무에 연결된다 — 자동 생성본만 존재)
 const mockDocuments = [
   {
     documentId: 1,
@@ -36,7 +36,6 @@ const mockDocuments = [
     expiryDate: null,
     source: 'OWN',
     sharedByName: null,
-    workCaseStatus: 'READY', // 근무 시작 전 — 삭제 잠금
     createdAt: '2026-07-22T09:20:00'
   },
   {
@@ -50,7 +49,6 @@ const mockDocuments = [
     expiryDate: null,
     source: 'OWN',
     sharedByName: null,
-    workCaseStatus: 'COMPLETED', // 근무 종료 — 삭제 가능
     createdAt: '2026-06-10T09:00:00'
   },
   {
@@ -64,7 +62,6 @@ const mockDocuments = [
     expiryDate: '2027-06-01',
     source: 'SHARED',
     sharedByName: '김알바',
-    workCaseStatus: 'READY', // 근무 시작 전 — 삭제 잠금
     createdAt: '2026-06-05T10:00:00'
   },
   {
@@ -78,23 +75,11 @@ const mockDocuments = [
     expiryDate: '2027-05-20',
     source: 'SHARED',
     sharedByName: '박알바',
-    workCaseStatus: 'COMPLETED', // 근무 종료 — 삭제 가능
     createdAt: '2026-06-01T10:00:00'
   }
 ]
 
 const mockShares = [{ workplaceId: 1, workplaceName: '강남점', sharedAt: '2026-07-20T10:00:00' }]
-
-/**
- * 사장 문서함의 문서 삭제 가능 여부 — 계약서·보건증 모두 연결 근무 종료(COMPLETED/NO_SHOW) 후만.
- * 근무에 연결되지 않은 직접 업로드본은 잠글 근거가 없어 상시 삭제 가능.
- * 공유받은 보건증을 지워도 원본은 알바생 문서함에 남는다(내 문서함에서만 제거).
- * 실제 API 연동 시 서버가 최종 검증(409)하므로, 이 함수는 버튼 노출용 UI 힌트로만 쓴다 — 교체 지점.
- */
-export function isDocumentDeletable(document) {
-  if (!document.workCaseId) return true
-  return ['COMPLETED', 'NO_SHOW'].includes(document.workCaseStatus)
-}
 
 /**
  * 문서 목록 조회 → { content[] } (명세 37).
@@ -107,8 +92,8 @@ export async function listDocuments(params = {}) {
 }
 
 /**
- * 문서 업로드 → { documentId } (명세 38). multipart.
- * @param {FormData} formData docType, file(jpg/png/pdf), issuedDate(보건증 필수), workplaceId(사장)
+ * 보건증 업로드 → { documentId } (명세 38). multipart. 알바생 전용(계약서 업로드 경로 없음).
+ * @param {FormData} formData docType, file(jpg/png/pdf), issuedDate(필수)
  */
 export async function uploadDocument(formData) {
   if (USE_MOCK) return { documentId: Date.now() }
@@ -123,7 +108,7 @@ export async function updateDocumentIssuedDate(documentId, { issuedDate }) {
   return data
 }
 
-/** 문서 삭제 (명세 40). 사장 문서함은 계약서·보건증 모두 근무 종료 후만(409) */
+/** 보건증 삭제 (명세 40). 본인 소유 보건증만 — 계약서는 3년 보존 대상이라 삭제 불가(403) */
 export async function deleteDocument(documentId) {
   if (USE_MOCK) return
   await http.delete(`/documents/${documentId}`)
