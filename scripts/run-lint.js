@@ -25,7 +25,7 @@ function run(command, args, options = {}) {
   const result = spawnSync(command, args, {
     cwd: options.cwd || rootDir,
     stdio: "inherit",
-    shell: options.shell || false
+    shell: options.shell || false,
   });
 
   if (result.error) {
@@ -34,7 +34,7 @@ function run(command, args, options = {}) {
     return 1;
   }
 
-  return result.status || 0;
+  return Number.isInteger(result.status) ? result.status : 1;
 }
 
 function runFrontendLint() {
@@ -52,7 +52,7 @@ function runFrontendLint() {
 
   const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
   return run(npmCommand, ["--prefix", "frontend", "run", "lint"], {
-    shell: process.platform === "win32"
+    shell: process.platform === "win32",
   });
 }
 
@@ -63,15 +63,15 @@ function getBackendGradleCommand() {
     return {
       command: ".\\gradlew.bat",
       args: ["-p", "backend", "check"],
-      cwd: rootDir
+      cwd: rootDir,
     };
   }
 
   if (process.platform !== "win32" && exists("gradlew")) {
     return {
-      command: path.join(rootDir, "gradlew"),
-      args: ["-p", "backend", "check"],
-      cwd: rootDir
+      command: "sh",
+      args: [path.join(rootDir, "gradlew"), "-p", "backend", "check"],
+      cwd: rootDir,
     };
   }
 
@@ -79,22 +79,22 @@ function getBackendGradleCommand() {
     return {
       command: ".\\gradlew.bat",
       args: ["check"],
-      cwd: backendDir
+      cwd: backendDir,
     };
   }
 
   if (process.platform !== "win32" && exists("backend/gradlew")) {
     return {
-      command: path.join(backendDir, "gradlew"),
-      args: ["check"],
-      cwd: backendDir
+      command: "sh",
+      args: [path.join(backendDir, "gradlew"), "check"],
+      cwd: backendDir,
     };
   }
 
   return {
     command: process.platform === "win32" ? "gradle.bat" : "gradle",
     args: ["-p", "backend", "check"],
-    cwd: rootDir
+    cwd: rootDir,
   };
 }
 
@@ -110,7 +110,7 @@ function runBackendLint() {
   const gradle = getBackendGradleCommand();
   return run(gradle.command, gradle.args, {
     cwd: gradle.cwd,
-    shell: process.platform === "win32"
+    shell: process.platform === "win32",
   });
 }
 
@@ -118,7 +118,7 @@ const runners = {
   frontend: runFrontendLint,
   fe: runFrontendLint,
   backend: runBackendLint,
-  be: runBackendLint
+  be: runBackendLint,
 };
 
 if (target === "all") {

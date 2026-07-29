@@ -6,15 +6,17 @@
   "scripts": {
     "prepare": "husky",
     "check:commit": "node scripts/validate-commit-msg.js",
-    "check:guardrails": "node scripts/check-project-guardrails.js",
-    "check:precommit": "node scripts/check-project-guardrails.js && npm run format:staged && node scripts/run-lint.js all",
+    "check:guardrails": "node scripts/check-project-guardrails.js --all",
+    "check:guardrails:staged": "node scripts/check-project-guardrails.js --staged",
+    "check:precommit": "node scripts/run-precommit.js",
     "db:migrate": "docker compose --profile tools run --rm flyway migrate",
     "db:seed:contract": "npm run db:migrate && docker compose --profile tools run --rm seed-contract-test",
     "lint": "node scripts/run-lint.js all",
     "lint:fe": "node scripts/run-lint.js frontend",
     "lint:be": "node scripts/run-lint.js backend",
     "format:staged": "lint-staged",
-    "check": "npm run check:guardrails && npm run lint"
+    "test:harness": "node --test scripts/check-project-guardrails.test.js scripts/run-precommit.test.js",
+    "check": "npm run check:guardrails && npm run test:harness && npm run lint"
   },
   "devDependencies": {
     "husky": "^9.1.7",

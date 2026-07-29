@@ -29,10 +29,12 @@
 
 ## Verification
 
-1. Run `npm run check` when practical, or the narrowest relevant checks for the changed area.
-2. Record any skipped check and the reason in the pull request.
-3. Verify documentation links and tracked-file status when changing the shared harness.
-4. Keep local-only agent state, reports, memories, plugins, permissions, models, and credentials out of shared files.
+1. During incremental work, run the narrowest checks relevant to the changed area.
+2. The pre-commit hook selects Frontend, Backend, both, or no application lint from staged paths. Unknown or shared automation paths fail closed to both areas.
+3. Run the full root `npm run check` once before pull-request handoff when application code, dependencies, build or test configuration, shared verification automation, or multiple application areas changed.
+4. For shared Markdown-only changes, verify formatting, local links, and Git tracking status without running the full application check.
+5. Repeat a successful full check only when later changes can invalidate it. Record every skipped required check and the reason in the pull request.
+6. Keep local-only agent state, reports, memories, plugins, permissions, models, and credentials out of shared files.
 
 ## Language contract
 

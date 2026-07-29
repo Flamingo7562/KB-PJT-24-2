@@ -48,7 +48,7 @@ chmod +x .husky/pre-commit .husky/commit-msg
 
 | Hook         | 파일                | 역할                                       |
 | ------------ | ------------------- | ------------------------------------------ |
-| `pre-commit` | `.husky/pre-commit` | 기술 제약 검사와 lint 실행                 |
+| `pre-commit` | `.husky/pre-commit` | staged 경로에 맞는 기술 제약·format·lint   |
 | `commit-msg` | `.husky/commit-msg` | 커밋 메시지가 컨벤션을 지키는지 검사       |
 
 ## 커밋 메시지 검사
@@ -65,15 +65,25 @@ docs: [GITHUB] 이슈 작성 가이드 추가 (#5)
 
 ## 프로젝트 기술 제약 검사
 
-`scripts/check-project-guardrails.js`는 staged 파일에서 다음 항목을 검사합니다.
+`scripts/check-project-guardrails.js`는 다음 두 범위를 구분해 검사합니다.
+
+```sh
+# pre-commit: Git index에 staged된 실제 내용만 검사
+npm run check:guardrails:staged
+
+# PR 전 전체 검사: 추적 파일과 무시되지 않은 작업 트리 파일 검사
+npm run check:guardrails
+```
+
+검사 항목은 다음과 같습니다.
 
 - `react`, `react-dom`, `@vitejs/plugin-react`
 - `spring-boot`, `org.springframework.boot`
 - `JpaRepository`, `@Entity`, `javax.persistence`, `jakarta.persistence`
 
-문서와 GitHub 템플릿은 검사 대상에서 제외합니다. 기술 제약을 설명하기 위해 금지 기술 이름을 문서에 적을 수 있어야 하기 때문입니다.
+문서와 GitHub 템플릿은 검사 대상에서 제외합니다. 기술 제약을 설명하기 위해 금지 기술 이름을 문서에 적을 수 있어야 하기 때문입니다. staged 검사는 작업 트리가 아니라 Git index의 내용을 읽으므로 부분 스테이징한 커밋도 실제 커밋 대상과 동일하게 검사합니다.
 
-## Lint 검사
+## 변경 경로별 pre-commit 검사
 
 `pre-commit`은 다음 명령을 실행합니다.
 
@@ -81,14 +91,27 @@ docs: [GITHUB] 이슈 작성 가이드 추가 (#5)
 npm run check:precommit
 ```
 
-이 명령은 기술 제약 검사를 먼저 실행하고, 이어서 프론트엔드와 백엔드 lint를 실행합니다.
+`scripts/run-precommit.js`는 삭제와 이름 변경의 이전·이후 경로를 포함한 staged 경로를 분류합니다. 문서와 메타데이터를 제외한 알 수 없는 경로는 검사를 생략하지 않고 전체 검사로 처리합니다.
+
+| staged 변경                                      | 실행                                                                          |
+| ------------------------------------------------ | ----------------------------------------------------------------------------- |
+| 문서·GitHub 템플릿·저장소 메타데이터만          | staged Guardrail, `lint-staged` 일치 파일 format; 애플리케이션 lint 생략      |
+| Frontend 애플리케이션 파일만                    | staged Guardrail, `lint-staged` 일치 파일 format, Frontend ESLint             |
+| Backend 애플리케이션 파일만                     | staged Guardrail, `lint-staged` 일치 파일 format, Backend Gradle `check`      |
+| Frontend와 Backend 애플리케이션 파일 모두       | staged Guardrail, `lint-staged` 일치 파일 format, 하네스 테스트, 두 영역 검사 |
+| Hook·검사 스크립트·루트 설정·분류되지 않은 경로 | staged Guardrail, `lint-staged` 일치 파일 format, 하네스 테스트, 전체 검사    |
+
+문서와 함께 애플리케이션 파일이 변경되면 문서는 검사 범위를 넓히지 않고 해당 애플리케이션 영역을 검사합니다. Frontend 또는 Backend 파일을 삭제하거나 다른 영역으로 이동해도 기존 경로를 기준으로 필요한 검사를 유지합니다.
+
+Frontend와 Backend 검사는 삭제와 파일 간 영향을 놓치지 않도록 선택된 영역 전체를 검사합니다. 따라서 같은 영역에 커밋하지 않은 오류가 남아 있으면 staged 파일과 무관하더라도 Hook을 통과하지 못할 수 있습니다.
+
+현재 staged 파일에 대한 실행 계획만 확인하고 실제 검사나 format을 실행하지 않으려면 다음 명령을 사용합니다.
 
 ```sh
-npm run check:guardrails
-npm run lint
+node scripts/run-precommit.js --dry-run
 ```
 
-아직 `frontend/package.json` 또는 `backend/build.gradle`이 없으면 해당 lint는 건너뜁니다.
+아직 `frontend/package.json` 또는 `backend/build.gradle`이 없으면 해당 영역 검사는 건너뜁니다.
 
 ## Frontend Lint
 
@@ -146,6 +169,24 @@ cd backend
 # macOS / Linux
 ./gradlew check
 ```
+
+Git 실행 권한을 추적하지 못하는 환경에서도 동작하도록 macOS와 Linux에서는 wrapper를 `sh`로 실행합니다.
+
+## 전체 검사 실행 기준
+
+다음 변경은 PR을 넘기기 전에 루트 전체 검사를 한 번 실행합니다.
+
+```sh
+npm run check
+```
+
+- Frontend 또는 Backend 애플리케이션 코드
+- 의존성, build, test 설정
+- Hook, 검사 스크립트와 루트 검증 자동화
+- Frontend와 Backend를 함께 변경한 작업
+- 경로 영향 범위를 확실히 분류할 수 없는 작업
+
+전체 검사는 전체 Guardrail, 하네스 단위 테스트, Frontend ESLint와 Backend Gradle `check`를 순서대로 실행합니다. Markdown-only 변경은 문서 format·링크·Git 추적 상태를 확인하고 전체 애플리케이션 검사를 생략할 수 있습니다. 생략 사유는 PR에 기록합니다.
 
 ## Hook 임시 비활성화
 
