@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.gighub.bank.mapper.MockBankQueryMapper">
+
+    <!-- 원문 계좌번호는 조회하지 않는다. 뒤 4자리만 남기고 앞을 *로 가린다. -->
+    <select id="findAccountsByUserId" resultType="com.gighub.bank.dto.BankAccountSummary">
+        SELECT id        AS bankAccountId,
+        bank_code AS bankCode,
+        CONCAT(
+        REPEAT('*', GREATEST(CHAR_LENGTH(mock_account_number) - 4, 0)),
+        RIGHT(mock_account_number, 4)
+        )         AS maskedAccountNumber,
+        currency          AS currency,
+        balance           AS balance,
+        available_amount  AS availableAmount,
+        status            AS status
+        FROM mock_bank_accounts
+        WHERE user_id = #{userId}
+        <if test="status != null">
+            AND status = #{status}
+        </if>
+        ORDER BY id
+    </select>
+
+</mapper>
