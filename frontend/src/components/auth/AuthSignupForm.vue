@@ -7,13 +7,15 @@
  *   → @/services/auth (checkLoginId, checkEmail, signup)
  * 성공 후: role 에 맞는 로그인 화면으로 이동.
  */
-import { reactive, ref, watch } from 'vue'
+import { Check } from 'lucide-vue-next'
+import { computed, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
 import AppField from '@/components/common/AppField.vue'
 import BaseButton from '@/components/common/BaseButton.vue'
 import { checkEmail, checkLoginId, signup } from '@/services/auth'
 import { useUiStore } from '@/stores/ui'
+import { formatPhoneInput } from '@/utils/format'
 import {
   isEmail,
   isPhone,
@@ -52,6 +54,11 @@ const loginIdCheck = reactive({ done: false, available: false })
 const emailCheck = reactive({ done: false, available: false })
 const submitting = ref(false)
 
+// 중복확인을 통과한 상태 — 버튼 자리를 '확인완료' 표시로 바꾼다.
+// 값이 바뀌면 아래 watch 가 done 을 내려 자동으로 버튼이 돌아온다.
+const loginIdVerified = computed(() => loginIdCheck.done && loginIdCheck.available)
+const emailVerified = computed(() => emailCheck.done && emailCheck.available)
+
 // 값이 바뀌면 이전 중복확인 결과는 무효화한다.
 watch(
   () => form.loginId,
@@ -67,6 +74,13 @@ watch(
     emailCheck.available = false
   }
 )
+
+// 입력 중 하이픈을 자동으로 채운다(010-1234-5678). 숫자 외 입력은 AppField 의 digits-only 가 막는다.
+// v-model 은 입력값을 그대로 대입해 가공할 틈이 없다. 그래서 템플릿에서 축약을 풀어
+// :model-value + @update:model-value 로 쓰고, 대입 자리에 이 함수를 끼워 포맷을 거치게 한다.
+function onPhoneInput(v) {
+  form.phone = formatPhoneInput(v)
+}
 
 async function onCheckLoginId() {
   const rule = loginIdRule(form.loginId)
@@ -160,7 +174,10 @@ async function onSubmit() {
       :error="errors.loginId"
     >
       <template #suffix>
-        <BaseButton type="button" variant="secondary" @click="onCheckLoginId">중복확인</BaseButton>
+        <span v-if="loginIdVerified" class="verified"><Check :size="16" /> 확인완료</span>
+        <BaseButton v-else type="button" variant="secondary" @click="onCheckLoginId">
+          중복확인
+        </BaseButton>
       </template>
     </AppField>
 
@@ -193,16 +210,22 @@ async function onSubmit() {
       :error="errors.email"
     >
       <template #suffix>
-        <BaseButton type="button" variant="secondary" @click="onCheckEmail">중복확인</BaseButton>
+        <span v-if="emailVerified" class="verified"><Check :size="16" /> 확인완료</span>
+        <BaseButton v-else type="button" variant="secondary" @click="onCheckEmail">
+          중복확인
+        </BaseButton>
       </template>
     </AppField>
 
     <AppField
-      v-model="form.phone"
+      :model-value="form.phone"
       type="tel"
       label="전화번호"
       placeholder="010-0000-0000 (선택)"
+      digits-only
+      maxlength="13"
       :error="errors.phone"
+      @update:model-value="onPhoneInput"
     />
 
     <BaseButton
@@ -222,5 +245,18 @@ async function onSubmit() {
   display: flex;
   flex-direction: column;
   gap: var(--space-lg);
+}
+/* 중복확인 완료 표시 — 버튼과 같은 높이를 유지해 입력란 우측 정렬이 흔들리지 않게 한다. */
+.verified {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 var(--space-md);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--color-success);
+  background: var(--color-success-bg);
+  white-space: nowrap;
 }
 </style>

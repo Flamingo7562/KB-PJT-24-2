@@ -9,6 +9,7 @@ import { computed, ref } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import { Backpack, ChevronLeft, FileText, QrCode, ShieldCheck, Store } from 'lucide-vue-next'
 
+import AuthRoleToggle from '@/components/auth/AuthRoleToggle.vue'
 import LogoGighub from '@/assets/images/logo/logo-gighub.svg'
 
 const route = useRoute()
@@ -22,7 +23,8 @@ const intros = [
     role: 'owner',
     icon: Store,
     title: '사장님, 급여 관리 걱정 끝',
-    subtitle: '전자지갑 에스크로로 인건비를 미리 예치하고, 정산까지 투명하게 관리하세요.',
+    // 줄바꿈 위치를 고정한다(.tagline 의 white-space: pre-line).
+    subtitle: '전자지갑 에스크로로 인건비를 미리 예치하고,\n정산까지 투명하게 관리하세요.',
     features: [
       {
         icon: ShieldCheck,
@@ -54,6 +56,12 @@ const isIntroStep = computed(() => step.value < intros.length)
 const intro = computed(() => intros[step.value])
 
 const role = ref(route.query.role === 'worker' ? 'worker' : 'owner') // 'owner' | 'worker' (역할 선택 단계에서 사용)
+
+// AuthRoleToggle 은 'OWNER'|'WORKER' 를 쓰고, 여기 role 은 링크 경로(/owner/login)에 그대로 들어가
+// 소문자를 유지해야 한다. 그래서 토글과 주고받을 때만 변환한다.
+function onSelectRole(next) {
+  role.value = next === 'WORKER' ? 'worker' : 'owner'
+}
 
 const features = [
   { title: '안심 에스크로', desc: '근무 확정 시 임금을 미리 예치, 정산까지 안전하게.' },
@@ -114,6 +122,12 @@ const features = [
         <p class="tagline">전자지갑·에스크로 근로정산 서비스</p>
       </div>
 
+      <AuthRoleToggle
+        class="role-select"
+        :model-value="role === 'owner' ? 'OWNER' : 'WORKER'"
+        @update:model-value="onSelectRole"
+      />
+
       <ul class="features">
         <li v-for="f in features" :key="f.title" class="feature">
           <strong>{{ f.title }}</strong>
@@ -121,27 +135,14 @@ const features = [
         </li>
       </ul>
 
-      <div class="role-toggle" role="tablist" aria-label="역할 선택">
-        <button
-          type="button"
-          class="role"
-          :class="{ active: role === 'owner' }"
-          @click="role = 'owner'"
-        >
-          사장님
-        </button>
-        <button
-          type="button"
-          class="role"
-          :class="{ active: role === 'worker' }"
-          @click="role = 'worker'"
-        >
-          알바생
-        </button>
-      </div>
-
       <div class="cta">
-        <RouterLink :to="`/${role}/login`" class="btn btn-primary">로그인</RouterLink>
+        <RouterLink
+          :to="`/${role}/login`"
+          class="btn"
+          :class="role === 'owner' ? 'btn-owner' : 'btn-worker'"
+        >
+          로그인
+        </RouterLink>
         <RouterLink :to="`/${role}/signup`" class="btn btn-secondary">회원가입</RouterLink>
       </div>
     </template>
@@ -213,6 +214,8 @@ const features = [
   margin-top: var(--space-sm);
   color: var(--color-text-sub);
   font-size: var(--text-md);
+  white-space: pre-line; /* subtitle 의 \n 을 줄바꿈으로 살린다 */
+  word-break: keep-all;
 }
 .features {
   display: flex;
@@ -292,29 +295,14 @@ const features = [
   width: 18px;
   background: var(--color-brand);
 }
-.role-toggle {
-  display: flex;
-  gap: var(--space-sm);
-  margin-top: auto;
-}
-.role {
-  flex: 1;
-  padding: var(--space-md);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  font-weight: var(--weight-medium);
-  color: var(--color-text-sub);
-  background: var(--color-surface);
-}
-.role.active {
-  border-color: var(--color-primary);
-  color: var(--color-text);
+.role-select {
+  margin-top: var(--space-lg);
 }
 .cta {
   display: flex;
   flex-direction: column;
   gap: var(--space-sm);
-  margin-top: var(--space-md);
+  margin-top: auto;
 }
 .btn {
   display: block;
@@ -326,6 +314,17 @@ const features = [
 .btn-primary {
   background: var(--color-primary);
   color: var(--color-on-primary);
+}
+/* 로그인 버튼은 선택한 역할 색으로 채운다(토글 thumb 과 같은 색). */
+.btn-owner {
+  background: var(--color-owner);
+  color: var(--color-on-primary);
+  transition: background-color 0.25s ease;
+}
+.btn-worker {
+  background: var(--color-worker);
+  color: var(--color-on-primary);
+  transition: background-color 0.25s ease;
 }
 .btn-secondary {
   background: var(--color-surface);
