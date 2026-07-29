@@ -1,43 +1,52 @@
 # 시작 가이드
 
-이 문서는 팀원이 프로젝트 개발을 시작하기 전에 한 번씩 해야 하는 설정을 정리합니다.
+이 문서는 새 clone에서 공통 개발 환경을 준비하는 최초 1회 절차만 설명한다. 일상적인 Issue·브랜치·커밋·PR 규칙은 각 기준 문서에서 확인한다.
 
-## 1. 레포지토리 받기
+## 사전 조건
+
+- Git
+- Java 17
+- Node.js `>=20.19.0 <25`
+- npm `>=11 <12`
+
+정확한 기술 경계와 버전 원본은 [`DEPENDENCY_SPECIFICATION.md`](DEPENDENCY_SPECIFICATION.md)를 확인한다. Docker, MySQL과 외부 Tomcat은 해당 작업을 시작할 때 애플리케이션 안내와 DB Runbook에 따라 준비한다.
+
+## 1. 저장소 받기
 
 ```sh
 git clone https://github.com/Flamingo7562/KB-PJT-24-2.git
 cd KB-PJT-24-2
 ```
 
-## 2. Node 의존성 설치
+일반 개발의 통합 기준은 `dev`다. 작업 브랜치를 만들기 전 [`PROJECT_MANAGEMENT_GUIDE.md`](PROJECT_MANAGEMENT_GUIDE.md)의 현재 브랜치 전략을 확인한다.
 
-루트 `package.json`은 Husky와 공통 검사 스크립트를 관리합니다.
+## 2. 공통·Frontend 의존성 설치
+
+루트와 Frontend는 서로 다른 manifest와 lockfile을 사용하므로 각각 설치한다.
 
 ```sh
 npm ci
+npm --prefix frontend ci
 ```
 
-Windows PowerShell에서 `npm.ps1` 실행 정책 오류가 나면 `npm.cmd`를 사용합니다.
+Windows PowerShell에서 `npm.ps1` 실행 정책 오류가 발생하면 `npm.cmd`를 사용한다.
 
-```sh
+```powershell
 npm.cmd ci
+npm.cmd --prefix frontend ci
 ```
 
-## 3. Husky 활성화
+개별 패키지를 임의로 설치하지 않는다. 직접 의존성을 변경해야 한다면 기술 스택과 의존성 기준의 같은 PR 갱신 절차를 따른다.
 
-커밋할 때 기술 제약, lint, 커밋 메시지 규칙을 자동 검사하도록 설정합니다.
+## 3. Git Hook과 커밋 Template 확인
+
+루트 설치 과정에서 Husky `prepare`가 실행된다. Hook shim이 없으면 다음 명령으로 다시 생성한다.
 
 ```sh
 npm run prepare
 ```
 
-PowerShell 오류가 나면:
-
-```sh
-npm.cmd run prepare
-```
-
-설정 확인:
+Husky 9의 Hook 경로를 확인한다.
 
 ```sh
 git config --get core.hooksPath
@@ -49,17 +58,10 @@ git config --get core.hooksPath
 .husky/_
 ```
 
-## 4. 커밋 메시지 템플릿 설정
-
-커밋 작성 시 컨벤션 예시가 자동으로 뜨게 합니다.
+커밋 Template을 이 저장소에만 적용한다.
 
 ```sh
 git config commit.template .gitmessage.txt
-```
-
-설정 확인:
-
-```sh
 git config --get commit.template
 ```
 
@@ -69,119 +71,39 @@ git config --get commit.template
 .gitmessage.txt
 ```
 
-## 5. 공통 검사 실행
+Hook 동작과 문제 해결은 [`GIT_HOOKS_HUSKY_GUIDE.md`](GIT_HOOKS_HUSKY_GUIDE.md), 메시지 형식은 [`COMMIT_CONVENTION.md`](COMMIT_CONVENTION.md)를 확인한다.
 
-로컬 설정이 정상인지 한 번 확인합니다.
+## 4. 영역별 로컬 설정
+
+현재 작업에 필요한 영역만 준비한다.
+
+| 작업                     | 안내                                                           |
+| ------------------------ | -------------------------------------------------------------- |
+| Frontend 실행·환경변수   | [`../frontend/README.md`](../frontend/README.md)               |
+| Backend 빌드·Tomcat 설정 | [`../backend/README.md`](../backend/README.md)                 |
+| Docker MySQL·Flyway      | [`runbooks/DATABASE_RUNBOOK.md`](runbooks/DATABASE_RUNBOOK.md) |
+
+환경별 설정, 비밀번호와 로컬 절대 경로는 Git에 커밋하지 않는다.
+
+## 5. 공통 검사
+
+도구 설치와 Java·Frontend·Backend 검사 진입점이 정상인지 확인한다.
 
 ```sh
 npm run check
 ```
 
-PowerShell 오류가 나면:
+Windows에서는 다음 명령을 사용할 수 있다.
 
-```sh
+```powershell
 npm.cmd run check
 ```
 
-아직 실제 `frontend/package.json` 또는 `backend/build.gradle`이 없다면 lint가 skip될 수 있습니다. 실제 프로젝트가 생성되면 같은 명령이 자동으로 lint를 실행합니다.
+전체 검사는 Guardrail, 하네스 테스트, Frontend ESLint와 Backend Gradle `check`를 실행한다. Frontend build·Vitest와 Backend WAR처럼 작업별로 필요한 검증은 각 애플리케이션 README와 Lint·Hook 기준을 따른다.
 
-## 6. 브랜치 생성
+## 다음 작업
 
-일반 작업 브랜치는 최신 `dev`에서 만듭니다. 이슈 번호를 포함하고 브랜치명에는 `#`를 넣지 않습니다.
-
-```sh
-git fetch origin
-git switch dev
-git pull --ff-only origin dev
-git switch -c feature/12-login
-git push -u origin feature/12-login
-```
-
-로컬에 `dev`가 아직 없으면 `git switch dev` 대신 최초 한 번 `git switch --track origin/dev`를 실행합니다.
-
-예시:
-
-```text
-feature/12-login
-fix/23-session-timeout
-docs/5-project-guide
-```
-
-## 7. 커밋 메시지 작성
-
-커밋 메시지는 다음 형식을 사용합니다.
-
-```text
-<type>: [AREA] 작업 요약 (#이슈번호)
-```
-
-예시:
-
-```text
-feat: [FE] 로그인 화면 구현 (#12)
-feat: [BE] 로그인 API 구현 (#12)
-feat: [DB] 사용자 조회 mapper 추가 (#12)
-docs: [GITHUB] 이슈 템플릿 수정 (#5)
-chore: [HOOK] Husky 설정 추가 (#7)
-```
-
-사용 가능한 AREA:
-
-```text
-[FE], [BE], [DB], [DOCS], [GITHUB], [HOOK], [INFRA], [COMMON]
-```
-
-## 8. 커밋 전 수동 검사
-
-커밋 전에 미리 확인하고 싶으면 실행합니다.
-
-```sh
-npm run check
-```
-
-프론트엔드만 확인:
-
-```sh
-npm run lint:fe
-```
-
-백엔드만 확인:
-
-```sh
-npm run lint:be
-```
-
-PowerShell 오류가 나면 `npm` 대신 `npm.cmd`를 사용합니다.
-
-## 9. 커밋
-
-```sh
-git add .
-git commit
-```
-
-`git commit`을 사용하면 `.gitmessage.txt` 템플릿이 뜹니다. `git commit -m "..."`을 사용하면 템플릿은 뜨지 않지만 Husky 검사는 동일하게 실행됩니다.
-
-## 10. PR 작성
-
-PR 제목은 이슈/커밋과 같은 형식을 사용합니다.
-
-```text
-feat: [FE] 로그인 화면 구현
-```
-
-일반 작업 PR은 `dev`를 대상으로 만들고 본문에는 아래 문구를 넣습니다.
-
-```text
-Refs #12
-```
-
-배포·제출할 때는 `dev`에서 `main`으로 PR을 만들고, 해당 PR에 `Closes #12`를 적어 기본 브랜치 머지 시 이슈를 종료합니다.
-
-## 참고 문서
-
-- [프로젝트 관리 가이드](PROJECT_MANAGEMENT_GUIDE.md)
-- [Monorepo 구조 가이드](MONOREPO_STRUCTURE_GUIDE.md)
-- [이슈 작성 템플릿 가이드](ISSUE_WRITING_GUIDE.md)
-- [커밋 컨벤션](COMMIT_CONVENTION.md)
-- [Lint, 검증 및 Git Hook 가이드](GIT_HOOKS_HUSKY_GUIDE.md)
+- Issue·브랜치·PR: [`PROJECT_MANAGEMENT_GUIDE.md`](PROJECT_MANAGEMENT_GUIDE.md)
+- 커밋 메시지: [`COMMIT_CONVENTION.md`](COMMIT_CONVENTION.md)
+- Lint·Guardrail·Hook: [`GIT_HOOKS_HUSKY_GUIDE.md`](GIT_HOOKS_HUSKY_GUIDE.md)
+- 전체 문서 라우터: [`README.md`](README.md)

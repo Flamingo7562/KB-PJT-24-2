@@ -58,10 +58,10 @@ DB 스키마의 단일 원본은 `backend/src/main/resources/db/migration/V*.sql
 
 ### 개발 환경과 저장소 구조
 
-| 작업                | 먼저 읽을 문서                                               |
-| ------------------- | ------------------------------------------------------------ |
-| 최초 개발 환경 준비 | [`GETTING_STARTED.md`](GETTING_STARTED.md)                   |
-| Monorepo 구조 확인  | [`MONOREPO_STRUCTURE_GUIDE.md`](MONOREPO_STRUCTURE_GUIDE.md) |
+| 작업                    | 먼저 읽을 문서                                                                                                                   |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| 새 clone 최초 환경 준비 | [`GETTING_STARTED.md`](GETTING_STARTED.md)                                                                                       |
+| 저장소·실행 영역 확인   | [`../README.md`](../README.md), [`../frontend/README.md`](../frontend/README.md), [`../backend/README.md`](../backend/README.md) |
 
 ### 협업과 Git
 
