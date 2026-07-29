@@ -2,13 +2,13 @@
 
 KB IT's Your Life 7기 24-2팀 프로젝트입니다.
 
-Vue.js와 Spring Framework Legacy를 사용하는 Gig Hub 모노레포입니다.
+Vue.js와 Spring Framework Legacy를 사용하는 Gig Hub 모노레포입니다. Frontend와 Backend는 별도로 실행하지만 Issue·PR과 공통 검증을 한 저장소에서 추적합니다.
 
 ## 시작하기
 
 ```sh
-npm install
-npm run prepare
+npm ci
+npm --prefix frontend ci
 npm run check
 ```
 

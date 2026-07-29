@@ -1,3 +1,10 @@
+> [!WARNING]
+> 이 문서는 현재 개발 기준이 아닌 보관 문서입니다.
+>
+> - 보관일: 2026-07-29
+> - 보관 사유: 초기 화면 분담표와 현재 존재하지 않는 `DEV_SEED` 사용법 등 구현 초기 안내가 현재 코드와 달라짐
+> - 현재 문서: [`../../frontend/README.md`](../../frontend/README.md), [`../agent/ARCHITECTURE_OVERVIEW.md`](../agent/ARCHITECTURE_OVERVIEW.md), [현재 View 코드](../../frontend/src/views/)
+
 # 화면(view) 구현 가이드 — 팀 분담
 
 공통 인프라(라우터·서비스·스토어·유틸·공통 컴포넌트)는 **이미 완성**되어 있습니다.
