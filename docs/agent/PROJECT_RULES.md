@@ -7,15 +7,17 @@
 3. Read `docs/agent/ARCHITECTURE_OVERVIEW.md` once in each agent conversation before material implementation for an issue or branch. Read it again after a context reset or agent handoff, when it changes, or when the work crosses an architecture boundary.
 4. Use `docs/README.md` only when the relevant task-specific document is not already known or when the task moves to a different area.
 5. Load detailed domain, runbook, schema, API, and testing documents only when the current change touches that subject. Do not preload the documentation tree.
-6. Treat executable code, configuration, migrations, and current verification results as authoritative when documentation may be stale.
-7. General questions, status checks, and narrow read-only inspection do not require the architecture overview or unrelated task documents.
+6. Read `docs/DEPENDENCY_SPECIFICATION.md` before changing a language, runtime, build tool, container image, or direct dependency. Do not load it for unrelated work.
+7. Treat executable code, configuration, migrations, and current verification results as authoritative when documentation may be stale.
+8. General questions, status checks, and narrow read-only inspection do not require the architecture overview or unrelated task documents.
 
 ## Task startup
 
 1. Inspect `git status` and the files relevant to the request before editing.
 2. Preserve unrelated user changes.
 3. Treat Vue.js, Spring Framework 5 non-Boot, MyBatis, MySQL, Java 17, and Tomcat 9 as fixed constraints.
-4. Define the smallest reviewable task boundary and its verification before editing.
+4. Treat JavaScript as the default frontend language. TypeScript is conditional, not prohibited, and requires the decision process in `docs/DEPENDENCY_SPECIFICATION.md`.
+5. Define the smallest reviewable task boundary and its verification before editing.
 
 ## Implementation rules
 
@@ -23,6 +25,7 @@
 - Never add React, Spring Boot, JPA, embedded secrets, API keys, personal data, or environment-specific credentials.
 - Use Spring MVC layering (`controller -> service -> mapper`) and explicit DTOs.
 - Keep SQL in MyBatis mapper XML unless a tracked project document explicitly changes that convention.
+- Update the executable manifest or build configuration, its lock or coupled configuration, and `docs/DEPENDENCY_SPECIFICATION.md` in the same pull request when adding, removing, replacing, or repurposing a direct dependency.
 - Make scoped changes and follow the existing lint and formatting rules.
 - Ask for direction only when a missing decision would materially change behavior, data, security, or architecture.
 - Do not alter another contributor's unrelated work.

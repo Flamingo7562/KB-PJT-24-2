@@ -34,11 +34,12 @@ KB-PJT-24-2/
   scripts/
 ```
 
-## 기술 제약
+## 기술 기준
 
-- Frontend: Vue.js, JavaScript
+- Frontend: Vue.js, JavaScript 기본
 - Backend: Java 17, Spring Framework 5, 외부 Tomcat 9
 - Persistence: MyBatis, MySQL
-- 사용 금지: React, TypeScript, Spring Boot, JPA
+- 조건부 도입: TypeScript는 명확한 필요와 팀 합의가 있을 때 허용
+- 사용 금지: React, Spring Boot, JPA
 
-세부 버전과 구현 규칙은 전체 개발 문서와 각 애플리케이션 README를 확인합니다.
+세부 기술 경계와 의존성 변경 절차는 전체 개발 문서의 `기술 스택과 의존성` 항목에서 확인합니다.

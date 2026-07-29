@@ -20,6 +20,7 @@
 | ------------- | ------------------------------------------------------------------ | ------------------------------------------------------------------- |
 | 모든 에이전트 | [`agent/PROJECT_RULES.md`](agent/PROJECT_RULES.md)                 | 컨텍스트 로딩, 기술 제약, 구현 경계와 공통 검증 기준의 단일 원본    |
 | 구현 작업     | [`agent/ARCHITECTURE_OVERVIEW.md`](agent/ARCHITECTURE_OVERVIEW.md) | 구현 전에 한 번 읽는 짧은 전체 구조와 책임 경계                     |
+| 의존성·빌드   | [`DEPENDENCY_SPECIFICATION.md`](DEPENDENCY_SPECIFICATION.md)       | 기술의 허용 상태, 직접 의존성 역할과 변경 절차                      |
 | DB 관련 작업  | [`agent/SCHEMA_OVERVIEW.md`](agent/SCHEMA_OVERVIEW.md)             | Migration, 관계, 불변식과 애플리케이션 책임 경계의 간결한 현재 요약 |
 | Claude Code   | [`../CLAUDE.md`](../CLAUDE.md)                                     | 공통 규칙을 가져오는 추적 대상 어댑터                               |
 | Codex 사용자  | 로컬 `AGENTS.md`                                                   | 공통 규칙을 읽고 개인 운영 절차를 추가하는 비공유 파일              |
@@ -38,6 +39,13 @@
 | Backend  | [`../backend/README.md`](../backend/README.md)   | Spring Legacy WAR, DB 연결, 검증과 패키지 구조 |
 
 ## 현재 개발 가이드
+
+### 기술 스택과 의존성
+
+| 작업                                             | 먼저 읽을 문서                                               |
+| ------------------------------------------------ | ------------------------------------------------------------ |
+| 기술의 기본·허용·조건부·금지 여부 확인           | [`DEPENDENCY_SPECIFICATION.md`](DEPENDENCY_SPECIFICATION.md) |
+| 언어·직접 의존성·빌드 도구·Container 이미지 변경 | [`DEPENDENCY_SPECIFICATION.md`](DEPENDENCY_SPECIFICATION.md) |
 
 ### 데이터베이스
 
@@ -88,11 +96,10 @@ DB 스키마의 단일 원본은 `backend/src/main/resources/db/migration/V*.sql
 
 다음 문서는 별도 이슈와 작은 PR로 작성합니다.
 
-1. 기술 스택과 허용·금지 의존성
-2. 현재 스프린트 목표와 역할 분담
-3. 테스트 작성 규칙과 coverage 기준
-4. 공통 API 규약과 생성된 OpenAPI
-5. 도메인별 상태 전이와 불변식
-6. 수직 기능 개발 플레이북과 전체 로컬 실행 Runbook
+1. 현재 스프린트 목표와 역할 분담
+2. 테스트 작성 규칙과 coverage 기준
+3. 공통 API 규약과 생성된 OpenAPI
+4. 도메인별 상태 전이와 불변식
+5. 수직 기능 개발 플레이북과 전체 로컬 실행 Runbook
 
 새 공유 문서는 실제 내용과 검증 방법을 완성한 뒤 이 색인에 상태와 진입 경로를 추가합니다.
