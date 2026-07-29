@@ -1,0 +1,120 @@
+<script setup>
+/**
+ * 근무 카드 목록 — 목록 뷰와 캘린더 뷰(선택한 날짜)가 **같은 마크업을 공유**한다.
+ *
+ * 이 컴포넌트를 따로 뺀 이유: 두 뷰에서 항목 모양과 이동 경로
+ * (/owner/attendance/work-cases/:workCaseId)가 어긋나지 않게 하기 위해서다.
+ * 실제 라우팅·링크 복사는 부모가 처리하고, 여기서는 클릭을 이벤트로 올려보내기만 한다.
+ *
+ * 사용:
+ *   <AttendanceWorkCaseList
+ *     :work-cases="items" :copying-id="copyingId"
+ *     @select="goDetail" @copy-invite="onCopyInvite" />
+ */
+import { Link2 } from 'lucide-vue-next'
+
+import StatusChip from '@/components/common/StatusChip.vue'
+import { isDraft } from '@/constants/workCaseStatus'
+import { formatDate, formatTimeRange } from '@/utils/format'
+
+defineProps({
+  /** 표시할 근무 목록(서버 조회 결과 그대로) */
+  workCases: { type: Array, default: () => [] },
+  /** 연결 링크 생성 중인 근무 id — 중복 클릭 방지용 */
+  copyingId: { type: [Number, String], default: null },
+  /** 날짜를 항목에 표시할지. 캘린더의 '선택한 날짜' 목록은 날짜가 이미 위에 있어 끈다. */
+  showDate: { type: Boolean, default: true }
+})
+
+const emit = defineEmits(['select', 'copy-invite'])
+</script>
+
+<template>
+  <ul class="list">
+    <li v-for="workCase in workCases" :key="workCase.workCaseId" class="item">
+      <button type="button" class="item-btn" @click="emit('select', workCase.workCaseId)">
+        <div class="item-head">
+          <span class="item-title">{{ workCase.title }}</span>
+          <StatusChip :status="workCase.status" kind="workCase" />
+        </div>
+        <p class="item-when">
+          <template v-if="showDate">{{ formatDate(workCase.workDate) }} · </template>
+          {{ formatTimeRange(workCase.startTime, workCase.endTime) }}
+        </p>
+        <p class="item-worker">
+          {{ workCase.workerName ?? '아직 매칭된 알바생이 없어요' }}
+        </p>
+      </button>
+
+      <!-- 작성중(DRAFT)에서만 연결 링크를 복사할 수 있게 하는 버튼 — 확정 후에는 서버가 링크 생성을 막는다 -->
+      <button
+        v-if="isDraft(workCase.status)"
+        type="button"
+        class="copy-btn"
+        :disabled="copyingId === workCase.workCaseId"
+        @click="emit('copy-invite', workCase.workCaseId)"
+      >
+        <Link2 :size="14" />
+        {{ copyingId === workCase.workCaseId ? '링크 만드는 중…' : '연결 링크 복사' }}
+      </button>
+    </li>
+  </ul>
+</template>
+
+<style scoped>
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  margin-top: var(--space-sm);
+  /* Bootstrap Reboot 의 ul padding-left 무효화 */
+  padding: 0;
+}
+.item {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+.item-btn {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  width: 100%;
+  padding: var(--space-md) var(--space-lg);
+  text-align: left;
+}
+/* 카드 하단 액션 — 매칭전 근무의 연결 링크 복사 */
+.copy-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-xs);
+  width: 100%;
+  padding: var(--space-sm);
+  border-top: 1px solid var(--color-border);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--color-owner);
+}
+.copy-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.item-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+}
+.item-title {
+  font-size: var(--text-md);
+  font-weight: var(--weight-medium);
+  color: var(--color-text);
+}
+.item-when,
+.item-worker {
+  font-size: var(--text-sm);
+  color: var(--color-text-sub);
+}
+</style>

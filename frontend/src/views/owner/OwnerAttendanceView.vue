@@ -7,25 +7,39 @@
  *          POST /work-cases/{id}/invitations (매칭전 항목의 연결 링크 복사)
  *   →  @/services/workCases (getWorkCaseSummary, listWorkCases, createInvite)
  * 공통: StatusChip(근무 상태) · EmptyState · 항목 클릭 → /owner/attendance/work-cases/:workCaseId
+ *
+ * 보기 방식(목록형 ↔ 캘린더)
+ *   - 두 뷰 모두 **같은 조회(listWorkCases)** 결과를 쓴다. 캘린더일 때만 보고 있는 달로
+ *     from/to 를 좁혀 요청하고, 결과를 날짜별로 묶어 그린다(@/utils/calendar).
+ *   - 상태 필터·검색어는 뷰를 바꿔도 그대로 유지된다(같은 ref 를 공유).
+ *   - 마지막으로 고른 뷰는 localStorage 에 남겨 재진입 시 복원한다(@/utils/storage).
+ *   - 항목 클릭 이동 경로는 두 뷰가 동일하다(AttendanceWorkCaseList 를 공유).
  */
-import { Link2, Plus, Search } from 'lucide-vue-next'
+import { Plus, Search } from 'lucide-vue-next'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
 import EmptyState from '@/components/common/EmptyState.vue'
-import StatusChip from '@/components/common/StatusChip.vue'
+import AttendanceCalendar from '@/components/owner/AttendanceCalendar.vue'
+import AttendanceViewToggle from '@/components/owner/AttendanceViewToggle.vue'
+import AttendanceWorkCaseList from '@/components/owner/AttendanceWorkCaseList.vue'
 import {
   WORK_CASE_SUMMARY,
   emptyWorkCaseSummary,
-  isDraft,
   workCaseStatusColor,
   workCaseStatusLabel
 } from '@/constants/workCaseStatus'
 import { createInvite, getWorkCaseSummary, listWorkCases } from '@/services/workCases'
 import { useUiStore } from '@/stores/ui'
 import { useWorkplaceStore } from '@/stores/workplace'
+import {
+  currentMonthKey,
+  formatDateKeyWithWeekday,
+  formatMonthLabel,
+  monthRange
+} from '@/utils/calendar'
 import { copyText } from '@/utils/clipboard'
-import { formatDate, formatTimeRange } from '@/utils/format'
+import { readPreference, writePreference } from '@/utils/storage'
 
 const router = useRouter()
 const ui = useUiStore()
@@ -37,14 +51,32 @@ const loading = ref(false)
 const keyword = ref('')
 const statusFilter = ref(null) // null(전체) | 8단계 상태 enum 중 하나(요약 카드 선택)
 
+/* ---- 보기 방식(목록형 ↔ 캘린더) ------------------------------------------ */
+
+// 저장 키. 다른 화면의 취향 값과 섞이지 않도록 화면 이름을 접두사로 둔다.
+const VIEW_MODE_KEY = 'owner.attendance.viewMode'
+const VIEW_MODES = ['list', 'calendar']
+
+// 재진입 시 마지막 모드로 복원한다. 저장값이 이상하면(수동 편집 등) 목록형으로 되돌린다.
+const savedViewMode = readPreference(VIEW_MODE_KEY)
+const viewMode = ref(VIEW_MODES.includes(savedViewMode) ? savedViewMode : 'list')
+const isCalendar = computed(() => viewMode.value === 'calendar')
+
+const monthKey = ref(currentMonthKey()) // 캘린더가 보고 있는 달 'YYYY-MM'
+const selectedDate = ref(null) // 캘린더에서 고른 날짜 'YYYY-MM-DD' | null
+
 /**
  * 선택 지점 기준으로 요약·리스트를 다시 조회한다.
  * 검색어·상태는 서버 파라미터로만 넘긴다 — 프론트에서 목록을 재계산하지 않는다.
+ * 캘린더 뷰일 때만 보고 있는 달(from~to)로 조회 범위를 좁힌다.
  * 요약(채용중·근무중 건수)은 상태 필터와 무관한 전체 집계라 그대로 둔다.
  */
 async function load() {
   const workplaceId = workplaceStore.selectedId
   if (workplaceId == null) return
+
+  // 캘린더는 한 달치만 필요하다. 목록형은 기존대로 기간 제한 없이 최신순 전체를 본다.
+  const range = isCalendar.value ? monthRange(monthKey.value) : {}
 
   loading.value = true
   try {
@@ -52,7 +84,9 @@ async function load() {
       getWorkCaseSummary(workplaceId),
       listWorkCases(workplaceId, {
         keyword: keyword.value.trim() || undefined,
-        status: statusFilter.value ?? undefined
+        status: statusFilter.value ?? undefined,
+        from: range.from,
+        to: range.to
       })
     ])
     summary.value = summaryRes
@@ -67,6 +101,15 @@ async function load() {
 // 지점 목록이 준비되면 selectedId 가 채워지고, 그때 watcher 가 조회한다.
 onMounted(() => workplaceStore.load())
 watch(() => workplaceStore.selectedId, load, { immediate: true })
+
+// 뷰를 바꾸면 조회 범위(달 제한 유무)가 달라지므로 다시 조회하고, 고른 뷰를 저장한다.
+watch(viewMode, (mode) => {
+  writePreference(VIEW_MODE_KEY, mode)
+  load()
+})
+
+// 캘린더에서 달을 옮기면 그 달을 다시 조회한다.
+watch(monthKey, load)
 
 // 입력할 때마다 다시 조회하되, 매 글자 요청하지 않도록 잠깐 기다린다.
 let searchTimer = null
@@ -98,6 +141,26 @@ const statusColor = (status) => workCaseStatusColor(status)
 const listTitle = computed(() =>
   statusFilter.value ? `${statusLabel(statusFilter.value)} 근무` : '근무 목록'
 )
+
+/**
+ * 캘린더에서 고른 날짜의 근무 — 조회 결과를 그대로 거른 것이라 목록형과 같은 데이터다.
+ * 하루 안에서는 시작 시간 순으로 보여준다(그날의 흐름대로 읽히게).
+ */
+const selectedDayWorkCases = computed(() => {
+  if (!selectedDate.value) return []
+  return workCases.value
+    .filter((workCase) => workCase.workDate === selectedDate.value)
+    .sort((a, b) => String(a.startTime).localeCompare(String(b.startTime)))
+})
+
+/** 선택한 날짜 제목: "2026.07.22 (수) · 2건" */
+const selectedDayTitle = computed(() =>
+  selectedDate.value
+    ? `${formatDateKeyWithWeekday(selectedDate.value)} · ${selectedDayWorkCases.value.length}건`
+    : ''
+)
+
+const monthLabel = computed(() => formatMonthLabel(monthKey.value))
 
 const copyingId = ref(null) // 링크 생성 중인 근무(중복 클릭 방지)
 
@@ -157,13 +220,17 @@ const goNew = () => router.push('/owner/attendance/work-cases/new')
       />
     </form>
 
-    <section class="list-section">
+    <!-- 보기 방식 전환 — 상태 필터·검색어는 그대로 두고 표시 방법만 바꾼다 -->
+    <AttendanceViewToggle v-model="viewMode" />
+
+    <p v-if="loading" class="loading">불러오는 중…</p>
+
+    <!-- ① 목록형 뷰 -->
+    <section v-else-if="!isCalendar" class="list-section">
       <h2 class="list-title">{{ listTitle }}</h2>
 
-      <p v-if="loading" class="loading">불러오는 중…</p>
-
       <EmptyState
-        v-else-if="workCases.length === 0 && isFiltered"
+        v-if="workCases.length === 0 && isFiltered"
         message="조건에 맞는 근무가 없습니다."
       >
         검색어를 바꾸거나 위 카드를 다시 눌러 전체를 확인해보세요.
@@ -173,35 +240,60 @@ const goNew = () => router.push('/owner/attendance/work-cases/new')
         아래 버튼으로 첫 근무 포지션을 추가해보세요.
       </EmptyState>
 
-      <ul v-else class="list">
-        <li v-for="workCase in workCases" :key="workCase.workCaseId" class="item">
-          <button type="button" class="item-btn" @click="goDetail(workCase.workCaseId)">
-            <div class="item-head">
-              <span class="item-title">{{ workCase.title }}</span>
-              <StatusChip :status="workCase.status" kind="workCase" />
-            </div>
-            <p class="item-when">
-              {{ formatDate(workCase.workDate) }} ·
-              {{ formatTimeRange(workCase.startTime, workCase.endTime) }}
-            </p>
-            <p class="item-worker">
-              {{ workCase.workerName ?? '아직 매칭된 알바생이 없어요' }}
-            </p>
-          </button>
+      <AttendanceWorkCaseList
+        v-else
+        :work-cases="workCases"
+        :copying-id="copyingId"
+        @select="goDetail"
+        @copy-invite="onCopyInvite"
+      />
+    </section>
 
-          <!-- 작성중(DRAFT)에서만 노출 — 확정 후에는 서버가 링크 생성을 막는다 -->
-          <button
-            v-if="isDraft(workCase.status)"
-            type="button"
-            class="copy-btn"
-            :disabled="copyingId === workCase.workCaseId"
-            @click="onCopyInvite(workCase.workCaseId)"
-          >
-            <Link2 :size="14" />
-            {{ copyingId === workCase.workCaseId ? '링크 만드는 중…' : '연결 링크 복사' }}
-          </button>
-        </li>
-      </ul>
+    <!-- ② 캘린더 뷰 — 월 그리드 + 선택한 날짜의 근무 목록 -->
+    <section v-else class="calendar-section">
+      <AttendanceCalendar
+        v-model:month-key="monthKey"
+        v-model:selected-date="selectedDate"
+        :work-cases="workCases"
+      />
+
+      <!-- 그 달에 근무가 아예 없을 때(필터 때문일 수도 있어 문구를 나눈다) -->
+      <EmptyState
+        v-if="workCases.length === 0 && isFiltered"
+        :message="`${monthLabel}에는 조건에 맞는 근무가 없습니다.`"
+      >
+        검색어를 바꾸거나 위 카드를 다시 눌러 전체를 확인해보세요.
+      </EmptyState>
+
+      <EmptyState
+        v-else-if="workCases.length === 0"
+        :message="`${monthLabel}에는 등록된 근무가 없습니다.`"
+      >
+        좌우 화살표로 다른 달을 보거나, 아래 버튼으로 근무를 추가해보세요.
+      </EmptyState>
+
+      <!-- 날짜를 아직 고르지 않은 상태 — 무엇을 하면 되는지 알려준다 -->
+      <EmptyState v-else-if="!selectedDate" message="날짜를 선택해보세요.">
+        근무가 있는 날에 색 점이 표시돼요. 날짜를 누르면 그날의 근무를 볼 수 있어요.
+      </EmptyState>
+
+      <!-- 고른 날짜의 근무 목록 — 항목 모양·이동 경로는 목록형과 동일하다 -->
+      <div v-else class="day-section">
+        <h2 class="list-title">{{ selectedDayTitle }}</h2>
+
+        <EmptyState v-if="selectedDayWorkCases.length === 0" message="이 날짜에는 근무가 없습니다.">
+          다른 날짜를 선택해보세요.
+        </EmptyState>
+
+        <AttendanceWorkCaseList
+          v-else
+          :work-cases="selectedDayWorkCases"
+          :copying-id="copyingId"
+          :show-date="false"
+          @select="goDetail"
+          @copy-invite="onCopyInvite"
+        />
+      </div>
     </section>
 
     <button type="button" class="fab" @click="goNew">
@@ -281,66 +373,18 @@ const goNew = () => router.push('/owner/attendance/work-cases/new')
   font-weight: var(--weight-bold);
   color: var(--color-text);
 }
-.list {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-sm);
-  margin-top: var(--space-sm);
-  /* Bootstrap Reboot 의 ul padding-left 무효화 */
-  padding: 0;
-}
-.item {
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  overflow: hidden;
-}
-.item-btn {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-xs);
-  width: 100%;
-  padding: var(--space-md) var(--space-lg);
-  text-align: left;
-}
-/* 카드 하단 액션 — 매칭전 근무의 연결 링크 복사 */
-.copy-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-xs);
-  width: 100%;
-  padding: var(--space-sm);
-  border-top: 1px solid var(--color-border);
-  font-size: var(--text-sm);
-  font-weight: var(--weight-medium);
-  color: var(--color-owner);
-}
-.copy-btn:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-.item-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-sm);
-}
-.item-title {
-  font-size: var(--text-md);
-  font-weight: var(--weight-medium);
-  color: var(--color-text);
-}
-.item-when,
-.item-worker {
-  font-size: var(--text-sm);
-  color: var(--color-text-sub);
-}
 .loading {
   padding: var(--space-xl) 0;
   text-align: center;
   font-size: var(--text-md);
   color: var(--color-text-sub);
+}
+
+/* ---- 캘린더 뷰(달력 + 선택한 날짜 목록) ---- */
+.calendar-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
 }
 
 /* ---- 근무 포지션 추가 ---- */
