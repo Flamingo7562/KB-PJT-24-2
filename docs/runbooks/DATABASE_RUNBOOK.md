@@ -161,7 +161,18 @@ WAR를 실행하는 Tomcat에도 같은 설정 파일 경로가 필요합니다.
 npm.cmd run db:seed:contract
 ```
 
-이 명령은 로컬 DB의 합성 테스트 데이터를 변경합니다. 공용 DB나 운영 DB에서는 실행하지 말고, 예상 데이터와 검증 쿼리는 [`../TEST_CONTRACT_SEED_GUIDE.md`](../TEST_CONTRACT_SEED_GUIDE.md)를 따릅니다.
+이 명령은 미적용 Migration을 먼저 적용한 뒤 [`test-contract-escrow.sql`](../../backend/src/test/resources/db/seed/test-contract-escrow.sql)을 실행합니다. 로컬 DB의 합성 테스트 데이터만 대상으로 하며 공용 DB나 운영 DB에서는 실행하지 않습니다.
+
+| 항목           | 초기 상태                                        |
+| -------------- | ------------------------------------------------ |
+| 사장님 로그인  | `test_owner_17` / `Test1234!`                    |
+| 근로자 로그인  | `test_worker_17` / `Test1234!`                   |
+| 근무·일급      | 2026-08-01 09:00~18:00, 무급 휴게 60분·300,000원 |
+| 사장님 지갑    | 가용 700,000원, 잠금 300,000원                   |
+| 근로자 지갑    | 가용 0원, 에스크로 확보액 300,000원              |
+| 업무 처리 상태 | 근무 `ACCEPTED`, 에스크로 `HELD`, 정산 `WAITING` |
+
+같은 명령을 다시 실행하면 전용 테스트 계정과 `[TEST-17]` 근무 건만 위 상태로 되돌립니다. 다른 사용자의 데이터는 삭제하지 않습니다. 전체 DB를 초기화하는 `docker compose down -v`나 Flyway `clean`을 이 Seed의 재실행 방법으로 사용하지 않습니다.
 
 ## 중지와 데이터 보존
 

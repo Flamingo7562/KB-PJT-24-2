@@ -80,13 +80,6 @@ DB 스키마의 단일 원본은 `backend/src/main/resources/db/migration/V*.sql
 | ----------------------- | ------------------------------------------------------ |
 | Lint·Guardrail·Git Hook | [`GIT_HOOKS_HUSKY_GUIDE.md`](GIT_HOOKS_HUSKY_GUIDE.md) |
 
-## 작업별 참고 문서
-
-| 작업                             | 참고 문서                                                    |
-| -------------------------------- | ------------------------------------------------------------ |
-| 회원가입·사업장 스키마 변경      | [`SIGNUP_DATABASE_SCHEMA.md`](SIGNUP_DATABASE_SCHEMA.md)     |
-| 계약·에스크로 테스트 데이터 준비 | [`TEST_CONTRACT_SEED_GUIDE.md`](TEST_CONTRACT_SEED_GUIDE.md) |
-
 ## 아카이브
 
 - [문서 아카이브 정책과 목록](archive/README.md)
