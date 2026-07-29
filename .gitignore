@@ -84,6 +84,7 @@ replay_pid*.log
 # Shared cross-agent harness
 !/CLAUDE.md
 !/docs/README.md
+!/docs/DEPENDENCY_SPECIFICATION.md
 !/docs/agent/
 !/docs/agent/PROJECT_RULES.md
 !/docs/agent/ARCHITECTURE_OVERVIEW.md

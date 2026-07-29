@@ -5,7 +5,7 @@ Read this short overview once before material implementation for an issue or bra
 ## Runtime shape
 
 - The repository is a monorepo: `frontend/` contains the browser application, `backend/` contains the server application, and root scripts coordinate shared checks and local infrastructure.
-- The frontend is a JavaScript-only Vue 3 and Vite application. Vue Router owns navigation, Pinia owns client state, and `src/services/` owns HTTP access through Axios.
+- The frontend is currently a JavaScript-based Vue 3 and Vite application. Vue Router owns navigation, Pinia owns client state, and `src/services/` owns HTTP access through Axios. TypeScript adoption is conditional under `docs/DEPENDENCY_SPECIFICATION.md`.
 - The backend is a Java 17 WAR for Tomcat 9 using Spring Framework 5 without Spring Boot. Annotation-based configuration separates the Root Context from the Spring MVC Servlet Context.
 - Backend domain and business flows follow `controller -> service -> mapper`; MyBatis mapper interfaces call SQL in `backend/src/main/resources/mappers/`.
 - MySQL 8.4 runs through Docker Compose. Flyway SQL under `backend/src/main/resources/db/migration/` is the schema source of truth.
@@ -22,6 +22,7 @@ Read this short overview once before material implementation for an issue or bra
 
 ## Authoritative sources
 
+- Technology selection and allowed, conditional, or prohibited dependencies: `docs/DEPENDENCY_SPECIFICATION.md`.
 - Application dependency and runtime versions: `frontend/package.json` and `backend/build.gradle`.
 - Container image versions and local infrastructure: `compose.yaml`.
 - Frontend routes and request behavior: `frontend/src/router/index.js`, `frontend/src/services/http.js`, and the affected `frontend/src/services/*.js`.
@@ -29,4 +30,4 @@ Read this short overview once before material implementation for an issue or bra
 - Database structure: Flyway migrations first, then `docs/agent/SCHEMA_OVERVIEW.md` for compact context.
 - Task-specific guides and runbooks: `docs/README.md`.
 
-Update this overview only when a top-level runtime, directory responsibility, request path, persistence boundary, or authoritative source changes. Keep feature details in task-specific documents.
+Update this overview only when a top-level runtime, default language, directory responsibility, request path, persistence boundary, or authoritative source changes. Keep feature details in task-specific documents.
