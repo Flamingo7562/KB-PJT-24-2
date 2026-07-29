@@ -22,6 +22,14 @@ describe('WorkerReportView', () => {
     createReport.mockResolvedValue({ reportId: 1 })
   })
 
+  it('신고 전 사장님 선연락을 권장하는 안내를 보여준다', () => {
+    const wrapper = mount(WorkerReportView)
+
+    expect(wrapper.text()).toContain('신고 절차에는 시간이 소요될 수 있어요')
+    expect(wrapper.text()).toContain('신고 전에 먼저 사장님과 연락해보는 것을 권장드려요')
+    expect(wrapper.text()).not.toContain('정산 진행에는 영향을 주지 않습니다')
+  })
+
   it('경위서가 최소 길이 미만이면 제출 버튼이 비활성화된다', async () => {
     const wrapper = mount(WorkerReportView)
     const submit = () => wrapper.find('button.submit')

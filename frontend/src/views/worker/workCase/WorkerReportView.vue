@@ -5,7 +5,6 @@
  * 연계 API: POST /work-cases/{id}/disputes  →  @/services/workCases (createReport)
  * route.params.workCaseId 사용. 공통: BaseButton · 제출 후 useUiStore().toast + 뒤로가기.
  */
-import { Info } from 'lucide-vue-next'
 import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
@@ -51,11 +50,7 @@ async function onSubmit() {
     <AppBackHeader title="임금분쟁 신고" />
     <main class="screen-body">
       <p class="notice">
-        <Info :size="16" class="notice-icon" />
-        <span>
-          신고는 <strong>기록·알림용</strong>이며 정산 진행에는 영향을 주지 않습니다. 상황을 최대한
-          구체적으로 작성해주세요.
-        </span>
+        신고 절차에는 시간이 소요될 수 있어요 · 신고 전에 먼저 사장님과 연락해보는 것을 권장드려요
       </p>
 
       <label class="field">
@@ -91,23 +86,11 @@ async function onSubmit() {
   padding: var(--space-lg);
 }
 .notice {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-sm);
   padding: var(--space-md);
-  background: var(--color-warning-bg);
-  border-radius: var(--radius-sm);
+  background: var(--color-bg);
+  border-radius: var(--radius-md);
   font-size: var(--text-sm);
   color: var(--color-text-sub);
-  line-height: 1.5;
-}
-.notice-icon {
-  flex-shrink: 0;
-  margin-top: 2px;
-}
-.notice strong {
-  color: var(--color-text);
-  font-weight: var(--weight-medium);
 }
 .field {
   display: flex;
