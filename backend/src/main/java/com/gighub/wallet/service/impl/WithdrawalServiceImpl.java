@@ -75,6 +75,31 @@ public class WithdrawalServiceImpl implements WithdrawalService {
             throw new InvalidWalletStateException("지갑을 찾을 수 없습니다.");
         }
 
+        // 전역 잠금 순서: 지갑 -> 계좌 claim INSERT보다 먼저 (데드락 예방)
+        WalletBalanceSnapshot wallet =
+                walletMapper.getWalletSnapshotForUpdate(command.getUserId());
+        if (wallet == null) {
+            throw new InvalidWalletStateException("지갑을 찾을 수 없습니다.");
+        }
+        validateWalletSnapshot(wallet, command.getUserId(), walletId);
+
+        // 잠금 잔액은 출금할 수 없다
+        if (wallet.getAvailableBalance() < command.getAmount()) {
+            throw new InsufficientAvailableBalanceException("지갑의 가용 잔액이 부족합니다.");
+        }
+        Long availableAfter = subtractExactly(
+                wallet.getAvailableBalance(),
+                command.getAmount(),
+                "지갑 출금 후 잔액이 허용 범위를 벗어났습니다."
+        );
+
+        // 계좌 소유권 preflight
+        bankTransferGateway.preflight(BankAccountPreflightCommand.builder()
+                .accountId(command.getLinkedAccountId())
+                .userId(command.getUserId())
+                .build());
+
+        // 이제 claim INSERT (FK S 잠금이 이미 잡은 X 뒤에 옴)
         WithdrawalOrderParam order = WithdrawalOrderParam.builder()
                 .userId(command.getUserId())
                 .walletId(walletId)
@@ -93,29 +118,7 @@ public class WithdrawalServiceImpl implements WithdrawalService {
             translateInvalidOrderReference(command, invalidOrder);
         }
 
-        bankTransferGateway.preflight(BankAccountPreflightCommand.builder()
-                .accountId(command.getLinkedAccountId())
-                .userId(command.getUserId())
-                .build());
-
-        // 전역 잠금 순서: 지갑 -> 계좌
-        WalletBalanceSnapshot wallet =
-                walletMapper.getWalletSnapshotForUpdate(command.getUserId());
-        if (wallet == null) {
-            throw new InvalidWalletStateException("지갑을 찾을 수 없습니다.");
-        }
-        validateWalletSnapshot(wallet, command.getUserId(), walletId);
-
-        // 잠금 잔액은 출금할 수 없다
-        if (wallet.getAvailableBalance() < command.getAmount()) {
-            throw new InsufficientAvailableBalanceException("지갑의 가용 잔액이 부족합니다.");
-        }
-        Long availableAfter = subtractExactly(
-                wallet.getAvailableBalance(),
-                command.getAmount(),
-                "지갑 출금 후 잔액이 허용 범위를 벗어났습니다."
-        );
-
+        // 계좌 입금
         BankTransferResult transfer = bankTransferGateway.deposit(BankTransferCommand.builder()
                 .accountId(command.getLinkedAccountId())
                 .userId(command.getUserId())

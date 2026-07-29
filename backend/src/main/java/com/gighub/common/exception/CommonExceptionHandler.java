@@ -11,13 +11,16 @@ import com.gighub.wallet.exception.InvalidEscrowStateException;
 import com.gighub.wallet.exception.InvalidFundingRequestException;
 import com.gighub.wallet.exception.InvalidIdempotencyKeyException;
 import com.gighub.wallet.exception.InvalidWalletStateException;
+import com.gighub.wallet.exception.InvalidWithdrawalRequestException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -108,6 +111,12 @@ public class CommonExceptionHandler {
         return body(400, "VALIDATION_FAILED", e.getMessage());
     }
 
+    @ExceptionHandler(InvalidWithdrawalRequestException.class)
+    public ResponseEntity<Map<String, Object>> handleInvalidWithdrawalRequest(
+            InvalidWithdrawalRequestException e) {
+        return body(400, "VALIDATION_FAILED", e.getMessage());
+    }
+
     /** 400 - @Valid 검증 실패. fieldErrors를 함께 반환한다 */
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<Map<String, Object>> handleValidation(MethodArgumentNotValidException e) {
@@ -122,6 +131,18 @@ public class CommonExceptionHandler {
         Map<String, Object> payload = base("VALIDATION_FAILED", "입력값을 확인해 주세요.");
         payload.put("fieldErrors", fieldErrors);
         return ResponseEntity.status(400).body(payload);
+    }
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<Map<String, Object>> handleTypeMismatch(
+            MethodArgumentTypeMismatchException e) {
+        return body(400, "VALIDATION_FAILED", "요청 파라미터 형식이 올바르지 않습니다.");
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<Map<String, Object>> handleNotReadable(
+            HttpMessageNotReadableException e) {
+        return body(400, "VALIDATION_FAILED", "요청 본문 형식이 올바르지 않습니다.");
     }
 
     /** 500 - 안전망. 내부 정보는 숨기고 traceId로 로그를 추적한다 */

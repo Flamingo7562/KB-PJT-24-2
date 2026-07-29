@@ -12,6 +12,7 @@ import javax.validation.constraints.Positive;
 @NoArgsConstructor
 public class WithdrawalRequest {
     @NotNull
+    @Positive
     private Long bankAccountId;
 
     @NotNull

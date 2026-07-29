@@ -30,6 +30,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -347,6 +348,69 @@ public class WithdrawalIntegrityDatabaseIntegrationTest {
             assertEquals(userId, snapshot.getUserId());
             assertNotNull(snapshot.getAvailableBalance());
             assertNotNull(snapshot.getLockedBalance());
+        }
+    }
+
+    @Test
+    @Timeout(20)
+    void concurrentDifferentKeySameWalletWithdrawalsDoNotDeadlock() throws Exception {
+        try (AnnotationConfigApplicationContext context =
+                     new AnnotationConfigApplicationContext(RootConfig.class)) {
+            JdbcTemplate jdbcTemplate = new JdbcTemplate(context.getBean(DataSource.class));
+            WithdrawalService withdrawalService = context.getBean(WithdrawalService.class);
+            WithdrawalFixture fixture = createWithdrawalFixture(jdbcTemplate);
+            ExecutorService executor = Executors.newFixedThreadPool(2);
+            CountDownLatch start = new CountDownLatch(1);
+
+            // 같은 지갑, 다른 멱등 키로 각각 1,000원 출금
+            WithdrawalCommand first = WithdrawalCommand.builder()
+                    .userId(fixture.userId())
+                    .linkedAccountId(fixture.accountId())
+                    .amount(1_000L)
+                    .idempotencyKey(fixture.idempotencyKey() + "-A")
+                    .build();
+            WithdrawalCommand second = WithdrawalCommand.builder()
+                    .userId(fixture.userId())
+                    .linkedAccountId(fixture.accountId())
+                    .amount(1_000L)
+                    .idempotencyKey(fixture.idempotencyKey() + "-B")
+                    .build();
+
+            try {
+                Future<WithdrawalResult> f1 = executor.submit(() -> {
+                    await(start);
+                    return withdrawalService.withdraw(first);
+                });
+                Future<WithdrawalResult> f2 = executor.submit(() -> {
+                    await(start);
+                    return withdrawalService.withdraw(second);
+                });
+                start.countDown();
+
+                // 데드락 없이 둘 다 완료되어야 한다 (재시도로 회복되더라도 예외 전파 없이)
+                WithdrawalResult r1 = f1.get(15, TimeUnit.SECONDS);
+                WithdrawalResult r2 = f2.get(15, TimeUnit.SECONDS);
+
+                assertEquals("COMPLETED", r1.getStatus());
+                assertEquals("COMPLETED", r2.getStatus());
+                assertNotEquals(r1.getWithdrawalRequestId(), r2.getWithdrawalRequestId());
+
+                // 서로 다른 출금 2건, 각 1,000원씩 총 2,000원 차감
+                assertEquals(2, count(jdbcTemplate,
+                        "SELECT COUNT(*) FROM withdrawal_requests WHERE user_id = ?",
+                        fixture.userId()));
+                assertEquals(8_000L, value(jdbcTemplate,
+                        "SELECT available_balance FROM wallets WHERE id = ?",
+                        fixture.walletId()));
+                assertEquals(2, count(jdbcTemplate,
+                        "SELECT COUNT(*) FROM wallet_transactions"
+                                + " WHERE wallet_id = ? AND transaction_type = 'WITHDRAWAL'",
+                        fixture.walletId()));
+            } finally {
+                executor.shutdownNow();
+                assertTrue(executor.awaitTermination(5, TimeUnit.SECONDS));
+                deleteWithdrawalFixture(jdbcTemplate, fixture);
+            }
         }
     }
 

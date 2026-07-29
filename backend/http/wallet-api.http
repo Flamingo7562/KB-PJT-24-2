@@ -48,3 +48,18 @@ Idempotency-Key: WDR-001
   "bankAccountId": 2,
   "amount": 300000
 }
+
+### bankAccountId=0 → 이제 400 VALIDATION_FAILED (기존 500)
+POST http://localhost:8080/api/wallet/withdrawal-requests
+Content-Type: application/json
+Idempotency-Key: TEST-VAL-01
+
+{"bankAccountId": 0, "amount": 1000}
+
+### page 타입 오류 → 400
+GET http://localhost:8080/api/wallet/transactions?page=abc
+
+### 잘못된 JSON → 400
+POST http://localhost:8080/api/wallet/withdrawal-requests
+Content-Type: application/json
+Idempotency-Key: TEST-VAL-02

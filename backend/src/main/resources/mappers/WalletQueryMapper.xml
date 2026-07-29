@@ -56,10 +56,10 @@
         <include refid="transactionConditions"/>
         <!-- 정렬 키는 서버가 매핑한다. 사용자 입력을 SQL에 직접 치환하지 않는다 (API-003) -->
         <choose>
-            <when test="sort == 'OLDEST'">ORDER BY wt.id ASC</when>
+            <when test="sort == 'OLDEST'">ORDER BY wt.created_at ASC, wt.id ASC</when>
             <when test="sort == 'AMOUNT_ASC'">ORDER BY wt.amount ASC, wt.id DESC</when>
             <when test="sort == 'AMOUNT_DESC'">ORDER BY wt.amount DESC, wt.id DESC</when>
-            <otherwise>ORDER BY wt.id DESC</otherwise>
+            <otherwise>ORDER BY wt.created_at DESC, wt.id DESC</otherwise>
         </choose>
         LIMIT #{size} OFFSET #{offset}
     </select>

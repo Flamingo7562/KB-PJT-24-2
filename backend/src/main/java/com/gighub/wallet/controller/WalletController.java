@@ -115,7 +115,7 @@ public class WalletController {
                 .maxAmount(maxAmount)
                 .keyword(trimmedKeyword)
                 .sort(sort)
-                .offset(page * size)
+                .offset((long)page * size)
                 .size(size)
                 .build();
 

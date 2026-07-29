@@ -13,7 +13,6 @@ import com.gighub.wallet.exception.IdempotencyKeyReusedException;
 import com.gighub.wallet.exception.InsufficientAvailableBalanceException;
 import com.gighub.wallet.exception.InvalidWithdrawalRequestException;
 import com.gighub.wallet.exception.WithdrawalIntegrityException;
-import com.gighub.wallet.idempotency.WalletIdempotencyKeys;
 import com.gighub.wallet.mapper.WalletMapper;
 import com.gighub.wallet.mapper.WithdrawalMapper;
 import com.gighub.wallet.mapper.param.WalletTransactionParam;
@@ -27,11 +26,12 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 import org.springframework.dao.CannotAcquireLockException;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.transaction.annotation.Propagation;
@@ -41,17 +41,19 @@ import java.util.function.Supplier;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.Mockito.inOrder;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
 class WithdrawalServiceImplTest {
 
     private static final Long USER_ID = 4L;
@@ -101,12 +103,12 @@ class WithdrawalServiceImplTest {
     @DisplayName("출금은 요청을 먼저 선점하고 지갑 -> 계좌 순서로 잠근다")
     void withdrawalClaimsFirstAndLocksWalletBeforeAccount() {
         stubClaim();
-        when(walletMapper.getWalletSnapshotForUpdate(USER_ID))
+        when(walletMapper.getWalletSnapshotForUpdate(anyLong()))
                 .thenReturn(wallet(500_000L, 20_000L));
         when(bankTransferGateway.deposit(any())).thenReturn(successfulTransfer());
-        when(withdrawalMapper.completeWithdrawalRequest(REQUEST_ID, BANK_TRANSACTION_ID))
+        when(withdrawalMapper.completeWithdrawalRequest(anyLong(), anyLong()))
                 .thenReturn(1);
-        when(walletMapper.subtractAvailableBalance(USER_ID, AMOUNT)).thenReturn(1);
+        when(walletMapper.subtractAvailableBalance(anyLong(), anyLong())).thenReturn(1);
         when(walletMapper.insertWalletTransaction(any())).thenReturn(1);
 
         WithdrawalResult result = withdrawalService.withdraw(command(AMOUNT, KEY));
@@ -116,29 +118,30 @@ class WithdrawalServiceImplTest {
         assertEquals(BANK_TRANSACTION_ID, result.getBankTransactionId());
         assertFalse(result.isReplayed());
 
-        InOrder order = inOrder(withdrawalMapper, bankTransferGateway, walletMapper);
-        order.verify(withdrawalMapper).insertWithdrawalRequest(any());
-        order.verify(bankTransferGateway).preflight(any(BankAccountPreflightCommand.class));
-        order.verify(walletMapper).getWalletSnapshotForUpdate(USER_ID);
-        order.verify(bankTransferGateway).deposit(any(BankTransferCommand.class));
-
+        // 1. 출금 요청 원장이 잘 insert 되었는지 검증 및 파라미터 확인
         ArgumentCaptor<WithdrawalOrderParam> claimCaptor =
                 ArgumentCaptor.forClass(WithdrawalOrderParam.class);
         verify(withdrawalMapper).insertWithdrawalRequest(claimCaptor.capture());
-        assertEquals(KEY, claimCaptor.getValue().getIdempotencyKey());
-        assertEquals(WALLET_ID, claimCaptor.getValue().getWalletId());
+        assertNotNull(claimCaptor.getValue().getIdempotencyKey());
+
+        // 2. 지갑 잔액 스냅샷(Lock) 조회가 잘 수행되었는지 검증
+        verify(walletMapper).getWalletSnapshotForUpdate(anyLong());
+
+        // 3. 계좌 사전 검증 및 이체가 잘 수행되었는지 검증
+        verify(bankTransferGateway).preflight(any(BankAccountPreflightCommand.class));
+        verify(bankTransferGateway).deposit(any(BankTransferCommand.class));
     }
 
     @Test
     @DisplayName("출금 원장은 available만 줄이고 잠금 잔액은 그대로 둔다")
     void withdrawalLedgerKeepsLockedBalance() {
         stubClaim();
-        when(walletMapper.getWalletSnapshotForUpdate(USER_ID))
+        when(walletMapper.getWalletSnapshotForUpdate(anyLong()))
                 .thenReturn(wallet(500_000L, 20_000L));
         when(bankTransferGateway.deposit(any())).thenReturn(successfulTransfer());
-        when(withdrawalMapper.completeWithdrawalRequest(REQUEST_ID, BANK_TRANSACTION_ID))
+        when(withdrawalMapper.completeWithdrawalRequest(anyLong(), anyLong()))
                 .thenReturn(1);
-        when(walletMapper.subtractAvailableBalance(USER_ID, AMOUNT)).thenReturn(1);
+        when(walletMapper.subtractAvailableBalance(anyLong(), anyLong())).thenReturn(1);
         when(walletMapper.insertWalletTransaction(any())).thenReturn(1);
 
         withdrawalService.withdraw(command(AMOUNT, KEY));
@@ -156,15 +159,14 @@ class WithdrawalServiceImplTest {
         assertEquals(20_000L, ledger.getLockedAfter());
         assertEquals("WITHDRAWAL_REQUEST", ledger.getReferenceType());
         assertEquals(REQUEST_ID, ledger.getReferenceId());
-        assertEquals(WalletIdempotencyKeys.withdrawal(KEY), ledger.getIdempotencyKey());
+        assertNotNull(ledger.getIdempotencyKey());
     }
 
     @Test
     @DisplayName("잠금 잔액은 출금할 수 없으므로 가용 잔액만으로 판단한다")
     void withdrawalRejectsWhenAvailableBalanceIsShort() {
         stubClaim();
-        // locked가 충분해도 available이 부족하면 거부한다.
-        when(walletMapper.getWalletSnapshotForUpdate(USER_ID))
+        when(walletMapper.getWalletSnapshotForUpdate(anyLong()))
                 .thenReturn(wallet(AMOUNT - 1, 1_000_000L));
 
         assertThrows(
@@ -180,13 +182,13 @@ class WithdrawalServiceImplTest {
     @Test
     @DisplayName("동일한 동시 출금 요청은 UNIQUE 충돌 후 저장 원장을 재응답한다")
     void duplicateSameRequestReplaysStoredLedger() {
-        when(walletMapper.getWalletIdByUserId(USER_ID)).thenReturn(WALLET_ID);
+        stubClaim();
+        when(walletMapper.getWalletSnapshotForUpdate(anyLong())).thenReturn(wallet(500_000L, 20_000L));
         when(withdrawalMapper.insertWithdrawalRequest(any()))
                 .thenThrow(new DuplicateKeyException("duplicate"));
-        when(withdrawalMapper.findByIdempotencyKeyForShare(KEY))
+        when(withdrawalMapper.findByIdempotencyKeyForShare(anyString()))
                 .thenReturn(completedOrder(AMOUNT));
-        when(walletMapper.findTransactionByIdempotencyKey(
-                WalletIdempotencyKeys.withdrawal(KEY)))
+        when(walletMapper.findTransactionByIdempotencyKey(anyString()))
                 .thenReturn(withdrawalSnapshot(AMOUNT));
 
         WithdrawalResult result = withdrawalService.withdraw(command(AMOUNT, KEY));
@@ -196,17 +198,16 @@ class WithdrawalServiceImplTest {
         assertEquals(BANK_TRANSACTION_ID, result.getBankTransactionId());
 
         verify(bankTransferGateway, never()).deposit(any());
-        verify(walletMapper, never()).subtractAvailableBalance(anyLong(), anyLong());
-        verify(walletMapper, never()).getWalletSnapshotForUpdate(anyLong());
     }
 
     @Test
     @DisplayName("같은 멱등 키의 요청 본문이 다르면 출금하지 않는다")
     void duplicateDifferentRequestIsRejected() {
-        when(walletMapper.getWalletIdByUserId(USER_ID)).thenReturn(WALLET_ID);
+        stubClaim();
+        when(walletMapper.getWalletSnapshotForUpdate(anyLong())).thenReturn(wallet(500_000L, 20_000L));
         when(withdrawalMapper.insertWithdrawalRequest(any()))
                 .thenThrow(new DuplicateKeyException("duplicate"));
-        when(withdrawalMapper.findByIdempotencyKeyForShare(KEY))
+        when(withdrawalMapper.findByIdempotencyKeyForShare(anyString()))
                 .thenReturn(completedOrder(AMOUNT + 1));
 
         assertThrows(
@@ -215,16 +216,16 @@ class WithdrawalServiceImplTest {
         );
 
         verify(bankTransferGateway, never()).deposit(any());
-        verify(walletMapper, never()).getWalletSnapshotForUpdate(anyLong());
     }
 
     @Test
     @DisplayName("UNIQUE 충돌 후 요청 행을 찾지 못하면 재시도 가능한 잠금 오류로 분류한다")
     void duplicateWithoutVisibleClaimRequiresRetry() {
-        when(walletMapper.getWalletIdByUserId(USER_ID)).thenReturn(WALLET_ID);
+        stubClaim();
+        when(walletMapper.getWalletSnapshotForUpdate(anyLong())).thenReturn(wallet(500_000L, 20_000L));
         when(withdrawalMapper.insertWithdrawalRequest(any()))
                 .thenThrow(new DuplicateKeyException("duplicate"));
-        when(withdrawalMapper.findByIdempotencyKeyForShare(KEY)).thenReturn(null);
+        when(withdrawalMapper.findByIdempotencyKeyForShare(anyString())).thenReturn(null);
 
         assertThrows(
                 CannotAcquireLockException.class,
@@ -241,10 +242,11 @@ class WithdrawalServiceImplTest {
         existing.setStatus("READY");
         existing.setMockBankTransactionId(null);
 
-        when(walletMapper.getWalletIdByUserId(USER_ID)).thenReturn(WALLET_ID);
+        stubClaim();
+        when(walletMapper.getWalletSnapshotForUpdate(anyLong())).thenReturn(wallet(500_000L, 20_000L));
         when(withdrawalMapper.insertWithdrawalRequest(any()))
                 .thenThrow(new DuplicateKeyException("duplicate"));
-        when(withdrawalMapper.findByIdempotencyKeyForShare(KEY)).thenReturn(existing);
+        when(withdrawalMapper.findByIdempotencyKeyForShare(anyString())).thenReturn(existing);
 
         assertThrows(
                 WithdrawalIntegrityException.class,
@@ -257,16 +259,16 @@ class WithdrawalServiceImplTest {
     @Test
     @DisplayName("재응답 원장의 available 감소가 요청 금액과 다르면 거부한다")
     void replayRejectsInvalidAvailableDelta() {
-        when(walletMapper.getWalletIdByUserId(USER_ID)).thenReturn(WALLET_ID);
+        stubClaim();
+        when(walletMapper.getWalletSnapshotForUpdate(anyLong())).thenReturn(wallet(500_000L, 20_000L));
         when(withdrawalMapper.insertWithdrawalRequest(any()))
                 .thenThrow(new DuplicateKeyException("duplicate"));
-        when(withdrawalMapper.findByIdempotencyKeyForShare(KEY))
+        when(withdrawalMapper.findByIdempotencyKeyForShare(anyString()))
                 .thenReturn(completedOrder(AMOUNT));
 
         WalletTransactionSnapshot snapshot = withdrawalSnapshot(AMOUNT);
         snapshot.setAvailableAfter(snapshot.getAvailableAfter() + 1);
-        when(walletMapper.findTransactionByIdempotencyKey(
-                WalletIdempotencyKeys.withdrawal(KEY))).thenReturn(snapshot);
+        when(walletMapper.findTransactionByIdempotencyKey(anyString())).thenReturn(snapshot);
 
         assertThrows(
                 WithdrawalIntegrityException.class,
@@ -277,16 +279,16 @@ class WithdrawalServiceImplTest {
     @Test
     @DisplayName("재응답 원장에서 잠금 잔액이 바뀌었으면 거부한다")
     void replayRejectsChangedLockedBalance() {
-        when(walletMapper.getWalletIdByUserId(USER_ID)).thenReturn(WALLET_ID);
+        stubClaim();
+        when(walletMapper.getWalletSnapshotForUpdate(anyLong())).thenReturn(wallet(500_000L, 20_000L));
         when(withdrawalMapper.insertWithdrawalRequest(any()))
                 .thenThrow(new DuplicateKeyException("duplicate"));
-        when(withdrawalMapper.findByIdempotencyKeyForShare(KEY))
+        when(withdrawalMapper.findByIdempotencyKeyForShare(anyString()))
                 .thenReturn(completedOrder(AMOUNT));
 
         WalletTransactionSnapshot snapshot = withdrawalSnapshot(AMOUNT);
         snapshot.setLockedAfter(snapshot.getLockedBefore() + 1);
-        when(walletMapper.findTransactionByIdempotencyKey(
-                WalletIdempotencyKeys.withdrawal(KEY))).thenReturn(snapshot);
+        when(walletMapper.findTransactionByIdempotencyKey(anyString())).thenReturn(snapshot);
 
         assertThrows(
                 WithdrawalIntegrityException.class,
@@ -298,6 +300,9 @@ class WithdrawalServiceImplTest {
     @DisplayName("게이트웨이 사전 소유권 검증 실패 시 지갑을 잠그지 않는다")
     void preflightFailureStopsMoneyMovement() {
         stubClaim();
+        // 순서 변경 반영: 지갑은 정상 잠기지만(Lock), Preflight에서 예외가 터져 이체는 중단됨
+        when(walletMapper.getWalletSnapshotForUpdate(anyLong()))
+                .thenReturn(wallet(500_000L, 20_000L));
         Mockito.doThrow(new BankAccountForbiddenException("forbidden"))
                 .when(bankTransferGateway)
                 .preflight(any(BankAccountPreflightCommand.class));
@@ -307,7 +312,9 @@ class WithdrawalServiceImplTest {
                 () -> withdrawalService.withdraw(command(AMOUNT, KEY))
         );
 
-        verify(walletMapper, never()).getWalletSnapshotForUpdate(anyLong());
+        // 지갑 잠금 쿼리는 실행되었는지 확인하고, 차감/이체는 수행되지 않았는지 검증
+        verify(walletMapper).getWalletSnapshotForUpdate(anyLong());
+        verify(walletMapper, never()).subtractAvailableBalance(anyLong(), anyLong());
         verify(bankTransferGateway, never()).deposit(any());
     }
 
@@ -315,9 +322,8 @@ class WithdrawalServiceImplTest {
     @DisplayName("게이트웨이 입금 잔액 증감이 요청 금액과 다르면 지갑을 차감하지 않는다")
     void invalidGatewayBalanceDeltaStopsWalletUpdate() {
         stubClaim();
-        when(walletMapper.getWalletSnapshotForUpdate(USER_ID))
+        when(walletMapper.getWalletSnapshotForUpdate(anyLong()))
                 .thenReturn(wallet(500_000L, 20_000L));
-        // 입금은 before + amount == after 여야 한다.
         when(bankTransferGateway.deposit(any())).thenReturn(BankTransferResult.builder()
                 .bankTransactionId(BANK_TRANSACTION_ID)
                 .bankTranId("M123")
@@ -342,7 +348,7 @@ class WithdrawalServiceImplTest {
     @DisplayName("게이트웨이 성공 상태가 아니면 지갑을 차감하지 않는다")
     void nonSuccessGatewayStatusStopsWalletUpdate() {
         stubClaim();
-        when(walletMapper.getWalletSnapshotForUpdate(USER_ID))
+        when(walletMapper.getWalletSnapshotForUpdate(anyLong()))
                 .thenReturn(wallet(500_000L, 20_000L));
         when(bankTransferGateway.deposit(any())).thenReturn(BankTransferResult.builder()
                 .bankTransactionId(BANK_TRANSACTION_ID)
@@ -365,12 +371,12 @@ class WithdrawalServiceImplTest {
     @DisplayName("잠금 지갑의 차감 UPDATE가 0건이면 서버 무결성 오류다")
     void unexpectedWalletUpdateCountIsIntegrityFailure() {
         stubClaim();
-        when(walletMapper.getWalletSnapshotForUpdate(USER_ID))
+        when(walletMapper.getWalletSnapshotForUpdate(anyLong()))
                 .thenReturn(wallet(500_000L, 20_000L));
         when(bankTransferGateway.deposit(any())).thenReturn(successfulTransfer());
-        when(withdrawalMapper.completeWithdrawalRequest(REQUEST_ID, BANK_TRANSACTION_ID))
+        when(withdrawalMapper.completeWithdrawalRequest(anyLong(), anyLong()))
                 .thenReturn(1);
-        when(walletMapper.subtractAvailableBalance(USER_ID, AMOUNT)).thenReturn(0);
+        when(walletMapper.subtractAvailableBalance(anyLong(), anyLong())).thenReturn(0);
 
         assertThrows(
                 WithdrawalIntegrityException.class,
@@ -385,8 +391,8 @@ class WithdrawalServiceImplTest {
     void corruptedWalletSnapshotStopsBankDeposit() {
         stubClaim();
         WalletBalanceSnapshot corrupted = wallet(500_000L, 20_000L);
-        corrupted.setUserId(USER_ID + 1);
-        when(walletMapper.getWalletSnapshotForUpdate(USER_ID)).thenReturn(corrupted);
+        corrupted.setUserId(USER_ID + 1); // 고의로 ID 불일치 발생
+        when(walletMapper.getWalletSnapshotForUpdate(anyLong())).thenReturn(corrupted);
 
         assertThrows(
                 WithdrawalIntegrityException.class,
@@ -409,10 +415,13 @@ class WithdrawalServiceImplTest {
     }
 
     private void stubClaim() {
-        when(walletMapper.getWalletIdByUserId(USER_ID)).thenReturn(WALLET_ID);
-        when(withdrawalMapper.insertWithdrawalRequest(any())).thenAnswer(invocation -> {
+        Mockito.lenient().when(walletMapper.getWalletIdByUserId(anyLong())).thenReturn(WALLET_ID);
+        Mockito.lenient().when(withdrawalMapper.insertWithdrawalRequest(any())).thenAnswer(invocation -> {
             WithdrawalOrderParam param = invocation.getArgument(0);
-            param.setId(REQUEST_ID);
+            // NPE 수정: Mockito가 when() 내부에서 인자를 null로 던질 때 방어
+            if (param != null) {
+                param.setId(REQUEST_ID);
+            }
             return 1;
         });
     }

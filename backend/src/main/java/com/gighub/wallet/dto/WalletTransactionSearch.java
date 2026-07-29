@@ -18,6 +18,6 @@ public class WalletTransactionSearch {
     private final Long maxAmount;
     private final String keyword;
     private final String sort;
-    private final int offset;
+    private final long offset;
     private final int size;
 }
