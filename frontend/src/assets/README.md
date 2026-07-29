@@ -2,22 +2,14 @@
 
 프론트 공통 자산(스타일 변수 · 폰트 · 로고 · 이미지) 폴더입니다.
 이 폴더는 이미 `frontend/src/assets/` 에 놓여 있고 `src/main.js` 에서 불러오도록
-연결까지 끝나 있습니다. **팀원은 아래 "팀원 준비" 3줄만 하면 바로 씁니다.**
+연결까지 끝나 있습니다.
 
-## 팀원 준비 (딱 3가지)
+## 사용 전 확인
 
-```powershell
-Set-Location frontend
-npm ci                    # 1) 기본 의존성 설치 (package-lock 기준)
-npm install lucide-vue-next   # 2) 아이콘 라이브러리 (에셋 맵에서 사용)
-```
-
-3. 끝. 전역 스타일·폰트는 이미 `main.js` 에서 불러오므로 추가 작업이 없습니다.
-   - `src/main.js` 에 `import '@/assets/main.css'` 가 이미 있습니다.
-   - 폰트(Pretendard)는 `fonts/` 에 파일이 함께 커밋되어 있어 **다운로드가 필요 없습니다.**
-
-> SVG 로고에 CSS 색을 입히려면(권장) 추가로 아래 한 줄이 필요합니다. (§로고 참고)
-> `npm install -D vite-svg-loader`
+- 최초 설치는 [Frontend README](../../README.md)에 따라 `npm ci`만 실행합니다.
+- `lucide-vue-next`와 `vite-svg-loader`는 이미 `package.json`과 lockfile에 포함되어 있으므로 개별 설치하지 않습니다.
+- `src/main.js`는 `@/assets/main.css`를 이미 불러옵니다.
+- Pretendard 파일도 `fonts/`에 포함되어 있어 별도 다운로드가 필요 없습니다.
 
 ## 폴더 구성
 
@@ -111,16 +103,9 @@ import LogoGighub from '@/assets/images/logo/logo-gighub.svg'
 
 > `.svg`를 위처럼 **컴포넌트로 import** 하려면 `vite-svg-loader` 가 필요합니다.
 >
-> 1. `npm install -D vite-svg-loader`
-> 2. `frontend/vite.config.js` 의 `plugins` 에 추가:
+> 현재 `vite-svg-loader`는 직접 의존성과 `frontend/vite.config.js`의 plugin으로 이미 설정되어 있습니다.
 >
-> ```js
-> import svgLoader from 'vite-svg-loader'
-> // ...
-> plugins: [vue(), svgLoader()],
-> ```
->
-> 설치가 부담되면 `<img src="@/assets/images/logo/logo-gighub.svg">` 로도 되지만
+> SVG를 컴포넌트로 제어할 필요가 없다면 `<img src="@/assets/images/logo/logo-gighub.svg">` 로도 사용할 수 있지만
 > 이땐 CSS 로 색을 못 바꿉니다(사장/알바생 2색 불가).
 
 **어디서 구하나:** 로고는 우리 브랜드라 다운로드가 아니라 **직접 제작**입니다(Figma에서
@@ -135,7 +120,7 @@ import LogoGighub from '@/assets/images/logo/logo-gighub.svg'
 
 ## 아이콘 — lucide 라이브러리 (역할 무관 재사용, 색만 CSS)
 
-`npm install lucide-vue-next` 로 설치합니다. 바텀 네비·헤더·상태 아이콘은 파일로
+`lucide-vue-next`는 현재 Frontend 직접 의존성입니다. 바텀 네비·헤더·상태 아이콘은 파일로
 관리하지 않고 lucide 컴포넌트로 씁니다.
 **사장·알바생이 겹치는 아이콘(문서함·QR 등)은 같은 컴포넌트를 재사용하고, 색은
 활성/비활성 상태에 따라 CSS로만 바꿉니다.** (역할별로 아이콘을 복제하지 마세요.)
