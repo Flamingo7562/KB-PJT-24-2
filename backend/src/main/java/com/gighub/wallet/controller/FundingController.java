@@ -1,5 +1,6 @@
 package com.gighub.wallet.controller;
 
+import com.gighub.common.exception.AuthRequiredException;
 import com.gighub.wallet.service.FundingService;
 import com.gighub.wallet.service.command.FundingCommand;
 import com.gighub.wallet.service.result.FundingResult;
@@ -32,8 +33,7 @@ public class FundingController {
             HttpSession session) {
         Long loginUserId = (Long) session.getAttribute(LOGIN_USER);
         if (loginUserId == null) {
-            return ResponseEntity.status(401)
-                    .body(Map.of("code", "AUTH_REQUIRED", "message", "로그인이 필요합니다."));
+            throw new AuthRequiredException("로그인이 필요합니다.");
         }
 
         FundingResult result = fundingService.fund(FundingCommand.builder()

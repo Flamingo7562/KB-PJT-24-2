@@ -1,5 +1,6 @@
 package com.gighub.wallet.controller;
 
+import com.gighub.common.exception.AuthRequiredException;
 import com.gighub.wallet.dto.WalletSummary;
 import com.gighub.wallet.dto.WalletTransactionSearch;
 import com.gighub.wallet.dto.WalletTransactionView;
@@ -37,8 +38,7 @@ public class WalletController {
     public ResponseEntity<Map<String, Object>> getWallet(HttpSession session){
         Long loginUserId = (Long) session.getAttribute(LOGIN_USER);
         if (loginUserId == null) {
-            return ResponseEntity.status(401)
-                    .body(Map.of("code", "AUTH_REQUIRED", "message", "로그인이 필요합니다."));
+            throw new AuthRequiredException("로그인이 필요합니다.");
         }
 
         WalletSummary summary = walletQueryMapper.findWalletSummaryByUserId(loginUserId);

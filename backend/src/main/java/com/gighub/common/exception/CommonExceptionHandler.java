@@ -145,6 +145,11 @@ public class CommonExceptionHandler {
         return body(400, "VALIDATION_FAILED", "요청 본문 형식이 올바르지 않습니다.");
     }
 
+    @ExceptionHandler(AuthRequiredException.class)
+    public ResponseEntity<Map<String, Object>> handleAuthRequired(AuthRequiredException e) {
+        return body(401, "AUTH_REQUIRED", e.getMessage());
+    }
+
     /** 500 - 안전망. 내부 정보는 숨기고 traceId로 로그를 추적한다 */
     @ExceptionHandler(RuntimeException.class)
     public ResponseEntity<Map<String, Object>> handleRuntime(RuntimeException e) {

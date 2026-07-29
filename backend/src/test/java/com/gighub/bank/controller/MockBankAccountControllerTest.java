@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.gighub.bank.dto.BankAccountSummary;
 import com.gighub.bank.mapper.MockBankQueryMapper;
+import com.gighub.common.exception.CommonExceptionHandler;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -52,6 +53,7 @@ class MockBankAccountControllerTest {
                 new MappingJackson2HttpMessageConverter(objectMapper);
         mockMvc = MockMvcBuilders
                 .standaloneSetup(new MockBankAccountController(mockBankQueryMapper))
+                .setControllerAdvice(new CommonExceptionHandler())
                 .setMessageConverters(converter)
                 .build();
 

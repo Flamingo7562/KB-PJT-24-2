@@ -2,6 +2,7 @@ package com.gighub.wallet.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import com.gighub.common.exception.CommonExceptionHandler;
 import com.gighub.wallet.dto.WalletSummary;
 import com.gighub.wallet.dto.WalletTransactionSearch;
 import com.gighub.wallet.dto.WalletTransactionView;
@@ -55,6 +56,7 @@ class WalletControllerTest {
                 new MappingJackson2HttpMessageConverter(objectMapper);
         mockMvc = MockMvcBuilders
                 .standaloneSetup(new WalletController(walletQueryMapper))
+                .setControllerAdvice(new CommonExceptionHandler())
                 .setMessageConverters(converter)
                 .build();
 

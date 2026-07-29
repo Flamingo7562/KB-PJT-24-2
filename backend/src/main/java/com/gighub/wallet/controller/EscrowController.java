@@ -1,5 +1,6 @@
 package com.gighub.wallet.controller;
 
+import com.gighub.common.exception.AuthRequiredException;
 import com.gighub.settlement.dto.SettlementApproveResponse;
 import com.gighub.settlement.service.SettlementService;
 import com.gighub.settlement.service.command.SettlementApproveCommand;
@@ -39,8 +40,7 @@ public class EscrowController {
 
         Long loginUserId = (Long) session.getAttribute(LOGIN_USER);
         if (loginUserId == null) {
-            return ResponseEntity.status(401)
-                    .body(Map.of("code", "AUTH_REQUIRED", "message", "로그인이 필요합니다."));
+            throw new AuthRequiredException("로그인이 필요합니다.");
         }
         // 예치는 근로자가 수락하는 시점이므로 workerId와 대조한다.
         if (!loginUserId.equals(request.getWorkerId())) {
@@ -68,8 +68,7 @@ public class EscrowController {
 
         Long loginUserId = (Long) session.getAttribute(LOGIN_USER);
         if (loginUserId == null) {
-            return ResponseEntity.status(401)
-                    .body(Map.of("code", "AUTH_REQUIRED", "message", "로그인이 필요합니다."));
+            throw new AuthRequiredException("로그인이 필요합니다.");
         }
 
         SettlementResult result =

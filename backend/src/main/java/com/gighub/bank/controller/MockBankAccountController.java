@@ -2,6 +2,7 @@ package com.gighub.bank.controller;
 
 import com.gighub.bank.dto.BankAccountSummary;
 import com.gighub.bank.mapper.MockBankQueryMapper;
+import com.gighub.common.exception.AuthRequiredException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -29,8 +30,7 @@ public class MockBankAccountController {
             HttpSession session) {
         Long loginUserId = (Long) session.getAttribute(LOGIN_USER);
         if (loginUserId == null) {
-            return ResponseEntity.status(401)
-                    .body(Map.of("code", "AUTH_REQUIRED", "message", "로그인이 필요합니다."));
+            throw new AuthRequiredException("로그인이 필요합니다.");
         }
 
         if (status != null && !STATUS_ACTIVE.equals(status)) {

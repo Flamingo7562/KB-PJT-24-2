@@ -3,6 +3,7 @@ package com.gighub.wallet.controller;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import com.gighub.common.exception.CommonExceptionHandler;
 import com.gighub.settlement.service.SettlementService;
 import com.gighub.settlement.service.command.SettlementApproveCommand;
 import com.gighub.settlement.service.result.SettlementResult;
@@ -52,6 +53,7 @@ class EscrowControllerTest {
                         escrowService,
                         settlementService
                 ))
+                .setControllerAdvice(new CommonExceptionHandler())
                 .setMessageConverters(
                         new MappingJackson2HttpMessageConverter(objectMapper)
                 )
