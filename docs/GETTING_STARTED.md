@@ -14,13 +14,13 @@ cd KB-PJT-24-2
 루트 `package.json`은 Husky와 공통 검사 스크립트를 관리합니다.
 
 ```sh
-npm install
+npm ci
 ```
 
 Windows PowerShell에서 `npm.ps1` 실행 정책 오류가 나면 `npm.cmd`를 사용합니다.
 
 ```sh
-npm.cmd install
+npm.cmd ci
 ```
 
 ## 3. Husky 활성화
@@ -46,7 +46,7 @@ git config --get core.hooksPath
 정상 결과:
 
 ```text
-.husky
+.husky/_
 ```
 
 ## 4. 커밋 메시지 템플릿 설정
@@ -184,5 +184,4 @@ Refs #12
 - [Monorepo 구조 가이드](MONOREPO_STRUCTURE_GUIDE.md)
 - [이슈 작성 템플릿 가이드](ISSUE_WRITING_GUIDE.md)
 - [커밋 컨벤션](COMMIT_CONVENTION.md)
-- [Git Hook 및 Husky 가이드](GIT_HOOKS_HUSKY_GUIDE.md)
-- [Lint 가이드](LINT_GUIDE.md)
+- [Lint, 검증 및 Git Hook 가이드](GIT_HOOKS_HUSKY_GUIDE.md)

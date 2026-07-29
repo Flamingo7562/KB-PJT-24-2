@@ -75,9 +75,9 @@ DB 스키마의 단일 원본은 `backend/src/main/resources/db/migration/V*.sql
 
 ### 코드 품질과 Hook
 
-| 작업            | 먼저 읽을 문서                                                                           |
-| --------------- | ---------------------------------------------------------------------------------------- |
-| Lint와 Git Hook | [`LINT_GUIDE.md`](LINT_GUIDE.md), [`GIT_HOOKS_HUSKY_GUIDE.md`](GIT_HOOKS_HUSKY_GUIDE.md) |
+| 작업                    | 먼저 읽을 문서                                         |
+| ----------------------- | ------------------------------------------------------ |
+| Lint·Guardrail·Git Hook | [`GIT_HOOKS_HUSKY_GUIDE.md`](GIT_HOOKS_HUSKY_GUIDE.md) |
 
 ## 작업별 참고 문서
 

@@ -1,12 +1,19 @@
+> [!WARNING]
+> 이 문서는 현재 개발 기준이 아닌 보관 문서입니다.
+>
+> - 보관일: 2026-07-29
+> - 보관 사유: Lint, staged Format, Hook과 PR 전 검증 기준을 하나의 현재 문서로 통합함
+> - 현재 문서: [`../GIT_HOOKS_HUSKY_GUIDE.md`](../GIT_HOOKS_HUSKY_GUIDE.md)
+
 # Lint 가이드
 
 이 프로젝트는 프론트엔드와 백엔드 lint를 각각의 생태계 도구로 관리합니다.
 
-| 영역 | 도구 | 실행 기준 |
-| --- | --- | --- |
+| 영역     | 도구                                | 실행 기준               |
+| -------- | ----------------------------------- | ----------------------- |
 | Frontend | ESLint, eslint-plugin-vue, Prettier | `frontend/package.json` |
-| Backend | Gradle `check`, Checkstyle | `backend/build.gradle` |
-| 공통 | Husky, root npm scripts | 루트 `package.json` |
+| Backend  | Gradle `check`, Checkstyle          | `backend/build.gradle`  |
+| 공통     | Husky, root npm scripts             | 루트 `package.json`     |
 
 ## 루트 명령
 
@@ -102,13 +109,13 @@ npm run check:precommit
 
 이 명령은 항상 staged Guardrail과 `lint-staged`를 먼저 실행한 뒤 다음처럼 애플리케이션 검사 범위를 선택합니다.
 
-| 변경 범위                           | 애플리케이션 검사                      |
-| ----------------------------------- | -------------------------------------- |
-| 문서·GitHub 템플릿·메타데이터만    | 생략                                   |
-| Frontend 애플리케이션 파일          | Frontend ESLint                        |
-| Backend 애플리케이션 파일           | Backend Gradle `check`                 |
-| 두 영역의 애플리케이션 파일         | 두 영역 모두                           |
-| 공통 Hook·스크립트·알 수 없는 경로 | 하네스 테스트와 두 영역 모두           |
+| 변경 범위                          | 애플리케이션 검사            |
+| ---------------------------------- | ---------------------------- |
+| 문서·GitHub 템플릿·메타데이터만    | 생략                         |
+| Frontend 애플리케이션 파일         | Frontend ESLint              |
+| Backend 애플리케이션 파일          | Backend Gradle `check`       |
+| 두 영역의 애플리케이션 파일        | 두 영역 모두                 |
+| 공통 Hook·스크립트·알 수 없는 경로 | 하네스 테스트와 두 영역 모두 |
 
 Prettier는 `lint-staged`를 통해 스테이징된 파일만 수정하고 변경 결과를 같은 커밋에 다시
 포함합니다. 프로젝트 전체 `format:check`는 필요할 때 수동으로 실행하는 선택 검사이며,
