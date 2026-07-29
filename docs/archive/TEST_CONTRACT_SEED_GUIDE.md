@@ -1,5 +1,12 @@
 # 테스트 근로계약·에스크로 Seed 사용법
 
+> [!WARNING]
+> 이 문서는 현재 개발 기준이 아닌 보관 문서입니다.
+>
+> - 보관일: 2026-07-29
+> - 보관 사유: 현재 Seed 실행법과 안전 기준을 DB Runbook으로 통합함
+> - 현재 문서: [`DATABASE_RUNBOOK.md`](../runbooks/DATABASE_RUNBOOK.md), [`test-contract-escrow.sql`](../../backend/src/test/resources/db/seed/test-contract-escrow.sql)
+
 이 Seed는 이슈 #17의 합성 데이터만 생성하거나 초기 상태로 되돌립니다. 실제 개인정보·계좌정보는 포함하지 않습니다. 사장님과 근로자 계정, 사업장, 근로계약, 지갑 원장, 300,000원 에스크로와 대기 중 정산을 한 번에 준비합니다.
 
 ## 실행

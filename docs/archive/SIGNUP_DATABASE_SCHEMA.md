@@ -1,5 +1,12 @@
 # 회원가입·사업장 데이터베이스 스키마
 
+> [!WARNING]
+> 이 문서는 현재 개발 기준이 아닌 보관 문서입니다.
+>
+> - 보관일: 2026-07-29
+> - 보관 사유: 이슈 #17의 상세 설계와 미확정 API 보완안은 현재 Migration·스키마 요약과 역할이 중복됨
+> - 현재 문서: [`SCHEMA_OVERVIEW.md`](../agent/SCHEMA_OVERVIEW.md), [`V202607211440__add_signup_and_workplace_schema.sql`](../../backend/src/main/resources/db/migration/V202607211440__add_signup_and_workplace_schema.sql)
+
 ## 목적과 범위
 
 이 문서는 이슈 #17의 회원가입 화면과 API 명세를 기준으로 회원, Mock 계좌, 사장님의 복수 사업장과 근무 건 연결에 필요한 MySQL 스키마를 정의합니다. 적용 Migration은 `backend/src/main/resources/db/migration/V202607211440__add_signup_and_workplace_schema.sql`입니다.
