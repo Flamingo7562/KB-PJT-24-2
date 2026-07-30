@@ -17,6 +17,10 @@ import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
  * 요구한다. 이 설정 이후 지갑·에스크로 등 기존 API도 세션 쿠키 없이 호출하면
  * 401을 받는다 — 로그인 흐름(#71 후속 브랜치)이 준비되기 전까지는 통합 테스트
  * 관점에서 예상된 동작이다.</p>
+ *
+ * <p>{@code /api/test-login/**}({@link com.gighub.support.TestLoginController},
+ * {@code @Profile("local")})도 공개한다 — local 프로파일 밖에서는 컨트롤러 빈 자체가
+ * 없어 경로가 존재하지 않으므로 다른 환경에는 영향이 없다.</p>
  */
 @Configuration
 @EnableWebSecurity
@@ -63,6 +67,7 @@ public class SecurityConfig {
             .authorizeHttpRequests(authorize -> authorize
                 .requestMatchers(PUBLIC_AUTH_PATHS).permitAll()
                 .requestMatchers("/api/health/**").permitAll()
+                .requestMatchers("/api/test-login/**").permitAll()
                 .anyRequest().authenticated());
 
         return http.build();

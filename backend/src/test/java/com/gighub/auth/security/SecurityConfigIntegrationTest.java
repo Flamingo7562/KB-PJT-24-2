@@ -78,4 +78,12 @@ class SecurityConfigIntegrationTest {
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value("AUTH_REQUIRED"));
     }
+
+    @Test
+    void testLoginPathPassesThroughSecurityLayerWithoutAuth() throws Exception {
+        // local 프로파일이 꺼져 있어 TestLoginController 빈 자체가 없으므로 404가 정상이다.
+        // 여기서 확인하려는 건 그 이전 단계 — Security가 401/403으로 먼저 막지 않는지다.
+        mockMvc.perform(get("/api/test-login/1"))
+                .andExpect(status().isNotFound());
+    }
 }
