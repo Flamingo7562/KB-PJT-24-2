@@ -4,7 +4,7 @@
  * 근태 현황(채용중·근무중) + 근무 리스트(최신순·검색) + '근무 포지션 추가'(→ /owner/attendance/work-cases/new).
  * 지점 컨텍스트: useWorkplaceStore().selectedId 기준.
  * 연계 API: GET /workplaces/{id}/work-cases/summary · GET /workplaces/{id}/work-cases
- *          POST /work-cases/{id}/invitations (매칭전 항목의 연결 링크 복사)
+ *          POST /work-cases/{id}/invitations (수락 전 항목의 연결 링크 발급·복사)
  *   →  @/services/workCases (getWorkCaseSummary, listWorkCases, createInvite)
  * 공통: StatusChip(근무 상태) · EmptyState · 항목 클릭 → /owner/attendance/work-cases/:workCaseId
  *
@@ -49,7 +49,7 @@ const summary = ref(emptyWorkCaseSummary())
 const workCases = ref([])
 const loading = ref(false)
 const keyword = ref('')
-const statusFilter = ref(null) // null(전체) | 8단계 상태 enum 중 하나(요약 카드 선택)
+const statusFilter = ref(null) // null(전체) | 7단계 상태 enum 중 하나(요약 카드 선택)
 
 /* ---- 보기 방식(목록형 ↔ 캘린더) ------------------------------------------ */
 
@@ -172,6 +172,9 @@ async function onCopyInvite(workCaseId) {
   copyingId.value = workCaseId
   try {
     const { inviteUrl } = await createInvite(workCaseId)
+    const issuedWorkCase = workCases.value.find((workCase) => workCase.workCaseId === workCaseId)
+    if (issuedWorkCase) issuedWorkCase.canIssueInvitation = false
+
     if (await copyText(inviteUrl)) {
       ui.toast('연결 링크를 복사했어요.', { type: 'success' })
     } else {

@@ -14,7 +14,6 @@
 import { Link2 } from 'lucide-vue-next'
 
 import StatusChip from '@/components/common/StatusChip.vue'
-import { isDraft } from '@/constants/workCaseStatus'
 import { formatDate, formatTimeRange } from '@/utils/format'
 
 defineProps({
@@ -46,16 +45,16 @@ const emit = defineEmits(['select', 'copy-invite'])
         </p>
       </button>
 
-      <!-- 작성중(DRAFT)에서만 연결 링크를 복사할 수 있게 하는 버튼 — 확정 후에는 서버가 링크 생성을 막는다 -->
+      <!-- 서버가 계산한 capability가 true일 때만 일회성 연결 링크를 새로 발급한다. -->
       <button
-        v-if="isDraft(workCase.status)"
+        v-if="workCase.canIssueInvitation === true"
         type="button"
         class="copy-btn"
         :disabled="copyingId === workCase.workCaseId"
         @click="emit('copy-invite', workCase.workCaseId)"
       >
         <Link2 :size="14" />
-        {{ copyingId === workCase.workCaseId ? '링크 만드는 중…' : '연결 링크 복사' }}
+        {{ copyingId === workCase.workCaseId ? '링크 만드는 중…' : '연결 링크 발급·복사' }}
       </button>
     </li>
   </ul>
@@ -84,7 +83,7 @@ const emit = defineEmits(['select', 'copy-invite'])
   padding: var(--space-md) var(--space-lg);
   text-align: left;
 }
-/* 카드 하단 액션 — 매칭전 근무의 연결 링크 복사 */
+/* 카드 하단 액션 — 수락 전 근무의 연결 링크 발급·복사 */
 .copy-btn {
   display: flex;
   align-items: center;

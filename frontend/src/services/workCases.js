@@ -1,8 +1,8 @@
 /**
  * 근무(work_case) API 서비스 — 사장 근태관리 + 근무 상세/정산/신고.
  *
- * 상태 전이(8단계, @/constants/workCaseStatus):
- *   DRAFT→INVITED→ACCEPTED→READY→IN_PROGRESS→COMPLETED / 확정 계열 NO_SHOW / CANCELED.
+ * 상태 전이(7단계, @/constants/workCaseStatus):
+ *   DRAFT→ACCEPTED→READY→IN_PROGRESS→COMPLETED / 확정 계열 NO_SHOW / CANCELED.
  * 수정·삭제·링크생성은 DRAFT 에서만(확정 후 409 WORK_CASE_LOCKED). 정산은 HOLD 일 때만(멱등).
  *
  * 관련 API(명세 WORK-001~006, INVITE-001, SETTLE-002, CONTACT-001, DISPUTE-001/002):
@@ -20,7 +20,8 @@ import http, { idempotentPost } from '@/services/http'
 const USE_MOCK = true
 
 // 지점별 근무 목록. 실제 API 처럼 workplaceId·keyword 로 걸러서 응답한다.
-// status 는 8단계 enum(@/constants/workCaseStatus). 요약 6버킷을 골고루 보이도록 구성.
+// status 는 7단계 enum(@/constants/workCaseStatus). 요약 6버킷을 골고루 보이도록 구성.
+// canIssueInvitation은 status와 활성 work_invitations를 함께 본 서버 계산 capability다.
 const mockWorkCaseList = [
   {
     workCaseId: 101,
@@ -42,7 +43,8 @@ const mockWorkCaseList = [
     startTime: '09:00',
     endTime: '15:00',
     status: 'DRAFT',
-    matched: false
+    matched: false,
+    canIssueInvitation: true
   },
   {
     workCaseId: 103,
@@ -63,8 +65,9 @@ const mockWorkCaseList = [
     workDate: '2026-07-25',
     startTime: '17:00',
     endTime: '22:00',
-    status: 'INVITED',
-    matched: false
+    status: 'DRAFT',
+    matched: false,
+    canIssueInvitation: false
   },
   {
     workCaseId: 105,
@@ -85,7 +88,7 @@ const mockWorkCaseList = [
     workDate: '2026-07-26',
     startTime: '09:00',
     endTime: '14:00',
-    status: 'INVITED',
+    status: 'ACCEPTED',
     matched: true
   },
   {
@@ -141,7 +144,8 @@ const mockWorkCaseList = [
     startTime: '13:00',
     endTime: '19:00',
     status: 'DRAFT',
-    matched: false
+    matched: false,
+    canIssueInvitation: true
   },
   {
     workCaseId: 203,
@@ -196,7 +200,8 @@ const mockWorkCaseDetail = {
 
 /**
  * 근태 현황 요약 → 6버킷 카운트 (WORK-001).
- * { draft, invited, ready, inProgress, completed, noShow } — @/constants/workCaseStatus WORK_CASE_SUMMARY.
+ * { draft, accepted, ready, inProgress, completed, noShow }
+ * — @/constants/workCaseStatus WORK_CASE_SUMMARY.
  */
 export async function getWorkCaseSummary(workplaceId) {
   if (USE_MOCK) {
@@ -204,7 +209,7 @@ export async function getWorkCaseSummary(workplaceId) {
     const count = (status) => list.filter((s) => s.status === status).length
     return {
       draft: count('DRAFT'),
-      invited: count('INVITED'),
+      accepted: count('ACCEPTED'),
       ready: count('READY'),
       inProgress: count('IN_PROGRESS'),
       completed: count('COMPLETED'),
@@ -220,6 +225,7 @@ export async function getWorkCaseSummary(workplaceId) {
  *
  * 목록 뷰·캘린더 뷰가 **같은 엔드포인트**를 쓴다. 캘린더 뷰일 때만 보고 있는 달을
  * from/to 로 좁혀서 요청하고, 결과를 날짜별로 묶어 그린다(@/utils/calendar).
+ * content 항목의 canIssueInvitation은 일회성 연결 링크 신규 발급 가능 여부다.
  * @param {number} workplaceId
  * @param {object} params keyword, status, from, to, page, size
  */
