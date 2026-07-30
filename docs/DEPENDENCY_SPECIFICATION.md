@@ -73,7 +73,7 @@
 | 계약 PDF·QR        | Apache PDFBox, ZXing Core·JavaSE                                                                                        |
 | Container 제공 API | Servlet API와 Annotation API를 `compileOnly`로 사용하고, MockMvc 테스트에는 Servlet API를 `testImplementation`으로 사용 |
 | 코드 생성          | Lombok을 compile/test annotation processor로 사용                                                                       |
-| 테스트             | JUnit Jupiter·Platform Launcher, Spring Test, Mockito Core·JUnit Jupiter, JSONAssert, JsonPath, Hamcrest, GlassFish EL  |
+| 테스트             | JUnit Jupiter·Platform Launcher, Spring Test, Spring Security Test, Mockito Core·JUnit Jupiter, JSONAssert, JsonPath, Hamcrest, GlassFish EL  |
 | Gradle Plugin      | `java`, `war`, `checkstyle`                                                                                             |
 
 다음 결합 관계를 함께 유지한다.
