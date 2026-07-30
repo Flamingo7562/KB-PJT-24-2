@@ -10,11 +10,14 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import com.gighub.auth.AuthNormalizer;
+import com.gighub.auth.dto.LoginRequest;
 import com.gighub.auth.dto.SignupRequest;
 import com.gighub.auth.exception.AuthErrorCode;
 import com.gighub.auth.exception.AuthException;
 import com.gighub.auth.exception.AuthValidationException;
 import com.gighub.auth.exception.FieldErrorItem;
+import com.gighub.auth.mapper.WorkplaceCountMapper;
+import com.gighub.auth.security.AuthPrincipal;
 import com.gighub.auth.service.AuthService;
 import com.gighub.member.domain.User;
 import com.gighub.member.mapper.UserMapper;
@@ -26,11 +29,14 @@ public class AuthServiceImpl implements AuthService {
 
     private final UserMapper userMapper;
     private final PasswordEncoder passwordEncoder;
+    private final WorkplaceCountMapper workplaceCountMapper;
 
     @Autowired
-    public AuthServiceImpl(UserMapper userMapper, PasswordEncoder passwordEncoder) {
+    public AuthServiceImpl(UserMapper userMapper, PasswordEncoder passwordEncoder,
+                            WorkplaceCountMapper workplaceCountMapper) {
         this.userMapper = userMapper;
         this.passwordEncoder = passwordEncoder;
+        this.workplaceCountMapper = workplaceCountMapper;
     }
 
     @Override
@@ -90,6 +96,27 @@ public class AuthServiceImpl implements AuthService {
         if (!errors.isEmpty()) {
             throw new AuthValidationException(errors);
         }
+    }
+
+    @Override
+    public AuthPrincipal authenticate(LoginRequest request) {
+        String loginId = AuthNormalizer.loginId(request.getLoginId());
+        User user = userMapper.findByLoginId(loginId);
+        if (user == null || !passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
+            throw new AuthException(AuthErrorCode.INVALID_CREDENTIALS);
+        }
+        if (!user.getRole().equals(request.getExpectedRole())) {
+            throw new AuthException(AuthErrorCode.ROLE_MISMATCH);
+        }
+        return new AuthPrincipal(user.getId(), user.getRole(), user.getName());
+    }
+
+    @Override
+    public boolean needsWorkplaceSetup(AuthPrincipal principal) {
+        if (!"OWNER".equals(principal.getRole())) {
+            return false;
+        }
+        return workplaceCountMapper.countActiveByOwnerUserId(principal.getUserId()) == 0;
     }
 
     private AuthException translateDuplicateKey(DuplicateKeyException e) {

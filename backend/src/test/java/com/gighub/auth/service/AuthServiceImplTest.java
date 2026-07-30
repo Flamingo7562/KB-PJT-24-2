@@ -8,10 +8,13 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
+import com.gighub.auth.dto.LoginRequest;
 import com.gighub.auth.dto.SignupRequest;
 import com.gighub.auth.exception.AuthErrorCode;
 import com.gighub.auth.exception.AuthException;
 import com.gighub.auth.exception.AuthValidationException;
+import com.gighub.auth.mapper.WorkplaceCountMapper;
+import com.gighub.auth.security.AuthPrincipal;
 import com.gighub.auth.service.impl.AuthServiceImpl;
 import com.gighub.member.domain.User;
 import com.gighub.member.mapper.UserMapper;
@@ -33,6 +36,9 @@ class AuthServiceImplTest {
     @Mock
     private PasswordEncoder passwordEncoder;
 
+    @Mock
+    private WorkplaceCountMapper workplaceCountMapper;
+
     private AuthService authService;
 
     private SignupRequest validRequest() {
@@ -47,8 +53,28 @@ class AuthServiceImplTest {
         return request;
     }
 
+    private LoginRequest loginRequest(String loginId, String password, String expectedRole) {
+        LoginRequest request = new LoginRequest();
+        request.setLoginId(loginId);
+        request.setPassword(password);
+        request.setExpectedRole(expectedRole);
+        return request;
+    }
+
+    private User storedUser() {
+        return User.builder()
+                .id(7L)
+                .loginId("tester01")
+                .email("tester01@example.com")
+                .passwordHash("{bcrypt}hashed")
+                .name("김테스트")
+                .role("WORKER")
+                .status("ACTIVE")
+                .build();
+    }
+
     private AuthService newService() {
-        return new AuthServiceImpl(userMapper, passwordEncoder);
+        return new AuthServiceImpl(userMapper, passwordEncoder, workplaceCountMapper);
     }
 
     @Test
@@ -167,5 +193,77 @@ class AuthServiceImplTest {
         AuthException exception = assertThrows(AuthException.class, () -> authService.signup(validRequest()));
 
         assertEquals(AuthErrorCode.EMAIL_ALREADY_EXISTS, exception.getErrorCode());
+    }
+
+    @Test
+    void authenticateReturnsPrincipalOnValidCredentials() {
+        when(userMapper.findByLoginId("tester01")).thenReturn(storedUser());
+        when(passwordEncoder.matches("abcd1234", "{bcrypt}hashed")).thenReturn(true);
+        authService = newService();
+
+        AuthPrincipal principal = authService.authenticate(loginRequest("tester01", "abcd1234", "WORKER"));
+
+        assertEquals(7L, principal.getUserId());
+        assertEquals("WORKER", principal.getRole());
+        assertEquals("김테스트", principal.getName());
+    }
+
+    @Test
+    void authenticateRejectsUnknownLoginIdWithInvalidCredentials() {
+        when(userMapper.findByLoginId("ghost")).thenReturn(null);
+        authService = newService();
+
+        AuthException exception = assertThrows(AuthException.class,
+                () -> authService.authenticate(loginRequest("ghost", "abcd1234", "WORKER")));
+
+        assertEquals(AuthErrorCode.INVALID_CREDENTIALS, exception.getErrorCode());
+    }
+
+    @Test
+    void authenticateRejectsWrongPasswordWithInvalidCredentials() {
+        when(userMapper.findByLoginId("tester01")).thenReturn(storedUser());
+        when(passwordEncoder.matches("wrong", "{bcrypt}hashed")).thenReturn(false);
+        authService = newService();
+
+        AuthException exception = assertThrows(AuthException.class,
+                () -> authService.authenticate(loginRequest("tester01", "wrong", "WORKER")));
+
+        assertEquals(AuthErrorCode.INVALID_CREDENTIALS, exception.getErrorCode());
+    }
+
+    @Test
+    void authenticateRejectsRoleMismatch() {
+        when(userMapper.findByLoginId("tester01")).thenReturn(storedUser());
+        when(passwordEncoder.matches("abcd1234", "{bcrypt}hashed")).thenReturn(true);
+        authService = newService();
+
+        AuthException exception = assertThrows(AuthException.class,
+                () -> authService.authenticate(loginRequest("tester01", "abcd1234", "OWNER")));
+
+        assertEquals(AuthErrorCode.ROLE_MISMATCH, exception.getErrorCode());
+    }
+
+    @Test
+    void needsWorkplaceSetupIsAlwaysFalseForWorker() {
+        authService = newService();
+
+        assertFalse(authService.needsWorkplaceSetup(new AuthPrincipal(1L, "WORKER", "이알바")));
+        org.mockito.Mockito.verifyNoInteractions(workplaceCountMapper);
+    }
+
+    @Test
+    void needsWorkplaceSetupTrueForOwnerWithNoWorkplaces() {
+        when(workplaceCountMapper.countActiveByOwnerUserId(1L)).thenReturn(0);
+        authService = newService();
+
+        assertTrue(authService.needsWorkplaceSetup(new AuthPrincipal(1L, "OWNER", "김사장")));
+    }
+
+    @Test
+    void needsWorkplaceSetupFalseForOwnerWithAWorkplace() {
+        when(workplaceCountMapper.countActiveByOwnerUserId(1L)).thenReturn(1);
+        authService = newService();
+
+        assertFalse(authService.needsWorkplaceSetup(new AuthPrincipal(1L, "OWNER", "김사장")));
     }
 }
