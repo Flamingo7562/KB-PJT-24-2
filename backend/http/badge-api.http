@@ -1,0 +1,11 @@
+### 1. 알바생(4번) 로그인
+GET http://localhost:8080/api/test-login/4
+
+### 2. 내 배지 목록 (BADGE-001)
+GET http://localhost:8080/api/users/me/badges
+
+### 3. 사장(3번) 로그인 - 다른 사용자 배지 확인
+GET http://localhost:8080/api/test-login/3
+
+### 4. 내 배지 목록 (배지 없는 경우 - 빈 목록 확인)
+GET http://localhost:8080/api/users/me/badges
