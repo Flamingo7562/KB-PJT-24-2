@@ -1,9 +1,11 @@
 package com.gighub.document.controller;
 
+import com.gighub.common.exception.AuthRequiredException;
 import com.gighub.document.dto.Document;
 import com.gighub.document.dto.DocumentListItem;
 import com.gighub.document.dto.DocumentShare;
 import com.gighub.document.dto.DocumentVersion;
+import com.gighub.document.exception.DocumentNotFoundException;
 import com.gighub.document.mapper.DocumentQueryMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -55,11 +57,15 @@ public class DocumentController {
     @GetMapping("/api/documents/{documentId}")
     public ResponseEntity<Map<String, Object>> getDocument(
             @PathVariable Long documentId,
-            HttpSession session){
+            HttpSession session) {
         requireLogin(session);
 
-        // TODO: 접근 권한 검증(소유자/계약당사자/유효공유), document_access_logs 기록
         Document document = documentQueryMapper.findDocumentById(documentId);
+        if (document == null) {
+            throw new DocumentNotFoundException("문서를 찾을 수 없습니다.");
+        }
+
+        // TODO: 접근 권한 검증(소유자/계약당사자/유효공유), document_access_logs 기록
         List<DocumentVersion> versions =
                 documentQueryMapper.findVersionsByDocumentId(documentId);
 
@@ -87,9 +93,9 @@ public class DocumentController {
 
     private Long requireLogin(HttpSession session){
         Long loginUserId = (Long) session.getAttribute(LOGIN_USER);
-//        if(loginUserId == null){
-//            throw new AuthRequiredException("로그인이 필요합니다.");
-//        }
+        if(loginUserId == null){
+            throw new AuthRequiredException("로그인이 필요합니다.");
+        }
         return loginUserId;
     }
 }
