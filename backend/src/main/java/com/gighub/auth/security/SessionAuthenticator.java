@@ -4,6 +4,7 @@ import java.util.List;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
+import javax.servlet.http.HttpSession;
 
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -42,6 +43,15 @@ public class SessionAuthenticator {
         SecurityContextHolder.setContext(context);
         securityContextRepository.saveContext(context, request, response);
 
+        csrfTokenRepository.saveToken(csrfTokenRepository.generateToken(request), request, response);
+    }
+
+    public void logout(HttpServletRequest request, HttpServletResponse response) {
+        HttpSession session = request.getSession(false);
+        if (session != null) {
+            session.invalidate();
+        }
+        SecurityContextHolder.clearContext();
         csrfTokenRepository.saveToken(csrfTokenRepository.generateToken(request), request, response);
     }
 }

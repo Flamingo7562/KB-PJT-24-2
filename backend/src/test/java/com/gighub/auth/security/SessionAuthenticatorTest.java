@@ -10,6 +10,8 @@ import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class SessionAuthenticatorTest {
 
@@ -52,6 +54,41 @@ class SessionAuthenticatorTest {
         MockHttpServletResponse response = new MockHttpServletResponse();
 
         sessionAuthenticator.login(request, response, new AuthPrincipal(1L, "WORKER", "이알바"));
+
+        assertNotNull(response.getCookie("XSRF-TOKEN"));
+    }
+
+    @Test
+    void logoutInvalidatesSessionAndClearsContext() {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        org.springframework.mock.web.MockHttpSession session = new org.springframework.mock.web.MockHttpSession();
+        request.setSession(session);
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        sessionAuthenticator.login(request, response, new AuthPrincipal(1L, "WORKER", "이알바"));
+
+        sessionAuthenticator.logout(request, response);
+
+        assertTrue(session.isInvalid());
+        assertNull(SecurityContextHolder.getContext().getAuthentication());
+    }
+
+    @Test
+    void logoutIsIdempotentWithNoExistingSession() {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        sessionAuthenticator.logout(request, response);
+
+        assertNull(SecurityContextHolder.getContext().getAuthentication());
+    }
+
+    @Test
+    void logoutRotatesCsrfCookie() {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.setSession(new org.springframework.mock.web.MockHttpSession());
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        sessionAuthenticator.logout(request, response);
 
         assertNotNull(response.getCookie("XSRF-TOKEN"));
     }
