@@ -167,13 +167,15 @@ const copyingId = ref(null) // 링크 생성 중인 근무(중복 클릭 방지)
 /**
  * 매칭전 근무의 알바생 연결 링크를 만들어 클립보드에 복사한다.
  * 링크는 1회성·유효기간이며, 확정 후에는 서버가 생성을 막는다(docs/rules/api.md).
+ *
+ * 발급에 성공해도 canIssueInvitation 을 로컬에서 내리지 않는다 — 링크를 잘못 보냈거나
+ * 복사에 실패한 경우 다시 발급할 수 있어야 한다. 발급 가능 여부의 권위는 서버이고,
+ * 다음 조회(load)에서 갱신된 capability 로 버튼 노출이 결정된다.
  */
 async function onCopyInvite(workCaseId) {
   copyingId.value = workCaseId
   try {
     const { inviteUrl } = await createInvite(workCaseId)
-    const issuedWorkCase = workCases.value.find((workCase) => workCase.workCaseId === workCaseId)
-    if (issuedWorkCase) issuedWorkCase.canIssueInvitation = false
 
     if (await copyText(inviteUrl)) {
       ui.toast('연결 링크를 복사했어요.', { type: 'success' })
