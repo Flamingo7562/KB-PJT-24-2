@@ -40,4 +40,10 @@ class SecurityConfigTest {
     void exposesSecurityFilterChain() {
         assertNotEquals(0, context.getBeansOfType(SecurityFilterChain.class).size());
     }
+
+    @Test
+    void exposesCsrfTokenRepositoryBean() {
+        assertNotEquals(0,
+                context.getBeansOfType(org.springframework.security.web.csrf.CsrfTokenRepository.class).size());
+    }
 }
