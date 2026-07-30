@@ -7,7 +7,7 @@
  *
  * 아이콘 매핑(lucide)은 이 파일이 아니라 StatusChip.vue 가 담당한다(여기는 순수 데이터).
  *
- * 근무(work_case) 8단계 상태 매핑은 여기가 아니라 `@/constants/workCaseStatus` 단일 소스에 있다.
+ * 근무(work_case) 7단계 상태 매핑은 여기가 아니라 `@/constants/workCaseStatus` 단일 소스에 있다.
  */
 import bankBusan from '@/assets/images/banks/busan.png'
 import bankCity from '@/assets/images/banks/city.png'

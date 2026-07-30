@@ -18,7 +18,6 @@ import {
   Lock,
   Minus,
   RotateCcw,
-  Send,
   TriangleAlert,
   UserX
 } from 'lucide-vue-next'
@@ -41,9 +40,8 @@ const LABEL_MAPS = {
 
 // 상태값(enum) → lucide 아이콘. 서로 다른 kind 가 같은 상태값을 공유한다.
 const ICONS = {
-  // 근무(work_case) 8단계
+  // 근무(work_case) 7단계
   DRAFT: FileText,
-  INVITED: Send,
   ACCEPTED: FileCheck,
   READY: Clock,
   IN_PROGRESS: Loader,
