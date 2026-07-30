@@ -3,8 +3,10 @@ package com.gighub.config;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.FilterType;
+import org.springframework.context.annotation.Import;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.servlet.config.annotation.EnableWebMvc;
+import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 /**
@@ -18,6 +20,7 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
  */
 @Configuration
 @EnableWebMvc
+@Import(SwaggerConfig.class)
 @ComponentScan(
         basePackages = "com.gighub",
         includeFilters = @ComponentScan.Filter(
@@ -28,5 +31,15 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 )
 public class WebMvcConfig implements WebMvcConfigurer {
     // 기본 MVC 설정으로 시작하고 실제 요구가 생길 때 필요한 메서드만 재정의합니다.
+
+        @Override
+        public void addResourceHandlers(ResourceHandlerRegistry registry) {
+                //Swagger UI 화면 정적 리소스 매핑 허용
+                registry.addResourceHandler("/swagger-ui/**")
+                        .addResourceLocations("classpath:/META-INF/resources/webjars/springfox-swagger-ui/");
+
+                registry.addResourceHandler("/webjars/**")
+                        .addResourceLocations("classpath:/META-INF/resources/webjars/");
+        }
 }
 
