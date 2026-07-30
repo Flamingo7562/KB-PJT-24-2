@@ -89,4 +89,22 @@ class SignupRequestValidationTest {
 
         assertTrue(validator.validate(request).isEmpty());
     }
+
+    @Test
+    void allowsPasswordAtSixtyFourCharBoundary() {
+        SignupRequest request = validRequest();
+        request.setPassword("a1".repeat(31) + "aa"); // 64자, 영문+숫자 포함
+        request.setPasswordConfirm(request.getPassword());
+
+        assertTrue(validator.validate(request).isEmpty());
+    }
+
+    @Test
+    void rejectsPasswordOverSixtyFourChars() {
+        SignupRequest request = validRequest();
+        request.setPassword("a1".repeat(32) + "a"); // 65자
+        request.setPasswordConfirm(request.getPassword());
+
+        assertEquals(1, validator.validate(request).size());
+    }
 }
