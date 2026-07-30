@@ -13,6 +13,7 @@ import com.gighub.member.domain.User;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 @Tag("database")
 class UserMapperIntegrationTest {
@@ -57,6 +58,13 @@ class UserMapperIntegrationTest {
             assertNotNull(user.getId());
             assertEquals(1, mapper.countByLoginId(loginId));
             assertEquals(1, mapper.countByEmail(email));
+
+            User found = mapper.findByLoginId(loginId);
+            assertNotNull(found);
+            assertEquals(email, found.getEmail());
+            assertEquals("WORKER", found.getRole());
+
+            assertNull(mapper.findByLoginId("no-such-login-id-xyz"));
         }
     }
 }

@@ -9,4 +9,6 @@ public interface UserMapper {
     int countByEmail(String email);
 
     int insert(User user);
+
+    User findByLoginId(String loginId);
 }

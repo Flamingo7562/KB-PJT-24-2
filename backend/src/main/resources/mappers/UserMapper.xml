@@ -10,6 +10,12 @@
         SELECT COUNT(*) FROM users WHERE email = #{email}
     </select>
 
+    <select id="findByLoginId" resultType="com.gighub.member.domain.User">
+        SELECT id, login_id, email, password_hash, name, phone, role, status
+        FROM users
+        WHERE login_id = #{loginId}
+    </select>
+
     <insert id="insert" parameterType="com.gighub.member.domain.User"
             useGeneratedKeys="true" keyProperty="id">
         INSERT INTO users (login_id, email, password_hash, name, phone, role, status)
