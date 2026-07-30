@@ -55,18 +55,19 @@ ON DUPLICATE KEY UPDATE
 
 INSERT INTO workplaces (
     owner_user_id, business_registration_number, name,
-    representative_name, address, phone,
+    representative_name, road_address, detail_address, phone,
     latitude, longitude, radius_meters, status
 ) VALUES (
     @owner_id, '0000000017', 'Gig-Hub 합성 테스트 매장',
-    '테스트 사장', '서울특별시 영등포구 테스트로 17', '02-0000-0017',
+    '테스트 사장', '서울특별시 영등포구 테스트로 17', NULL, '02-0000-0017',
     37.5265000, 126.8962000, 100.00, 'ACTIVE'
 )
 ON DUPLICATE KEY UPDATE
     owner_user_id = @owner_id,
     name = 'Gig-Hub 합성 테스트 매장',
     representative_name = '테스트 사장',
-    address = '서울특별시 영등포구 테스트로 17',
+    road_address = '서울특별시 영등포구 테스트로 17',
+    detail_address = NULL,
     phone = '02-0000-0017',
     latitude = 37.5265000,
     longitude = 126.8962000,
