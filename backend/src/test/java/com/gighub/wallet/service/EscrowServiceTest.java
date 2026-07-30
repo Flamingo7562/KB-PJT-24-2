@@ -41,7 +41,7 @@ class EscrowServiceTest {
     private static final Long WORK_CASE_ID = 1L;
     private static final Long AGREED_WAGE = 300_000L;
     private static final String KEY = "TEST-KEY-001";
-    private static final List<String> HOLDABLE = List.of("INVITED");
+    private static final List<String> HOLDABLE = List.of("DRAFT");
 
     @Mock
     private WalletMapper walletMapper;
@@ -54,7 +54,7 @@ class EscrowServiceTest {
 
     @Test
     void holdUsesLockedWalletSnapshotAndRecordsLedger() {
-        WorkCaseEscrowContext context = context("INVITED");
+        WorkCaseEscrowContext context = context("DRAFT");
         WalletBalanceSnapshot wallet =
                 wallet(30L, EMPLOYER_ID, 700_000L, 0L);
 
@@ -92,7 +92,7 @@ class EscrowServiceTest {
     @Test
     void holdRejectsInsufficientBalanceBeforeMutation() {
         when(workMapper.getEscrowContextForUpdate(WORK_CASE_ID))
-                .thenReturn(context("INVITED"));
+                .thenReturn(context("DRAFT"));
         when(walletMapper.getWalletSnapshotForUpdate(EMPLOYER_ID))
                 .thenReturn(wallet(30L, EMPLOYER_ID, 30_000L, 0L));
 
@@ -108,7 +108,7 @@ class EscrowServiceTest {
     @Test
     void holdRejectsCorruptedWalletSnapshot() {
         when(workMapper.getEscrowContextForUpdate(WORK_CASE_ID))
-                .thenReturn(context("INVITED"));
+                .thenReturn(context("DRAFT"));
         WalletBalanceSnapshot corrupted =
                 wallet(30L, WORKER_ID, 700_000L, 0L);
         when(walletMapper.getWalletSnapshotForUpdate(EMPLOYER_ID))
@@ -125,7 +125,7 @@ class EscrowServiceTest {
     @Test
     void holdRejectsUnexpectedWalletUpdateCount() {
         when(workMapper.getEscrowContextForUpdate(WORK_CASE_ID))
-                .thenReturn(context("INVITED"));
+                .thenReturn(context("DRAFT"));
         when(walletMapper.getWalletSnapshotForUpdate(EMPLOYER_ID))
                 .thenReturn(wallet(30L, EMPLOYER_ID, 700_000L, 0L));
 
@@ -140,7 +140,7 @@ class EscrowServiceTest {
 
     @Test
     void holdRejectsEmployerMismatch() {
-        WorkCaseEscrowContext context = context("INVITED");
+        WorkCaseEscrowContext context = context("DRAFT");
         context.setEmployerId(99L);
         when(workMapper.getEscrowContextForUpdate(WORK_CASE_ID))
                 .thenReturn(context);
@@ -211,7 +211,7 @@ class EscrowServiceTest {
     void holdRejectsReplayForDifferentWorkCase() {
         String ledgerKey = WalletIdempotencyKeys.escrowHold(KEY);
         when(workMapper.getEscrowContextForUpdate(WORK_CASE_ID))
-                .thenReturn(context("INVITED"));
+                .thenReturn(context("DRAFT"));
         when(walletMapper.findTransactionByIdempotencyKey(ledgerKey))
                 .thenReturn(holdTransaction(99L));
 

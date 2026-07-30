@@ -84,6 +84,9 @@ class FundingServiceImplTest {
                     Supplier<FundingResult> attempt = invocation.getArgument(0);
                     return attempt.get();
                 });
+        org.mockito.Mockito.lenient()
+                .when(walletMapper.getWalletSnapshotForUpdate(EMPLOYER_ID))
+                .thenReturn(wallet(50L, 700_000L, 20_000L));
     }
 
     @Test
@@ -97,8 +100,8 @@ class FundingServiceImplTest {
     }
 
     @Test
-    @DisplayName("충전은 주문을 먼저 선점하고 단일 지갑 스냅샷으로 원장을 기록한다")
-    void fundingClaimsFirstAndUsesLockedSnapshot() {
+    @DisplayName("충전은 지갑을 잠근 뒤 주문을 선점하고 계좌를 처리한다")
+    void fundingLocksWalletThenClaimsBeforeAccountAccess() {
         when(fundingMapper.insertFundingOrder(any())).thenAnswer(invocation -> {
             FundingOrderParam param = invocation.getArgument(0);
             param.setId(ORDER_ID);
@@ -120,11 +123,12 @@ class FundingServiceImplTest {
         assertEquals(20_000L, result.getLockedBalance());
         assertFalse(result.isReplayed());
 
+        // 호출 순서를 계약으로 고정해 내부 재시도가 잠금 순서 회귀를 가리지 않도록 한다.
         InOrder order =
                 inOrder(fundingMapper, bankTransferGateway, walletMapper);
+        order.verify(walletMapper).getWalletSnapshotForUpdate(EMPLOYER_ID);
         order.verify(fundingMapper).insertFundingOrder(any());
         order.verify(bankTransferGateway).preflight(any(BankAccountPreflightCommand.class));
-        order.verify(walletMapper).getWalletSnapshotForUpdate(EMPLOYER_ID);
         order.verify(bankTransferGateway).withdraw(any(BankTransferCommand.class));
 
         ArgumentCaptor<FundingOrderParam> orderCaptor =
@@ -166,7 +170,7 @@ class FundingServiceImplTest {
         assertEquals(BANK_TRANSACTION_ID, result.getBankTransactionId());
         verifyNoInteractions(bankTransferGateway);
         verify(walletMapper, never()).addAvailableBalance(anyLong(), anyLong());
-        verify(walletMapper, never()).getWalletSnapshotForUpdate(anyLong());
+        verify(walletMapper).getWalletSnapshotForUpdate(EMPLOYER_ID);
     }
 
     @Test
@@ -183,7 +187,8 @@ class FundingServiceImplTest {
         );
 
         verifyNoInteractions(bankTransferGateway);
-        verifyNoInteractions(walletMapper);
+        verify(walletMapper).getWalletSnapshotForUpdate(EMPLOYER_ID);
+        verify(walletMapper, never()).addAvailableBalance(anyLong(), anyLong());
     }
 
     @Test
@@ -218,11 +223,12 @@ class FundingServiceImplTest {
         );
 
         verifyNoInteractions(bankTransferGateway);
-        verifyNoInteractions(walletMapper);
+        verify(walletMapper).getWalletSnapshotForUpdate(EMPLOYER_ID);
+        verify(walletMapper, never()).addAvailableBalance(anyLong(), anyLong());
     }
 
     @Test
-    @DisplayName("재응답할 충전 원장 스냅샷이 없으면 현재 지갑을 조회하지 않는다")
+    @DisplayName("재응답할 충전 원장 스냅샷이 없으면 저장 결과를 거부한다")
     void replayRejectsMissingLedgerSnapshot() {
         when(fundingMapper.insertFundingOrder(any()))
                 .thenThrow(new DuplicateKeyException("duplicate"));
@@ -258,7 +264,7 @@ class FundingServiceImplTest {
                 () -> fundingService.fund(command(AMOUNT, KEY))
         );
 
-        verify(walletMapper, never()).getWalletSnapshotForUpdate(anyLong());
+        verify(walletMapper).getWalletSnapshotForUpdate(EMPLOYER_ID);
         verify(bankTransferGateway, never()).withdraw(any());
     }
 
@@ -276,18 +282,13 @@ class FundingServiceImplTest {
                 () -> fundingService.fund(command(AMOUNT, KEY))
         );
 
-        verify(walletMapper, never()).getWalletSnapshotForUpdate(anyLong());
+        verify(walletMapper).getWalletSnapshotForUpdate(EMPLOYER_ID);
         verify(bankTransferGateway, never()).withdraw(any());
     }
 
     @Test
     @DisplayName("손상된 지갑 스냅샷은 계좌 출금 전 서버 무결성 오류로 거부한다")
     void corruptedWalletSnapshotStopsBankWithdrawal() {
-        when(fundingMapper.insertFundingOrder(any())).thenAnswer(invocation -> {
-            FundingOrderParam param = invocation.getArgument(0);
-            param.setId(ORDER_ID);
-            return 1;
-        });
         WalletBalanceSnapshot corrupted = wallet(50L, 700_000L, 20_000L);
         corrupted.setUserId(EMPLOYER_ID + 1);
         when(walletMapper.getWalletSnapshotForUpdate(EMPLOYER_ID))
@@ -299,6 +300,7 @@ class FundingServiceImplTest {
         );
 
         verify(bankTransferGateway, never()).withdraw(any());
+        verify(fundingMapper, never()).insertFundingOrder(any());
         verify(walletMapper, never()).addAvailableBalance(anyLong(), anyLong());
     }
 
@@ -317,15 +319,15 @@ class FundingServiceImplTest {
     @Test
     @DisplayName("잠금 충돌 후에는 새 시도로 충전을 완료한다")
     void retryableLockFailureStartsAnotherAttempt() {
-        when(fundingMapper.insertFundingOrder(any()))
+        when(walletMapper.getWalletSnapshotForUpdate(EMPLOYER_ID))
                 .thenThrow(new CannotAcquireLockException("lock"))
+                .thenReturn(wallet(50L, 700_000L, 20_000L));
+        when(fundingMapper.insertFundingOrder(any()))
                 .thenAnswer(invocation -> {
                     FundingOrderParam param = invocation.getArgument(0);
                     param.setId(ORDER_ID);
                     return 1;
                 });
-        when(walletMapper.getWalletSnapshotForUpdate(EMPLOYER_ID))
-                .thenReturn(wallet(50L, 700_000L, 20_000L));
         when(bankTransferGateway.withdraw(any())).thenReturn(successfulTransfer());
         when(fundingMapper.completeFundingOrder(
                 ORDER_ID, AMOUNT, BANK_TRANSACTION_ID)).thenReturn(1);
@@ -336,7 +338,8 @@ class FundingServiceImplTest {
 
         assertFalse(result.isReplayed());
         verify(transactionExecutor, times(2)).execute(any());
-        verify(fundingMapper, times(2)).insertFundingOrder(any());
+        verify(walletMapper, times(2)).getWalletSnapshotForUpdate(EMPLOYER_ID);
+        verify(fundingMapper).insertFundingOrder(any());
         verify(bankTransferGateway).withdraw(any());
     }
 

@@ -67,6 +67,14 @@ public class FundingServiceImpl implements FundingService {
 
     private FundingResult fundOnce(
             FundingCommand command, String rawKey, String ledgerKey) {
+        // 지갑을 먼저 잠가 claim의 계좌 FK 잠금과 실제 계좌 잠금 순서를 일관되게 유지한다.
+        WalletBalanceSnapshot wallet =
+                walletMapper.getWalletSnapshotForUpdate(command.getEmployerId());
+        if (wallet == null) {
+            throw new InvalidWalletStateException("지갑을 찾을 수 없습니다.");
+        }
+        validateWalletSnapshot(wallet, command.getEmployerId());
+
         FundingOrderParam order = FundingOrderParam.builder()
                 .employerId(command.getEmployerId())
                 .linkedAccountId(command.getLinkedAccountId())
@@ -90,12 +98,6 @@ public class FundingServiceImpl implements FundingService {
                 .userId(command.getEmployerId())
                 .build());
 
-        WalletBalanceSnapshot wallet =
-                walletMapper.getWalletSnapshotForUpdate(command.getEmployerId());
-        if (wallet == null) {
-            throw new InvalidWalletStateException("지갑을 찾을 수 없습니다.");
-        }
-        validateWalletSnapshot(wallet, command.getEmployerId());
         Long availableAfter = addExactly(
                 wallet.getAvailableBalance(),
                 command.getAmount(),

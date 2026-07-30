@@ -593,15 +593,7 @@ class SettlementIntegrityDatabaseIntegrationTest {
         Long workerWalletId =
                 idBy(jdbcTemplate, "wallets", "user_id", workerId);
 
-        jdbcTemplate.update(
-                "INSERT INTO workplaces"
-                        + " (owner_user_id, business_registration_number, name,"
-                        + " representative_name, address, phone, status)"
-                        + " VALUES (?, ?, '통합 테스트 사업장', '합성 대표',"
-                        + " '서울특별시 테스트로 1', '02-0000-0000', 'ACTIVE')",
-                employerId,
-                businessNumber
-        );
+        insertWorkplace(jdbcTemplate, employerId, businessNumber);
         Long workplaceId = idBy(
                 jdbcTemplate,
                 "workplaces",
@@ -682,6 +674,45 @@ class SettlementIntegrityDatabaseIntegrationTest {
                 escrowId,
                 settlementId,
                 "IT-SETTLE-APPROVE-" + token
+        );
+    }
+
+    private void insertWorkplace(
+            JdbcTemplate jdbcTemplate,
+            Long employerId,
+            String businessNumber) {
+        // 주소 분리 마이그레이션 적용 여부를 확인해 구·신 스키마에서 같은 fixture를 사용한다.
+        int splitAddressColumnCount = count(
+                jdbcTemplate,
+                "SELECT COUNT(*) FROM information_schema.columns"
+                        + " WHERE table_schema = DATABASE()"
+                        + " AND table_name = 'workplaces'"
+                        + " AND column_name = 'road_address'"
+        );
+        if (splitAddressColumnCount > 0) {
+            jdbcTemplate.update(
+                    "INSERT INTO workplaces"
+                            + " (owner_user_id,"
+                            + " business_registration_number, name,"
+                            + " representative_name, road_address,"
+                            + " detail_address, phone, status)"
+                            + " VALUES (?, ?, '통합 테스트 사업장',"
+                            + " '합성 대표', '서울특별시 테스트로 1',"
+                            + " NULL, '02-0000-0000', 'ACTIVE')",
+                    employerId,
+                    businessNumber
+            );
+            return;
+        }
+
+        jdbcTemplate.update(
+                "INSERT INTO workplaces"
+                        + " (owner_user_id, business_registration_number, name,"
+                        + " representative_name, address, phone, status)"
+                        + " VALUES (?, ?, '통합 테스트 사업장', '합성 대표',"
+                        + " '서울특별시 테스트로 1', '02-0000-0000', 'ACTIVE')",
+                employerId,
+                businessNumber
         );
     }
 

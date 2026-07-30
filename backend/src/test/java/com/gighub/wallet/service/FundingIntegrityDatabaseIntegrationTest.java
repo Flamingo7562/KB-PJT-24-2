@@ -10,7 +10,9 @@ import com.gighub.wallet.mapper.FundingMapper;
 import com.gighub.wallet.mapper.WalletMapper;
 import com.gighub.wallet.mapper.param.FundingOrderParam;
 import com.gighub.wallet.service.command.FundingCommand;
+import com.gighub.wallet.service.command.WithdrawalCommand;
 import com.gighub.wallet.service.result.FundingResult;
+import com.gighub.wallet.service.result.WithdrawalResult;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -31,6 +33,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -105,6 +109,158 @@ class FundingIntegrityDatabaseIntegrationTest {
                 FundingResult replayed = fundingService.fund(command);
                 assertTrue(replayed.isReplayed());
                 assertEquals(1_000L, replayed.getAvailableBalance());
+            } finally {
+                start.countDown();
+                executor.shutdownNow();
+                assertTrue(executor.awaitTermination(5, TimeUnit.SECONDS));
+                deleteFundingFixture(jdbcTemplate, fixture);
+            }
+        }
+    }
+
+    @Test
+    @Timeout(20)
+    void concurrentDifferentKeyFundingRequestsBothComplete() throws Exception {
+        try (AnnotationConfigApplicationContext context =
+                     new AnnotationConfigApplicationContext(RootConfig.class)) {
+            JdbcTemplate jdbcTemplate =
+                    new JdbcTemplate(context.getBean(DataSource.class));
+            FundingService fundingService = context.getBean(FundingService.class);
+            FundingFixture fixture = createFundingFixture(jdbcTemplate);
+            ExecutorService executor = Executors.newFixedThreadPool(2);
+            // 서로 다른 키를 동시에 시작해 같은 지갑·계좌의 신규 충전 경합을 재현한다.
+            CountDownLatch start = new CountDownLatch(1);
+            FundingCommand first = FundingCommand.builder()
+                    .employerId(fixture.userId())
+                    .linkedAccountId(fixture.accountId())
+                    .amount(1_000L)
+                    .idempotencyKey(fixture.idempotencyKey() + "-A")
+                    .build();
+            FundingCommand second = FundingCommand.builder()
+                    .employerId(fixture.userId())
+                    .linkedAccountId(fixture.accountId())
+                    .amount(1_000L)
+                    .idempotencyKey(fixture.idempotencyKey() + "-B")
+                    .build();
+
+            try {
+                Future<FundingResult> firstFuture = executor.submit(() -> {
+                    await(start);
+                    return fundingService.fund(first);
+                });
+                Future<FundingResult> secondFuture = executor.submit(() -> {
+                    await(start);
+                    return fundingService.fund(second);
+                });
+                start.countDown();
+
+                FundingResult firstResult = firstFuture.get(15, TimeUnit.SECONDS);
+                FundingResult secondResult = secondFuture.get(15, TimeUnit.SECONDS);
+
+                assertFalse(firstResult.isReplayed());
+                assertFalse(secondResult.isReplayed());
+                assertNotEquals(firstResult.getFundingOrderId(),
+                        secondResult.getFundingOrderId());
+                assertEquals(2, count(jdbcTemplate,
+                        "SELECT COUNT(*) FROM funding_orders WHERE employer_id = ?",
+                        fixture.userId()));
+                assertEquals(2, count(jdbcTemplate,
+                        "SELECT COUNT(*) FROM mock_bank_transactions WHERE account_id = ?",
+                        fixture.accountId()));
+                assertEquals(2, count(jdbcTemplate,
+                        "SELECT COUNT(*) FROM wallet_transactions"
+                                + " WHERE wallet_id = ? AND transaction_type = 'FUNDING'",
+                        fixture.walletId()));
+                assertEquals(998_000L, value(jdbcTemplate,
+                        "SELECT balance FROM mock_bank_accounts WHERE id = ?",
+                        fixture.accountId()));
+                assertEquals(2_000L, value(jdbcTemplate,
+                        "SELECT available_balance FROM wallets WHERE id = ?",
+                        fixture.walletId()));
+            } finally {
+                start.countDown();
+                executor.shutdownNow();
+                assertTrue(executor.awaitTermination(5, TimeUnit.SECONDS));
+                deleteFundingFixture(jdbcTemplate, fixture);
+            }
+        }
+    }
+
+    @Test
+    @Timeout(20)
+    void concurrentFundingAndWithdrawalPreserveTotalBalance() throws Exception {
+        try (AnnotationConfigApplicationContext context =
+                     new AnnotationConfigApplicationContext(RootConfig.class)) {
+            JdbcTemplate jdbcTemplate =
+                    new JdbcTemplate(context.getBean(DataSource.class));
+            FundingService fundingService = context.getBean(FundingService.class);
+            WithdrawalService withdrawalService = context.getBean(WithdrawalService.class);
+            FundingFixture fixture = createFundingFixture(jdbcTemplate);
+            ExecutorService executor = Executors.newFixedThreadPool(2);
+            // 같은 지갑·계좌에서 충전과 출금이 겹치는 실제 경합 상황을 재현한다.
+            CountDownLatch start = new CountDownLatch(1);
+            FundingCommand funding = FundingCommand.builder()
+                    .employerId(fixture.userId())
+                    .linkedAccountId(fixture.accountId())
+                    .amount(3_000L)
+                    .idempotencyKey(fixture.idempotencyKey() + "-F")
+                    .build();
+            WithdrawalCommand withdrawal = WithdrawalCommand.builder()
+                    .userId(fixture.userId())
+                    .linkedAccountId(fixture.accountId())
+                    .amount(2_000L)
+                    .idempotencyKey(fixture.idempotencyKey() + "-W")
+                    .build();
+
+            try {
+                jdbcTemplate.update(
+                        "UPDATE wallets SET available_balance = 10000 WHERE id = ?",
+                        fixture.walletId()
+                );
+                Future<FundingResult> fundingFuture = executor.submit(() -> {
+                    await(start);
+                    return fundingService.fund(funding);
+                });
+                Future<WithdrawalResult> withdrawalFuture = executor.submit(() -> {
+                    await(start);
+                    return withdrawalService.withdraw(withdrawal);
+                });
+                start.countDown();
+
+                FundingResult fundingResult = fundingFuture.get(15, TimeUnit.SECONDS);
+                WithdrawalResult withdrawalResult =
+                        withdrawalFuture.get(15, TimeUnit.SECONDS);
+
+                assertFalse(fundingResult.isReplayed());
+                assertFalse(withdrawalResult.isReplayed());
+                assertEquals("COMPLETED", fundingResult.getStatus());
+                assertEquals("COMPLETED", withdrawalResult.getStatus());
+                assertEquals(1, count(jdbcTemplate,
+                        "SELECT COUNT(*) FROM funding_orders WHERE employer_id = ?",
+                        fixture.userId()));
+                assertEquals(1, count(jdbcTemplate,
+                        "SELECT COUNT(*) FROM withdrawal_requests WHERE user_id = ?",
+                        fixture.userId()));
+                assertEquals(2, count(jdbcTemplate,
+                        "SELECT COUNT(*) FROM mock_bank_transactions WHERE account_id = ?",
+                        fixture.accountId()));
+                assertEquals(2, count(jdbcTemplate,
+                        "SELECT COUNT(*) FROM wallet_transactions WHERE wallet_id = ?",
+                        fixture.walletId()));
+                assertEquals(999_000L, value(jdbcTemplate,
+                        "SELECT balance FROM mock_bank_accounts WHERE id = ?",
+                        fixture.accountId()));
+                assertEquals(11_000L, value(jdbcTemplate,
+                        "SELECT available_balance FROM wallets WHERE id = ?",
+                        fixture.walletId()));
+                // 순이동 금액과 관계없이 은행·지갑을 합친 전체 금액은 보존되어야 한다.
+                assertEquals(1_010_000L,
+                        value(jdbcTemplate,
+                                "SELECT balance FROM mock_bank_accounts WHERE id = ?",
+                                fixture.accountId())
+                                + value(jdbcTemplate,
+                                "SELECT available_balance FROM wallets WHERE id = ?",
+                                fixture.walletId()));
             } finally {
                 start.countDown();
                 executor.shutdownNow();
@@ -451,6 +607,10 @@ class FundingIntegrityDatabaseIntegrationTest {
         );
         jdbcTemplate.update(
                 "DELETE FROM funding_orders WHERE employer_id = ?",
+                fixture.userId()
+        );
+        jdbcTemplate.update(
+                "DELETE FROM withdrawal_requests WHERE user_id = ?",
                 fixture.userId()
         );
         jdbcTemplate.update(
