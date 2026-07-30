@@ -4,7 +4,7 @@
  * 지점 문서: 자동 생성 계약서 + 공유받은 보건증. 읽기 전용(업로드·삭제 없음).
  * 지점 컨텍스트: useWorkplaceStore().selectedId (AppTopBar 의 전역 지점 select 를 그대로 구독).
  * 연계 API: GET /documents?workplaceId  →  @/services/documents (listDocuments)
- * 규칙: 계약서는 근무 확정 시 자동 생성되며 3년 보존(삭제 불가). 보건증은 알바생이 공유한 것을
+ * 규칙: 계약서는 근무 확정 시 자동 생성되며 근무일로부터 3년 보존(삭제 불가). 보건증은 알바생이 공유한 것을
  *   열람만 하고, 근무 종료 시 서버가 공유를 자동 해제해 목록에서 빠진다.
  * 공통: 카드 클릭 → /owner/documents/:documentId
  */
@@ -101,8 +101,8 @@ function openViewer(documentId) {
     </ul>
 
     <p class="notice">
-      근로계약서는 근무 확정 시 자동 저장되며 3년간 보관돼요 · 보건증은 알바생이 공유한 문서로,
-      근무가 끝나면 공유가 자동으로 해제돼요
+      근로계약서는 근무 확정 시 자동 저장되며 근무일로부터 3년간 보관돼요 · 보건증은 알바생이 공유한
+      문서로, 근무가 끝나면 공유가 자동으로 해제돼요
     </p>
   </div>
 </template>

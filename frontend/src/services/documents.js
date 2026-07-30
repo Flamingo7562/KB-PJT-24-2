@@ -2,8 +2,9 @@
  * 문서함 API 서비스 — 근로계약서(자동 생성) + 보건증(업로드·공유).
  *
  * 업로드(서버 검증, 위반 403): 알바생 HEALTH_CERT 만. 계약서는 확정 시 자동 생성되며 업로드 경로가 없다.
- * 삭제(위반 403): 알바생 본인 보건증만. 계약서는 3년 보존 대상이라 삭제할 수 없고, 사장 문서함에는
- *   삭제 기능이 없다. 허용 형식 jpg/png/pdf.
+ * 삭제(위반 403): 알바생 본인 보건증만. 계약서는 근무일로부터 3년 보존 대상이라 삭제할 수 없고(근로기준법
+ *   제42조·시행령 제22조 — 기산일은 근로관계가 끝난 날), 사장 문서함에는 삭제 기능이 없다.
+ *   허용 형식 jpg/png/pdf.
  * 보건증 공유 대상 = 확정·시작 전(ACCEPTED/READY) 근무 보유 지점만. 원본 삭제 시 공유 REVOKED.
  * 공유는 근무 종료 시 서버가 자동 해제한다(document_shares.expires_at = work_cases.ends_at).
  *
@@ -108,7 +109,7 @@ export async function updateDocumentIssuedDate(documentId, { issuedDate }) {
   return data
 }
 
-/** 보건증 삭제 (명세 40). 본인 소유 보건증만 — 계약서는 3년 보존 대상이라 삭제 불가(403) */
+/** 보건증 삭제 (명세 40). 본인 소유 보건증만 — 계약서는 근무일로부터 3년 보존 대상이라 삭제 불가(403) */
 export async function deleteDocument(documentId) {
   if (USE_MOCK) return
   await http.delete(`/documents/${documentId}`)
