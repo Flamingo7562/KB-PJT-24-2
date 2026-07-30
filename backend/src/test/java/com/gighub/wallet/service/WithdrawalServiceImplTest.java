@@ -26,6 +26,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Mockito;
@@ -47,6 +48,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -100,8 +102,8 @@ class WithdrawalServiceImplTest {
     }
 
     @Test
-    @DisplayName("출금은 요청을 먼저 선점하고 지갑 -> 계좌 순서로 잠근다")
-    void withdrawalClaimsFirstAndLocksWalletBeforeAccount() {
+    @DisplayName("출금은 지갑을 잠근 뒤 요청을 선점하고 계좌를 처리한다")
+    void withdrawalLocksWalletThenClaimsBeforeAccountAccess() {
         stubClaim();
         when(walletMapper.getWalletSnapshotForUpdate(anyLong()))
                 .thenReturn(wallet(500_000L, 20_000L));
@@ -118,18 +120,18 @@ class WithdrawalServiceImplTest {
         assertEquals(BANK_TRANSACTION_ID, result.getBankTransactionId());
         assertFalse(result.isReplayed());
 
-        // 1. 출금 요청 원장이 잘 insert 되었는지 검증 및 파라미터 확인
         ArgumentCaptor<WithdrawalOrderParam> claimCaptor =
                 ArgumentCaptor.forClass(WithdrawalOrderParam.class);
         verify(withdrawalMapper).insertWithdrawalRequest(claimCaptor.capture());
         assertNotNull(claimCaptor.getValue().getIdempotencyKey());
 
-        // 2. 지갑 잔액 스냅샷(Lock) 조회가 잘 수행되었는지 검증
-        verify(walletMapper).getWalletSnapshotForUpdate(anyLong());
-
-        // 3. 계좌 사전 검증 및 이체가 잘 수행되었는지 검증
-        verify(bankTransferGateway).preflight(any(BankAccountPreflightCommand.class));
-        verify(bankTransferGateway).deposit(any(BankTransferCommand.class));
+        // 호출 순서를 계약으로 고정해 내부 재시도가 잠금 순서 회귀를 가리지 않도록 한다.
+        InOrder order = inOrder(walletMapper, withdrawalMapper, bankTransferGateway);
+        order.verify(walletMapper).getWalletIdByUserId(USER_ID);
+        order.verify(walletMapper).getWalletSnapshotForUpdate(USER_ID);
+        order.verify(withdrawalMapper).insertWithdrawalRequest(any());
+        order.verify(bankTransferGateway).preflight(any(BankAccountPreflightCommand.class));
+        order.verify(bankTransferGateway).deposit(any(BankTransferCommand.class));
     }
 
     @Test
@@ -174,7 +176,10 @@ class WithdrawalServiceImplTest {
                 () -> withdrawalService.withdraw(command(AMOUNT, KEY))
         );
 
+        verify(withdrawalMapper).insertWithdrawalRequest(any());
+        verify(bankTransferGateway, never()).preflight(any());
         verify(bankTransferGateway, never()).deposit(any());
+        verify(withdrawalMapper, never()).completeWithdrawalRequest(anyLong(), anyLong());
         verify(walletMapper, never()).subtractAvailableBalance(anyLong(), anyLong());
         verify(walletMapper, never()).insertWalletTransaction(any());
     }
@@ -197,7 +202,37 @@ class WithdrawalServiceImplTest {
         assertEquals(REQUEST_ID, result.getWithdrawalRequestId());
         assertEquals(BANK_TRANSACTION_ID, result.getBankTransactionId());
 
+        verify(bankTransferGateway, never()).preflight(any());
         verify(bankTransferGateway, never()).deposit(any());
+        verify(walletMapper, never()).subtractAvailableBalance(anyLong(), anyLong());
+        verify(walletMapper, never()).insertWalletTransaction(any());
+    }
+
+    @Test
+    @DisplayName("완료된 동일 키 출금은 현재 잔액과 계좌 상태를 다시 검증하지 않는다")
+    void duplicateSameRequestReplaysWithoutCurrentStateValidation() {
+        stubClaim();
+        when(walletMapper.getWalletSnapshotForUpdate(anyLong()))
+                .thenReturn(wallet(0L, 20_000L));
+        when(withdrawalMapper.insertWithdrawalRequest(any()))
+                .thenThrow(new DuplicateKeyException("duplicate"));
+        when(withdrawalMapper.findByIdempotencyKeyForShare(anyString()))
+                .thenReturn(completedOrder(AMOUNT));
+        when(walletMapper.findTransactionByIdempotencyKey(anyString()))
+                .thenReturn(withdrawalSnapshot(AMOUNT));
+        Mockito.doThrow(new BankAccountForbiddenException("blocked"))
+                .when(bankTransferGateway)
+                .preflight(any(BankAccountPreflightCommand.class));
+
+        WithdrawalResult result = withdrawalService.withdraw(command(AMOUNT, KEY));
+
+        assertTrue(result.isReplayed());
+        assertEquals(REQUEST_ID, result.getWithdrawalRequestId());
+        verify(bankTransferGateway, never()).preflight(any());
+        verify(bankTransferGateway, never()).deposit(any());
+        verify(withdrawalMapper, never()).completeWithdrawalRequest(anyLong(), anyLong());
+        verify(walletMapper, never()).subtractAvailableBalance(anyLong(), anyLong());
+        verify(walletMapper, never()).insertWalletTransaction(any());
     }
 
     @Test
@@ -297,8 +332,8 @@ class WithdrawalServiceImplTest {
     }
 
     @Test
-    @DisplayName("게이트웨이 사전 소유권 검증 실패 시 지갑을 잠그지 않는다")
-    void preflightFailureStopsMoneyMovement() {
+    @DisplayName("신규 출금의 계좌 사전 검증 실패는 지갑 잠금과 claim 이후 이체를 중단한다")
+    void preflightFailureAfterClaimStopsMoneyMovement() {
         stubClaim();
         // 순서 변경 반영: 지갑은 정상 잠기지만(Lock), Preflight에서 예외가 터져 이체는 중단됨
         when(walletMapper.getWalletSnapshotForUpdate(anyLong()))
@@ -312,8 +347,12 @@ class WithdrawalServiceImplTest {
                 () -> withdrawalService.withdraw(command(AMOUNT, KEY))
         );
 
-        // 지갑 잠금 쿼리는 실행되었는지 확인하고, 차감/이체는 수행되지 않았는지 검증
-        verify(walletMapper).getWalletSnapshotForUpdate(anyLong());
+        InOrder order = inOrder(walletMapper, withdrawalMapper, bankTransferGateway);
+        order.verify(walletMapper).getWalletIdByUserId(USER_ID);
+        order.verify(walletMapper).getWalletSnapshotForUpdate(USER_ID);
+        order.verify(withdrawalMapper).insertWithdrawalRequest(any());
+        order.verify(bankTransferGateway).preflight(any(BankAccountPreflightCommand.class));
+
         verify(walletMapper, never()).subtractAvailableBalance(anyLong(), anyLong());
         verify(bankTransferGateway, never()).deposit(any());
     }

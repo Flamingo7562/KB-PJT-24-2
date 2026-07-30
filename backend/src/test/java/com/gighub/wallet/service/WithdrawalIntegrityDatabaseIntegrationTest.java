@@ -30,6 +30,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -104,6 +105,68 @@ public class WithdrawalIntegrityDatabaseIntegrationTest {
                 start.countDown();
                 executor.shutdownNow();
                 assertTrue(executor.awaitTermination(5, TimeUnit.SECONDS));
+                deleteWithdrawalFixture(jdbcTemplate, fixture);
+            }
+        }
+    }
+
+    @Test
+    @Timeout(15)
+    void completedReplayIgnoresDrainedWalletAndBlockedAccount() {
+        try (AnnotationConfigApplicationContext context =
+                     new AnnotationConfigApplicationContext(RootConfig.class)) {
+            JdbcTemplate jdbcTemplate = new JdbcTemplate(context.getBean(DataSource.class));
+            WithdrawalService withdrawalService = context.getBean(WithdrawalService.class);
+            WithdrawalFixture fixture = createWithdrawalFixture(jdbcTemplate);
+            WithdrawalCommand command = WithdrawalCommand.builder()
+                    .userId(fixture.userId())
+                    .linkedAccountId(fixture.accountId())
+                    .amount(1_000L)
+                    .idempotencyKey(fixture.idempotencyKey())
+                    .build();
+
+            try {
+                jdbcTemplate.update(
+                        "UPDATE wallets SET available_balance = 1000 WHERE id = ?",
+                        fixture.walletId()
+                );
+
+                WithdrawalResult original = withdrawalService.withdraw(command);
+                assertFalse(original.isReplayed());
+                assertEquals(0L, value(jdbcTemplate,
+                        "SELECT available_balance FROM wallets WHERE id = ?",
+                        fixture.walletId()));
+
+                // 첫 요청 뒤 계좌를 차단해도 replay는 현재 상태가 아닌 저장 결과를 반환해야 한다.
+                jdbcTemplate.update(
+                        "UPDATE mock_bank_accounts SET status = 'BLOCKED' WHERE id = ?",
+                        fixture.accountId()
+                );
+
+                WithdrawalResult replayed = withdrawalService.withdraw(command);
+
+                assertTrue(replayed.isReplayed());
+                assertEquals(original.getWithdrawalRequestId(),
+                        replayed.getWithdrawalRequestId());
+                assertEquals(original.getBankTransactionId(),
+                        replayed.getBankTransactionId());
+                assertEquals(1, count(jdbcTemplate,
+                        "SELECT COUNT(*) FROM withdrawal_requests WHERE user_id = ?",
+                        fixture.userId()));
+                assertEquals(1, count(jdbcTemplate,
+                        "SELECT COUNT(*) FROM mock_bank_transactions WHERE account_id = ?",
+                        fixture.accountId()));
+                assertEquals(1, count(jdbcTemplate,
+                        "SELECT COUNT(*) FROM wallet_transactions"
+                                + " WHERE wallet_id = ? AND transaction_type = 'WITHDRAWAL'",
+                        fixture.walletId()));
+                assertEquals(0L, value(jdbcTemplate,
+                        "SELECT available_balance FROM wallets WHERE id = ?",
+                        fixture.walletId()));
+                assertEquals(1_001_000L, value(jdbcTemplate,
+                        "SELECT balance FROM mock_bank_accounts WHERE id = ?",
+                        fixture.accountId()));
+            } finally {
                 deleteWithdrawalFixture(jdbcTemplate, fixture);
             }
         }

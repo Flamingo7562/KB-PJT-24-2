@@ -13,7 +13,6 @@ import com.gighub.wallet.exception.InsufficientAvailableBalanceException;
 import com.gighub.wallet.exception.InvalidWalletStateException;
 import com.gighub.wallet.exception.InvalidWithdrawalRequestException;
 import com.gighub.wallet.exception.WithdrawalIntegrityException;
-import com.gighub.wallet.exception.WithdrawalIntegrityException;
 import com.gighub.wallet.idempotency.WalletIdempotencyKeys;
 import com.gighub.wallet.mapper.WalletMapper;
 import com.gighub.wallet.mapper.WithdrawalMapper;
@@ -68,14 +67,14 @@ public class WithdrawalServiceImpl implements WithdrawalService {
 
     private WithdrawalResult withdrawOnce(
             WithdrawalCommand command, String rawKey, String ledgerKey) {
-        // wallet_id는 NOT NULL FK이므로 선점 INSERT 전에 필요
-        // 불변 식별자만 조회하고 잔액은 아래 잠금 스냅샷에서만 읽는다.
+        // wallet_id는 NOT NULL FK이므로 먼저 식별자만 조회한다.
+        // 잔액 판단은 이 조회값이 아니라 아래 FOR UPDATE 스냅샷을 기준으로 한다.
         Long walletId = walletMapper.getWalletIdByUserId(command.getUserId());
         if (walletId == null || walletId <= 0) {
             throw new InvalidWalletStateException("지갑을 찾을 수 없습니다.");
         }
 
-        // 전역 잠금 순서: 지갑 -> 계좌 claim INSERT보다 먼저 (데드락 예방)
+        // Funding과 동일하게 지갑 → 계좌 순서로 잠가 교차 데드락을 예방한다.
         WalletBalanceSnapshot wallet =
                 walletMapper.getWalletSnapshotForUpdate(command.getUserId());
         if (wallet == null) {
@@ -83,23 +82,7 @@ public class WithdrawalServiceImpl implements WithdrawalService {
         }
         validateWalletSnapshot(wallet, command.getUserId(), walletId);
 
-        // 잠금 잔액은 출금할 수 없다
-        if (wallet.getAvailableBalance() < command.getAmount()) {
-            throw new InsufficientAvailableBalanceException("지갑의 가용 잔액이 부족합니다.");
-        }
-        Long availableAfter = subtractExactly(
-                wallet.getAvailableBalance(),
-                command.getAmount(),
-                "지갑 출금 후 잔액이 허용 범위를 벗어났습니다."
-        );
-
-        // 계좌 소유권 preflight
-        bankTransferGateway.preflight(BankAccountPreflightCommand.builder()
-                .accountId(command.getLinkedAccountId())
-                .userId(command.getUserId())
-                .build());
-
-        // 이제 claim INSERT (FK S 잠금이 이미 잡은 X 뒤에 옴)
+        // 지갑을 잡은 상태에서 요청을 선점해 계좌 FK 잠금이 순서를 뒤집지 않게 한다.
         WithdrawalOrderParam order = WithdrawalOrderParam.builder()
                 .userId(command.getUserId())
                 .walletId(walletId)
@@ -117,6 +100,21 @@ public class WithdrawalServiceImpl implements WithdrawalService {
         }catch (DataIntegrityViolationException invalidOrder){
             translateInvalidOrderReference(command, invalidOrder);
         }
+
+        // 완료 요청의 replay는 당시 원장 스냅샷을 사용하므로 현재 상태 검증은 신규 claim에만 적용한다.
+        if (wallet.getAvailableBalance() < command.getAmount()) {
+            throw new InsufficientAvailableBalanceException("지갑의 가용 잔액이 부족합니다.");
+        }
+        Long availableAfter = subtractExactly(
+                wallet.getAvailableBalance(),
+                command.getAmount(),
+                "지갑 출금 후 잔액이 허용 범위를 벗어났습니다."
+        );
+
+        bankTransferGateway.preflight(BankAccountPreflightCommand.builder()
+                .accountId(command.getLinkedAccountId())
+                .userId(command.getUserId())
+                .build());
 
         // 계좌 입금
         BankTransferResult transfer = bankTransferGateway.deposit(BankTransferCommand.builder()

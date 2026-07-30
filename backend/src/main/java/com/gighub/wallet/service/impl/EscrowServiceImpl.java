@@ -27,7 +27,8 @@ public class EscrowServiceImpl implements EscrowService {
 
     private static final String ESCROW_UNFUNDED = "UNFUNDED";
     private static final String WORK_ACCEPTED = "ACCEPTED";
-    private static final List<String> HOLDABLE_STATUSES = List.of("INVITED");
+    // 최신 근무 상태 모델에서 초대 수락 전 단계는 DRAFT로 관리한다.
+    private static final List<String> HOLDABLE_STATUSES = List.of("DRAFT");
     private static final String TX_ESCROW_HOLD = "ESCROW_HOLD";
     private static final String REF_ESCROW = "ESCROW";
 
