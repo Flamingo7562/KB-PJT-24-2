@@ -1,5 +1,7 @@
 package com.gighub.auth.security;
 
+import java.util.Arrays;
+
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -9,6 +11,8 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
+import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
+import org.springframework.security.web.util.matcher.RequestMatcher;
 
 /**
  * 세션 인증 + CSRF 기반 Spring Security 설정.
@@ -21,6 +25,14 @@ import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
  * <p>{@code /api/test-login/**}({@link com.gighub.support.TestLoginController},
  * {@code @Profile("local")})도 공개한다 — local 프로파일 밖에서는 컨트롤러 빈 자체가
  * 없어 경로가 존재하지 않으므로 다른 환경에는 영향이 없다.</p>
+ *
+ * <p>경로 매칭은 문자열 {@code requestMatchers(String...)} 대신 명시적
+ * {@link AntPathRequestMatcher}를 쓴다. 문자열 오버로드는 Spring MVC가
+ * classpath에 있으면 {@code mvcHandlerMappingIntrospector} 빈이 필요한
+ * {@code MvcRequestMatcher}를 시도하는데, 이 앱은 Root Context({@link
+ * com.gighub.config.RootConfig}, 이 클래스가 속한 곳)와 Servlet Context({@link
+ * com.gighub.config.WebMvcConfig}, {@code @EnableWebMvc}가 있는 곳)가 분리되어 있어
+ * 그 빈을 찾지 못하고 컨텍스트 시작이 실패한다.</p>
  */
 @Configuration
 @EnableWebSecurity
@@ -35,6 +47,12 @@ public class SecurityConfig {
         "/api/auth/login",
         "/api/auth/logout"
     };
+
+    private static RequestMatcher[] antMatchers(String... patterns) {
+        return Arrays.stream(patterns)
+                .map(AntPathRequestMatcher::new)
+                .toArray(RequestMatcher[]::new);
+    }
 
     @Bean
     public PasswordEncoder passwordEncoder() {
@@ -65,9 +83,9 @@ public class SecurityConfig {
                 .authenticationEntryPoint(jsonAuthenticationEntryPoint())
                 .accessDeniedHandler(jsonAccessDeniedHandler()))
             .authorizeHttpRequests(authorize -> authorize
-                .requestMatchers(PUBLIC_AUTH_PATHS).permitAll()
-                .requestMatchers("/api/health/**").permitAll()
-                .requestMatchers("/api/test-login/**").permitAll()
+                .requestMatchers(antMatchers(PUBLIC_AUTH_PATHS)).permitAll()
+                .requestMatchers(antMatchers("/api/health/**")).permitAll()
+                .requestMatchers(antMatchers("/api/test-login/**")).permitAll()
                 .anyRequest().authenticated());
 
         return http.build();

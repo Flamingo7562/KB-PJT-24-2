@@ -23,29 +23,43 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * 실제 MySQL Root Context 위에서 SecurityConfig의 세션·CSRF·401 응답을 확인한다.
+ * 실제 MySQL 위에서, 운영과 동일한 Root/Servlet Context 분리 구조로
+ * SecurityConfig의 세션·CSRF·401 응답을 확인한다.
+ *
+ * <p>Root(RootConfig)와 Servlet(WebMvcConfig)를 하나로 합쳐 두면 SecurityConfig가
+ * WebMvcConfig의 {@code mvcHandlerMappingIntrospector}를 우연히 볼 수 있어 실제
+ * 배포(Root/Servlet 분리)에서만 나는 오류를 테스트가 놓친다 — 반드시 부모/자식으로
+ * 나눠서 구성한다.</p>
  */
 @Tag("database")
 class SecurityConfigIntegrationTest {
 
-    private AnnotationConfigWebApplicationContext context;
+    private AnnotationConfigWebApplicationContext rootContext;
+    private AnnotationConfigWebApplicationContext servletContext;
     private MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
-        context = new AnnotationConfigWebApplicationContext();
-        context.register(RootConfig.class, WebMvcConfig.class);
-        context.setServletContext(new MockServletContext());
-        context.refresh();
+        rootContext = new AnnotationConfigWebApplicationContext();
+        rootContext.register(RootConfig.class);
+        rootContext.setServletContext(new MockServletContext());
+        rootContext.refresh();
 
-        mockMvc = MockMvcBuilders.webAppContextSetup(context)
+        servletContext = new AnnotationConfigWebApplicationContext();
+        servletContext.setParent(rootContext);
+        servletContext.register(WebMvcConfig.class);
+        servletContext.setServletContext(rootContext.getServletContext());
+        servletContext.refresh();
+
+        mockMvc = MockMvcBuilders.webAppContextSetup(servletContext)
                 .apply(springSecurity())
                 .build();
     }
 
     @AfterEach
     void tearDown() {
-        context.close();
+        servletContext.close();
+        rootContext.close();
     }
 
     @Test
