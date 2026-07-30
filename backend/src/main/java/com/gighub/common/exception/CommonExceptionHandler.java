@@ -3,6 +3,7 @@ package com.gighub.common.exception;
 import com.gighub.bank.exception.BankAccountForbiddenException;
 import com.gighub.bank.exception.InsufficientBankBalanceException;
 import com.gighub.bank.exception.InvalidBankAccountStateException;
+import com.gighub.document.exception.DocumentNotFoundException;
 import com.gighub.wallet.exception.EscrowAccessDeniedException;
 import com.gighub.wallet.exception.IdempotencyKeyReusedException;
 import com.gighub.wallet.exception.InsufficientAvailableBalanceException;
@@ -148,6 +149,12 @@ public class CommonExceptionHandler {
     @ExceptionHandler(AuthRequiredException.class)
     public ResponseEntity<Map<String, Object>> handleAuthRequired(AuthRequiredException e) {
         return body(401, "AUTH_REQUIRED", e.getMessage());
+    }
+
+    @ExceptionHandler(DocumentNotFoundException.class)
+    public ResponseEntity<Map<String, Object>> handleDocumentNotFound(
+            DocumentNotFoundException e) {
+        return body(404, "DOCUMENT_NOT_FOUND", e.getMessage());
     }
 
     /** 500 - 안전망. 내부 정보는 숨기고 traceId로 로그를 추적한다 */
