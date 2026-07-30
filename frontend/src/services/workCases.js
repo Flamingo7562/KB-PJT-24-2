@@ -161,11 +161,18 @@ const mockWorkCaseList = [
 ]
 
 /**
- * 지점 + 검색어(제목·알바생 이름) + 상태 + 기간으로 거르는 mock 필터.
+ * 지점 + 검색어(제목·알바생 이름) + 상태 + 기간으로 거르고 정렬하는 mock 필터.
  * from/to 는 `YYYY-MM-DD` 양끝 포함 구간(캘린더 뷰가 보고 있는 달). 문자열 비교로 충분하다.
+ *
+ * sort 는 근무 날짜 기준 LATEST(기본) | OLDEST 다. 같은 날짜는 시작 시간으로 이어 정렬해
+ * 순서가 흔들리지 않게 한다(실제 API 도 안정 정렬을 준다고 가정).
  */
-function filterMockWorkCases(workplaceId, { keyword = '', status = '', from = '', to = '' } = {}) {
+function filterMockWorkCases(
+  workplaceId,
+  { keyword = '', status = '', from = '', to = '', sort = 'LATEST' } = {}
+) {
   const q = String(keyword).trim().toLowerCase()
+  const dir = sort === 'OLDEST' ? 1 : -1
   return mockWorkCaseList
     .filter((s) => s.workplaceId === Number(workplaceId))
     .filter((s) => status === '' || s.status === status)
@@ -176,6 +183,12 @@ function filterMockWorkCases(workplaceId, { keyword = '', status = '', from = ''
         q === '' ||
         s.title.toLowerCase().includes(q) ||
         (s.workerName ?? '').toLowerCase().includes(q)
+    )
+    .sort(
+      (a, b) =>
+        dir *
+        (String(a.workDate).localeCompare(String(b.workDate)) ||
+          String(a.startTime).localeCompare(String(b.startTime)))
     )
 }
 
@@ -227,7 +240,7 @@ export async function getWorkCaseSummary(workplaceId) {
  * from/to 로 좁혀서 요청하고, 결과를 날짜별로 묶어 그린다(@/utils/calendar).
  * content 항목의 canIssueInvitation은 일회성 연결 링크 신규 발급 가능 여부다.
  * @param {number} workplaceId
- * @param {object} params keyword, status, from, to, page, size
+ * @param {object} params keyword, status, sort('LATEST'|'OLDEST'), from, to, page, size
  */
 export async function listWorkCases(workplaceId, params = {}) {
   if (USE_MOCK) {
@@ -235,7 +248,8 @@ export async function listWorkCases(workplaceId, params = {}) {
       keyword: params.keyword,
       status: params.status,
       from: params.from,
-      to: params.to
+      to: params.to,
+      sort: params.sort
     }).map((s) => ({ ...s }))
     return { content, totalPages: 1 }
   }

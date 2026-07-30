@@ -1,7 +1,7 @@
 <script setup>
 /**
  * [C] 사장 근태관리  ·  /owner/attendance  ·  OWNER  (탭 화면)
- * 근태 현황(채용중·근무중) + 근무 리스트(최신순·검색) + '근무 포지션 추가'(→ /owner/attendance/work-cases/new).
+ * 근태 현황(채용중·근무중) + 근무 리스트(검색·필터) + '근무 포지션 추가'(→ /owner/attendance/work-cases/new).
  * 지점 컨텍스트: useWorkplaceStore().selectedId 기준.
  * 연계 API: GET /workplaces/{id}/work-cases/summary · GET /workplaces/{id}/work-cases
  *          POST /work-cases/{id}/invitations (수락 전 항목의 연결 링크 발급·복사)
@@ -11,16 +11,20 @@
  * 보기 방식(목록형 ↔ 캘린더)
  *   - 두 뷰 모두 **같은 조회(listWorkCases)** 결과를 쓴다. 캘린더일 때만 보고 있는 달로
  *     from/to 를 좁혀 요청하고, 결과를 날짜별로 묶어 그린다(@/utils/calendar).
- *   - 상태 필터·검색어는 뷰를 바꿔도 그대로 유지된다(같은 ref 를 공유).
+ *   - 적용한 필터는 뷰를 바꿔도 그대로 유지된다(같은 appliedFilter 를 공유).
+ *     단 캘린더 뷰에서는 보고 있는 달이 필터의 기간을 덮는다(AttendanceFilterSheet 가 잠금).
  *   - 마지막으로 고른 뷰는 localStorage 에 남겨 재진입 시 복원한다(@/utils/storage).
  *   - 항목 클릭 이동 경로는 두 뷰가 동일하다(AttendanceWorkCaseList 를 공유).
  */
 import { Plus, Search } from 'lucide-vue-next'
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
 import EmptyState from '@/components/common/EmptyState.vue'
 import AttendanceCalendar from '@/components/owner/AttendanceCalendar.vue'
+import AttendanceFilterSheet, {
+  buildAttendanceFilterParams
+} from '@/components/owner/AttendanceFilterSheet.vue'
 import AttendanceViewToggle from '@/components/owner/AttendanceViewToggle.vue'
 import AttendanceWorkCaseList from '@/components/owner/AttendanceWorkCaseList.vue'
 import {
@@ -48,8 +52,13 @@ const workplaceStore = useWorkplaceStore()
 const summary = ref(emptyWorkCaseSummary())
 const workCases = ref([])
 const loading = ref(false)
-const keyword = ref('')
-const statusFilter = ref(null) // null(전체) | 7단계 상태 enum 중 하나(요약 카드 선택)
+
+/* ---- 검색·필터 -----------------------------------------------------------
+ * 적용 중인 필터를 **서버 파라미터 형태 그대로** 들고 있다(사장 홈의 송금상세와 같은 방식).
+ * 기본값은 { sort: 'LATEST' } — 비어 있는 항목은 애초에 키가 없다.
+ * 요약 카드 토글과 시트의 '유형' 선택이 이 하나의 status 를 함께 쓴다. */
+const appliedFilter = ref(buildAttendanceFilterParams())
+const filterOpen = ref(false)
 
 /* ---- 보기 방식(목록형 ↔ 캘린더) ------------------------------------------ */
 
@@ -67,7 +76,7 @@ const selectedDate = ref(null) // 캘린더에서 고른 날짜 'YYYY-MM-DD' | n
 
 /**
  * 선택 지점 기준으로 요약·리스트를 다시 조회한다.
- * 검색어·상태는 서버 파라미터로만 넘긴다 — 프론트에서 목록을 재계산하지 않는다.
+ * 필터는 서버 파라미터로만 넘긴다 — 프론트에서 목록을 재계산하지 않는다.
  * 캘린더 뷰일 때만 보고 있는 달(from~to)로 조회 범위를 좁힌다.
  * 요약(채용중·근무중 건수)은 상태 필터와 무관한 전체 집계라 그대로 둔다.
  */
@@ -76,18 +85,15 @@ async function load() {
   if (workplaceId == null) return
 
   // 캘린더는 한 달치만 필요하다. 목록형은 기존대로 기간 제한 없이 최신순 전체를 본다.
+  // range 를 뒤에 펼쳐 캘린더에서는 보고 있는 달이 필터의 from/to 를 덮는다
+  // (그래서 시트도 캘린더에서는 기간 항목을 잠근다).
   const range = isCalendar.value ? monthRange(monthKey.value) : {}
 
   loading.value = true
   try {
     const [summaryRes, listRes] = await Promise.all([
       getWorkCaseSummary(workplaceId),
-      listWorkCases(workplaceId, {
-        keyword: keyword.value.trim() || undefined,
-        status: statusFilter.value ?? undefined,
-        from: range.from,
-        to: range.to
-      })
+      listWorkCases(workplaceId, { ...appliedFilter.value, ...range })
     ])
     summary.value = summaryRes
     workCases.value = listRes.content ?? []
@@ -111,35 +117,33 @@ watch(viewMode, (mode) => {
 // 캘린더에서 달을 옮기면 그 달을 다시 조회한다.
 watch(monthKey, load)
 
-// 입력할 때마다 다시 조회하되, 매 글자 요청하지 않도록 잠깐 기다린다.
-let searchTimer = null
-watch(keyword, () => {
-  clearTimeout(searchTimer)
-  searchTimer = setTimeout(load, 300)
-})
-onUnmounted(() => clearTimeout(searchTimer))
-
-/** 엔터로 제출하면 대기 없이 바로 조회한다. */
-function onSearchSubmit() {
-  clearTimeout(searchTimer)
+/** 시트에서 '적용'을 누르면 그 파라미터로 갈아끼우고 다시 조회한다. */
+function onApplyFilter(params) {
+  appliedFilter.value = params
   load()
 }
 
-/** 같은 상태를 다시 누르면 필터를 해제한다(전체 보기). */
+/**
+ * 요약 카드 토글 — 시트의 '유형'과 같은 status 를 건드린다.
+ * 같은 상태를 다시 누르면 키를 지워 전체 보기로 돌아간다(status 없음 = 전체).
+ */
 function toggleStatus(status) {
-  statusFilter.value = statusFilter.value === status ? null : status
+  const next = { ...appliedFilter.value }
+  if (next.status === status) delete next.status
+  else next.status = status
+  appliedFilter.value = next
   load()
 }
 
-const isSearching = computed(() => keyword.value.trim() !== '')
-const isFiltered = computed(() => isSearching.value || statusFilter.value !== null)
+// sort 는 항상 들어 있으므로 그 외 키가 하나라도 있으면 무언가 걸러진 상태다.
+const isFiltered = computed(() => Object.keys(appliedFilter.value).some((key) => key !== 'sort'))
 
 // 상태 라벨·색은 상수 단일 소스만 사용(컴포넌트에 문자열 하드코딩 금지).
 const statusLabel = (status) => workCaseStatusLabel(status)
 const statusColor = (status) => workCaseStatusColor(status)
 
 const listTitle = computed(() =>
-  statusFilter.value ? `${statusLabel(statusFilter.value)} 근무` : '근무 목록'
+  appliedFilter.value.status ? `${statusLabel(appliedFilter.value.status)} 근무` : '근무 목록'
 )
 
 /**
@@ -208,8 +212,8 @@ const goNew = () => router.push('/owner/attendance/work-cases/new')
           :key="bucket.key"
           type="button"
           class="stat"
-          :class="{ active: statusFilter === bucket.status }"
-          :aria-pressed="statusFilter === bucket.status"
+          :class="{ active: appliedFilter.status === bucket.status }"
+          :aria-pressed="appliedFilter.status === bucket.status"
           @click="toggleStatus(bucket.status)"
         >
           <span class="stat-label">{{ statusLabel(bucket.status) }}</span>
@@ -219,27 +223,26 @@ const goNew = () => router.push('/owner/attendance/work-cases/new')
         </button>
       </section>
 
-      <form class="search" @submit.prevent="onSearchSubmit">
-        <Search :size="16" class="search-icon" />
-        <input
-          v-model="keyword"
-          class="search-input"
-          type="search"
-          placeholder="근무 제목·알바생 검색"
-          aria-label="근무 검색"
-        />
-      </form>
-
-      <!-- 보기 방식 전환 — 상태 필터·검색어는 그대로 두고 표시 방법만 바꾼다 -->
+      <!-- 보기 방식 전환 — 필터는 그대로 두고 표시 방법만 바꾼다 -->
       <AttendanceViewToggle v-model="viewMode" />
 
       <!--
-      목록 머리 — 제목 + '근무 포지션 추가'(사업장 관리의 header-row 와 같은 형태).
-      두 뷰가 공유하고 로딩 중에도 남기려고 v-if 분기 밖에 둔다. 캘린더 뷰에는
-      달력이 자체 월 헤더를 갖고 있어 제목을 겹쳐 쓰지 않고 버튼만 보여준다.
-    -->
+        목록 머리 — 제목 + '검색·필터' + '근무 포지션 추가'.
+        두 뷰가 공유하고 로딩 중에도 남기려고 v-if 분기 밖에 둔다. 캘린더 뷰에는
+        달력이 자체 월 헤더를 갖고 있어 제목을 겹쳐 쓰지 않고 버튼만 보여준다.
+      -->
       <div class="list-header">
         <h2 v-if="!isCalendar" class="list-title">{{ listTitle }}</h2>
+        <!-- 걸러진 상태를 색으로 표시한다 — 검색어·기간은 제목에 드러나지 않기 때문이다. -->
+        <button
+          type="button"
+          class="filter-btn"
+          :class="{ 'is-active': isFiltered }"
+          @click="filterOpen = true"
+        >
+          <Search :size="14" />
+          검색·필터
+        </button>
         <button type="button" class="add-btn" @click="goNew">
           <Plus :size="14" />
           근무 포지션 추가
@@ -255,7 +258,7 @@ const goNew = () => router.push('/owner/attendance/work-cases/new')
         v-if="workCases.length === 0 && isFiltered"
         message="조건에 맞는 근무가 없습니다."
       >
-        검색어를 바꾸거나 위 카드를 다시 눌러 전체를 확인해보세요.
+        검색·필터 조건을 바꾸거나 위 카드를 다시 눌러 전체를 확인해보세요.
       </EmptyState>
 
       <EmptyState v-else-if="workCases.length === 0" message="등록된 근무가 없습니다.">
@@ -284,7 +287,7 @@ const goNew = () => router.push('/owner/attendance/work-cases/new')
         v-if="workCases.length === 0 && isFiltered"
         :message="`${monthLabel}에는 조건에 맞는 근무가 없습니다.`"
       >
-        검색어를 바꾸거나 위 카드를 다시 눌러 전체를 확인해보세요.
+        검색·필터 조건을 바꾸거나 위 카드를 다시 눌러 전체를 확인해보세요.
       </EmptyState>
 
       <EmptyState
@@ -317,6 +320,18 @@ const goNew = () => router.push('/owner/attendance/work-cases/new')
         />
       </div>
     </section>
+
+    <!--
+      캘린더 뷰에서는 기간 항목을 잠근다 — 보고 있는 달이 조회 범위를 정하므로(load 의 range)
+      기간을 따로 받으면 두 범위가 충돌한다.
+    -->
+    <AttendanceFilterSheet
+      :open="filterOpen"
+      :model-value="appliedFilter"
+      :date-range-locked="isCalendar"
+      @close="filterOpen = false"
+      @apply="onApplyFilter"
+    />
   </div>
 </template>
 
@@ -382,32 +397,6 @@ const goNew = () => router.push('/owner/attendance/work-cases/new')
   font-weight: var(--weight-bold);
 }
 
-/* ---- 검색 ---- */
-.search {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-  padding: 0 var(--space-md);
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-pill);
-}
-.search-icon {
-  flex-shrink: 0;
-  color: var(--color-text-sub);
-}
-.search-input {
-  flex: 1;
-  min-width: 0;
-  padding: var(--space-md) 0;
-  border: none;
-  background: none;
-  font-size: var(--text-md);
-}
-.search-input:focus {
-  outline: none;
-}
-
 /* ---- 근무 리스트 ---- */
 /* 제목 + 추가 버튼. 캘린더 뷰에는 제목이 없으므로 버튼을 margin-left 로 오른쪽에 붙인다
    (space-between 은 제목이 없을 때 버튼이 왼쪽으로 붙는다). */
@@ -428,11 +417,29 @@ const goNew = () => router.push('/owner/attendance/work-cases/new')
   font-weight: var(--weight-bold);
   color: var(--color-text);
 }
-.add-btn {
+/* 검색·필터 — 사장 홈의 송금상세 필터 버튼과 같은 모양(pill + 보조 텍스트색). */
+.filter-btn {
   display: inline-flex;
   align-items: center;
   gap: var(--space-xs);
   margin-left: auto;
+  padding: var(--space-xs) var(--space-md);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  font-size: var(--text-sm);
+  color: var(--color-text-sub);
+}
+/* 걸러진 상태 — 검색어·기간은 제목에 안 드러나므로 버튼 색으로 알린다. */
+.filter-btn.is-active {
+  border-color: var(--color-owner);
+  background: var(--color-owner-weak);
+  color: var(--color-owner);
+  font-weight: var(--weight-medium);
+}
+.add-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
   padding: var(--space-xs) var(--space-sm);
   border: 1px solid var(--color-owner);
   border-radius: var(--radius-sm);

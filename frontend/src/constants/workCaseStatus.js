@@ -58,3 +58,25 @@ export const WORK_CASE_SUMMARY = [
 export function emptyWorkCaseSummary() {
   return Object.fromEntries(WORK_CASE_SUMMARY.map((b) => [b.key, 0]))
 }
+
+/**
+ * 근태관리 검색·필터 시트의 '유형' 선택지 — 전체 + 7단계 전부.
+ *
+ * WORK_CASE_STATUS 에서 파생시킨다(라벨을 다시 적으면 단일 원본이 깨진다). 나열 순서는
+ * 그 객체의 키 순서 = 상태 전이 순서다.
+ * 요약 카드(WORK_CASE_SUMMARY)와 달리 CANCELED 도 넣는다 — 요약은 운영 현황 집계라
+ * 취소를 세지 않지만, 필터는 취소된 근무를 찾아보는 용도가 있다.
+ */
+export const WORK_CASE_STATUS_FILTER = [
+  { value: 'ALL', label: '전체' },
+  ...Object.entries(WORK_CASE_STATUS).map(([status, { label }]) => ({ value: status, label }))
+]
+
+/**
+ * 근태관리 정렬 선택지. 서버 파라미터(sort)로만 전달한다.
+ * 지갑의 TX_SORT 와 달리 금액 정렬은 없다 — 근무 리스트는 날짜 축으로만 읽는다.
+ */
+export const WORK_CASE_SORT = [
+  { value: 'LATEST', label: '최신순' },
+  { value: 'OLDEST', label: '오래된순' }
+]

@@ -1,50 +1,54 @@
 <script>
 /**
- * 송금상세(거래내역) 필터 바텀시트 — /owner/home 에서 사용.
+ * 근태관리 검색·필터 바텀시트 — /owner/attendance 에서 사용.
  *
- * 필터는 프론트에서 목록을 재계산하지 않고, 서버 파라미터로만 전달한다
- * (서버가 최종 권위 — docs/rules/domain.md). buildTransactionFilterParams 는
- * 빈 값/기본값을 제외한 GET /wallet/transactions 파라미터를 만든다.
+ * 사장 홈의 송금상세 필터(TransactionFilterSheet)와 같은 구조·조작 방식을 따른다.
+ * 필터는 프론트에서 목록을 재계산하지 않고 서버 파라미터로만 전달한다
+ * (서버가 최종 권위 — docs/rules/domain.md). buildAttendanceFilterParams 는
+ * 빈 값/기본값을 제외한 GET /workplaces/{id}/work-cases 파라미터를 만든다.
  */
 export const DEFAULT_FILTER = {
   keyword: '',
-  txType: 'ALL',
+  status: 'ALL',
   sort: 'LATEST',
-  startDate: '',
-  endDate: '',
-  minAmount: '',
-  maxAmount: ''
+  from: '',
+  to: ''
 }
 
-/** 필터 초안 → 서버 파라미터(빈 값·기본값 제외). 순수 함수라 단위 테스트 대상. */
-export function buildTransactionFilterParams(draft = {}) {
+/**
+ * 필터 초안 → 서버 파라미터(빈 값·기본값 제외). 순수 함수라 단위 테스트 대상.
+ * 키 이름은 서비스(listWorkCases)가 받는 이름과 같아야 한다 — keyword/status/sort/from/to.
+ */
+export function buildAttendanceFilterParams(draft = {}) {
   const f = { ...DEFAULT_FILTER, ...draft }
   const params = {}
   const keyword = String(f.keyword).trim()
   if (keyword) params.keyword = keyword
-  if (f.txType && f.txType !== 'ALL') params.txType = f.txType
+  if (f.status && f.status !== 'ALL') params.status = f.status
   if (f.sort) params.sort = f.sort
-  if (f.startDate) params.startDate = f.startDate
-  if (f.endDate) params.endDate = f.endDate
-  if (f.minAmount !== '' && Number(f.minAmount) >= 0) params.minAmount = Number(f.minAmount)
-  if (f.maxAmount !== '' && Number(f.maxAmount) >= 0) params.maxAmount = Number(f.maxAmount)
+  if (f.from) params.from = f.from
+  if (f.to) params.to = f.to
   return params
 }
 </script>
 
 <script setup>
-import { computed, reactive, watch } from 'vue'
+import { reactive, watch } from 'vue'
 
 import AppField from '@/components/common/AppField.vue'
 import BaseBottomSheet from '@/components/common/BaseBottomSheet.vue'
 import BaseButton from '@/components/common/BaseButton.vue'
-import { TX_SORT, TX_TYPE_FILTER } from '@/utils/constants'
-import { blockNonDigitKeydown } from '@/utils/format'
+import { WORK_CASE_SORT, WORK_CASE_STATUS_FILTER } from '@/constants/workCaseStatus'
 
 const props = defineProps({
   open: { type: Boolean, default: false },
   // 현재 적용 중인 필터(시트를 다시 열 때 초안 복원용)
-  modelValue: { type: Object, default: () => ({}) }
+  modelValue: { type: Object, default: () => ({}) },
+  /**
+   * 기간 항목을 잠근다. 캘린더 뷰는 보고 있는 달로 조회 범위를 정하므로(monthRange)
+   * 기간을 함께 받으면 두 범위가 충돌한다 — 그래서 캘린더에서는 이 값을 켠다.
+   */
+  dateRangeLocked: { type: Boolean, default: false }
 })
 
 const emit = defineEmits(['close', 'apply'])
@@ -59,22 +63,12 @@ watch(
   }
 )
 
-// 금액 범위는 원 단위 정수 문자열로 보관하고, 화면에는 천단위 콤마로 표시한다.
-const minAmountDisplay = computed(() => formatAmount(draft.minAmount))
-const maxAmountDisplay = computed(() => formatAmount(draft.maxAmount))
-function formatAmount(v) {
-  return v === '' || v == null ? '' : Number(v).toLocaleString('ko-KR')
-}
-function onAmountInput(key, v) {
-  draft[key] = String(v).replace(/[^\d]/g, '')
-}
-
 function onReset() {
   Object.assign(draft, DEFAULT_FILTER)
 }
 
 function onApply() {
-  emit('apply', buildTransactionFilterParams(draft))
+  emit('apply', buildAttendanceFilterParams(draft))
   emit('close')
 }
 </script>
@@ -82,18 +76,18 @@ function onApply() {
 <template>
   <BaseBottomSheet :open="open" title="검색·필터" @close="emit('close')">
     <div class="filter-body">
-      <AppField v-model="draft.keyword" label="검색어" placeholder="내용·설명 검색" />
+      <AppField v-model="draft.keyword" label="검색어" placeholder="근무 제목·알바생 검색" />
 
       <div class="group">
         <p class="group-label">유형</p>
         <div class="chips">
           <button
-            v-for="opt in TX_TYPE_FILTER"
+            v-for="opt in WORK_CASE_STATUS_FILTER"
             :key="opt.value"
             type="button"
             class="chip"
-            :class="{ 'is-active': draft.txType === opt.value }"
-            @click="draft.txType = opt.value"
+            :class="{ 'is-active': draft.status === opt.value }"
+            @click="draft.status = opt.value"
           >
             {{ opt.label }}
           </button>
@@ -104,7 +98,7 @@ function onApply() {
         <p class="group-label">정렬</p>
         <div class="chips">
           <button
-            v-for="opt in TX_SORT"
+            v-for="opt in WORK_CASE_SORT"
             :key="opt.value"
             type="button"
             class="chip"
@@ -119,31 +113,13 @@ function onApply() {
       <div class="group">
         <p class="group-label">기간</p>
         <div class="field-row">
-          <AppField v-model="draft.startDate" type="date" />
+          <AppField v-model="draft.from" type="date" :disabled="dateRangeLocked" />
           <span class="tilde">~</span>
-          <AppField v-model="draft.endDate" type="date" />
+          <AppField v-model="draft.to" type="date" :disabled="dateRangeLocked" />
         </div>
-      </div>
-
-      <div class="group">
-        <p class="group-label">금액 범위</p>
-        <div class="field-row">
-          <AppField
-            :model-value="minAmountDisplay"
-            type="tel"
-            placeholder="최소"
-            @keydown="blockNonDigitKeydown"
-            @update:model-value="(v) => onAmountInput('minAmount', v)"
-          />
-          <span class="tilde">~</span>
-          <AppField
-            :model-value="maxAmountDisplay"
-            type="tel"
-            placeholder="최대"
-            @keydown="blockNonDigitKeydown"
-            @update:model-value="(v) => onAmountInput('maxAmount', v)"
-          />
-        </div>
+        <p v-if="dateRangeLocked" class="group-note">
+          캘린더 보기에서는 달력에서 보고 있는 달로 기간이 정해져요.
+        </p>
       </div>
     </div>
 
@@ -166,6 +142,11 @@ function onApply() {
   margin-bottom: var(--space-sm);
   font-size: var(--text-sm);
   font-weight: var(--weight-medium);
+  color: var(--color-text-sub);
+}
+.group-note {
+  margin-top: var(--space-xs);
+  font-size: var(--text-sm);
   color: var(--color-text-sub);
 }
 .chips {
