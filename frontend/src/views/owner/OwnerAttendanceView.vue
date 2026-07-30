@@ -196,49 +196,55 @@ const goNew = () => router.push('/owner/attendance/work-cases/new')
 
 <template>
   <div class="attendance">
-    <!-- 상태별 요약 6종 — 카드를 누르면 해당 상태만, 다시 누르면 전체를 본다 -->
-    <section class="summary">
-      <button
-        v-for="bucket in WORK_CASE_SUMMARY"
-        :key="bucket.key"
-        type="button"
-        class="stat"
-        :class="{ active: statusFilter === bucket.status }"
-        :aria-pressed="statusFilter === bucket.status"
-        @click="toggleStatus(bucket.status)"
-      >
-        <span class="stat-label">{{ statusLabel(bucket.status) }}</span>
-        <strong class="stat-value" :style="{ color: statusColor(bucket.status) }">
-          {{ summary[bucket.key] ?? 0 }}
-        </strong>
-      </button>
-    </section>
-
-    <form class="search" @submit.prevent="onSearchSubmit">
-      <Search :size="16" class="search-icon" />
-      <input
-        v-model="keyword"
-        class="search-input"
-        type="search"
-        placeholder="근무 제목·알바생 검색"
-        aria-label="근무 검색"
-      />
-    </form>
-
-    <!-- 보기 방식 전환 — 상태 필터·검색어는 그대로 두고 표시 방법만 바꾼다 -->
-    <AttendanceViewToggle v-model="viewMode" />
-
     <!--
+      고정 영역 — 요약·검색·뷰 토글·목록 머리까지 화면 위에 붙어 있고, 그 아래(근무 목록 ·
+      캘린더)만 스크롤한다. AppTopBar 바로 밑에 멈추도록 sticky 로 잡는다.
+    -->
+    <div class="sticky-head">
+      <!-- 상태별 요약 6종 — 카드를 누르면 해당 상태만, 다시 누르면 전체를 본다 -->
+      <section class="summary">
+        <button
+          v-for="bucket in WORK_CASE_SUMMARY"
+          :key="bucket.key"
+          type="button"
+          class="stat"
+          :class="{ active: statusFilter === bucket.status }"
+          :aria-pressed="statusFilter === bucket.status"
+          @click="toggleStatus(bucket.status)"
+        >
+          <span class="stat-label">{{ statusLabel(bucket.status) }}</span>
+          <strong class="stat-value" :style="{ color: statusColor(bucket.status) }">
+            {{ summary[bucket.key] ?? 0 }}
+          </strong>
+        </button>
+      </section>
+
+      <form class="search" @submit.prevent="onSearchSubmit">
+        <Search :size="16" class="search-icon" />
+        <input
+          v-model="keyword"
+          class="search-input"
+          type="search"
+          placeholder="근무 제목·알바생 검색"
+          aria-label="근무 검색"
+        />
+      </form>
+
+      <!-- 보기 방식 전환 — 상태 필터·검색어는 그대로 두고 표시 방법만 바꾼다 -->
+      <AttendanceViewToggle v-model="viewMode" />
+
+      <!--
       목록 머리 — 제목 + '근무 포지션 추가'(사업장 관리의 header-row 와 같은 형태).
       두 뷰가 공유하고 로딩 중에도 남기려고 v-if 분기 밖에 둔다. 캘린더 뷰에는
       달력이 자체 월 헤더를 갖고 있어 제목을 겹쳐 쓰지 않고 버튼만 보여준다.
     -->
-    <div class="list-header">
-      <h2 v-if="!isCalendar" class="list-title">{{ listTitle }}</h2>
-      <button type="button" class="add-btn" @click="goNew">
-        <Plus :size="14" />
-        근무 포지션 추가
-      </button>
+      <div class="list-header">
+        <h2 v-if="!isCalendar" class="list-title">{{ listTitle }}</h2>
+        <button type="button" class="add-btn" @click="goNew">
+          <Plus :size="14" />
+          근무 포지션 추가
+        </button>
+      </div>
     </div>
 
     <p v-if="loading" class="loading">불러오는 중…</p>
@@ -318,7 +324,31 @@ const goNew = () => router.push('/owner/attendance/work-cases/new')
 .attendance {
   display: flex;
   flex-direction: column;
+  /* 자식은 .sticky-head 와 본문 하나뿐이다. 둘 사이 간격은 .sticky-head 의 padding-bottom 이
+     맡는다 — gap 으로 띄우면 그 빈 띠가 투명해서 스크롤되는 내용이 비쳐 보인다. */
+  gap: 0;
+}
+
+/* ---- 고정 영역(요약·검색·뷰 토글·목록 머리) ---- */
+.sticky-head {
+  /* AppTopBar 는 sticky top:0 이고 높이는 12px 패딩 + 28px 로고 + 12px 패딩 = 53px 이다.
+     고정 영역은 그 바로 아래에 멈춰야 하므로 같은 값을 쓴다.
+     ※ AppTopBar 의 높이를 바꾸면 이 값도 함께 고쳐야 한다. */
+  position: sticky;
+  top: 53px;
+  z-index: var(--z-tabbar);
+
+  display: flex;
+  flex-direction: column;
   gap: var(--space-lg);
+
+  /* 좌우 full-bleed — screen-body 의 좌우 패딩(16px)만큼 밖으로 빼고 안에서 되돌린다.
+     그러지 않으면 스크롤되는 내용이 양옆 16px 여백으로 비쳐 보인다. */
+  margin: 0 calc(-1 * var(--space-lg));
+  padding: 0 var(--space-lg) var(--space-lg);
+  /* 스크롤되는 내용이 뒤로 비치지 않게 불투명 배경을 깐다.
+     색은 .app 컨테이너와 같은 --color-surface — --color-bg(회색)를 쓰면 이 영역만 띠로 보인다. */
+  background: var(--color-surface);
 }
 
 /* ---- 근태 현황 요약(6종 그리드) ---- */
