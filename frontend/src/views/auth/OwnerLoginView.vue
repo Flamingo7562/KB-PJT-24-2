@@ -33,6 +33,11 @@ function onChangeRole(next) {
   if (next === 'WORKER') router.push('/worker/login')
 }
 
+// Schema Gap: 비밀번호 재설정(토큰·메일 인프라) 미구현 → 진입점만 '준비 중'으로 노출(API·라우트 없음).
+function onForgotPassword() {
+  ui.toast('비밀번호 찾기는 준비 중입니다.', { type: 'info' })
+}
+
 async function onSubmit() {
   if (!canSubmit.value) {
     ui.toast('아이디와 비밀번호를 입력해주세요.', { type: 'warning' })
@@ -75,6 +80,10 @@ async function onSubmit() {
         </BaseButton>
       </form>
 
+      <button type="button" class="forgot-link" @click="onForgotPassword">
+        비밀번호를 잊으셨나요? <span class="soon">준비 중</span>
+      </button>
+
       <p class="signup-link">
         아직 계정이 없나요?
         <RouterLink to="/owner/signup">회원가입</RouterLink>
@@ -100,6 +109,19 @@ async function onSubmit() {
   display: flex;
   flex-direction: column;
   gap: var(--space-lg);
+}
+.forgot-link {
+  align-self: center;
+  font-size: var(--text-sm);
+  color: var(--color-text-sub);
+}
+.forgot-link .soon {
+  margin-left: var(--space-xs);
+  padding: 0 var(--space-xs);
+  border-radius: var(--radius-pill);
+  background: var(--color-bg);
+  font-size: var(--text-sm);
+  color: var(--color-text-sub);
 }
 .signup-link {
   text-align: center;

@@ -12,23 +12,24 @@ vi.mock('@/services/worker', () => ({ getWorkerHome: vi.fn() }))
 import { getWorkerHome } from '@/services/worker'
 
 const homePayload = {
-  wallet: { balance: 320000 },
-  todayShift: {
+  wallet: { availableBalance: 320000 },
+  todayWorkCase: {
     status: 'LATE',
     title: '주말 홀 서빙',
     workplaceName: '카페 봄',
+    workDate: '2026-07-22',
     startTime: '10:00',
     endTime: '18:00'
   },
   earning: {
-    dailyWage: 90000,
+    agreedWage: 90000,
     totalMinutes: 480,
     unpaidBreakMinutes: 60,
-    lateMinutes: 15,
-    lateDeduction: 3214,
-    accruedAmount: 34526,
+    elapsedPayDisplay: 34526,
     progressRatio: 0.42,
-    expectedNetAmount: 83912
+    expectedNetAmount: 90000,
+    isLate: true,
+    lateMinutes: 15
   }
 }
 
@@ -45,19 +46,20 @@ describe('WorkerHomeView', () => {
 
     expect(wrapper.text()).toContain('320,000원') // 안심지갑 잔액
     expect(wrapper.text()).toContain('주말 홀 서빙') // 오늘의 알바
-    expect(wrapper.text()).toContain('확보 안심금액') // 서버 earning 카드
+    expect(wrapper.text()).toContain('현재까지 확보한 안심금액') // 안심금액 카드
+    expect(wrapper.text()).toContain('일급 90,000원') // agreedWage 로 읽는지 확인
   })
 
-  it('오늘 근무가 없으면 확보 안심금액 카드를 숨긴다', async () => {
+  it('오늘 근무가 없으면 안심금액 카드를 숨긴다', async () => {
     getWorkerHome.mockResolvedValue({
-      wallet: { balance: 0 },
-      todayShift: { status: 'NONE' },
+      wallet: { availableBalance: 0 },
+      todayWorkCase: { status: 'NONE' },
       earning: null
     })
     const wrapper = mount(WorkerHomeView)
     await flushPromises()
 
-    expect(wrapper.text()).not.toContain('확보 안심금액')
+    expect(wrapper.text()).not.toContain('현재까지 확보한 안심금액')
     expect(wrapper.text()).toContain('오늘은 예정된 알바가 없어요.')
   })
 

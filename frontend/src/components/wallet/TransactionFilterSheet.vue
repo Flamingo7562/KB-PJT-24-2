@@ -33,12 +33,13 @@ export function buildTransactionFilterParams(draft = {}) {
 </script>
 
 <script setup>
-import { reactive, watch } from 'vue'
+import { computed, reactive, watch } from 'vue'
 
 import AppField from '@/components/common/AppField.vue'
 import BaseBottomSheet from '@/components/common/BaseBottomSheet.vue'
 import BaseButton from '@/components/common/BaseButton.vue'
 import { TX_SORT, TX_TYPE_FILTER } from '@/utils/constants'
+import { blockNonDigitKeydown } from '@/utils/format'
 
 const props = defineProps({
   open: { type: Boolean, default: false },
@@ -57,6 +58,16 @@ watch(
     if (open) Object.assign(draft, DEFAULT_FILTER, props.modelValue)
   }
 )
+
+// 금액 범위는 원 단위 정수 문자열로 보관하고, 화면에는 천단위 콤마로 표시한다.
+const minAmountDisplay = computed(() => formatAmount(draft.minAmount))
+const maxAmountDisplay = computed(() => formatAmount(draft.maxAmount))
+function formatAmount(v) {
+  return v === '' || v == null ? '' : Number(v).toLocaleString('ko-KR')
+}
+function onAmountInput(key, v) {
+  draft[key] = String(v).replace(/[^\d]/g, '')
+}
 
 function onReset() {
   Object.assign(draft, DEFAULT_FILTER)
@@ -117,17 +128,29 @@ function onApply() {
       <div class="group">
         <p class="group-label">금액 범위</p>
         <div class="row">
-          <AppField v-model="draft.minAmount" type="number" placeholder="최소" />
+          <AppField
+            :model-value="minAmountDisplay"
+            type="tel"
+            placeholder="최소"
+            @keydown="blockNonDigitKeydown"
+            @update:model-value="(v) => onAmountInput('minAmount', v)"
+          />
           <span class="tilde">~</span>
-          <AppField v-model="draft.maxAmount" type="number" placeholder="최대" />
+          <AppField
+            :model-value="maxAmountDisplay"
+            type="tel"
+            placeholder="최대"
+            @keydown="blockNonDigitKeydown"
+            @update:model-value="(v) => onAmountInput('maxAmount', v)"
+          />
         </div>
       </div>
     </div>
 
     <template #footer>
       <div class="actions">
-        <BaseButton variant="secondary" @click="onReset">초기화</BaseButton>
-        <BaseButton variant="owner" block @click="onApply">적용</BaseButton>
+        <BaseButton variant="secondary" class="reset" @click="onReset">초기화</BaseButton>
+        <BaseButton variant="owner" class="apply" @click="onApply">적용</BaseButton>
       </div>
     </template>
   </BaseBottomSheet>
@@ -178,5 +201,13 @@ function onApply() {
 .actions {
   display: flex;
   gap: var(--space-sm);
+}
+/* 초기화는 내용 폭으로 한 줄 유지, 적용이 남은 폭을 채우는 주 버튼. */
+.reset {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+.apply {
+  flex: 1;
 }
 </style>

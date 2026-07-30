@@ -6,7 +6,7 @@
 
 - Refs #이슈번호
 
-<!-- dev 대상 작업 PR은 Refs를 사용합니다. main 대상 배포·긴급 수정 PR에서 이슈를 종료할 때는 Closes를 사용합니다. -->
+<!-- dev 대상 작업 PR은 Refs를 사용하고 우측 Development에서 이슈를 수동 연결합니다. main 대상 배포·긴급 수정 PR에서 이슈를 종료할 때는 Closes를 사용합니다. -->
 
 ## 변경 사항
 
@@ -19,6 +19,7 @@
 ## 체크리스트
 
 - [ ] 이슈의 완료 조건을 충족했습니다.
+- [ ] 관련 이슈를 PR의 Development 항목에 연결했습니다.
 - [ ] Vue.js, Spring Framework legacy, MyBatis 제약을 지켰습니다.
 - [ ] React, Spring Boot, JPA를 추가하지 않았습니다.
 - [ ] 필요한 테스트 또는 수동 검증 결과를 남겼습니다.

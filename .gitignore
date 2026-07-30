@@ -66,7 +66,7 @@ replay_pid*.log
 /local-data/
 
 # Local Markdown documents
-# Existing tracked Markdown remains tracked. Intentionally shared new docs require git add -f.
+# Existing tracked Markdown remains tracked. New docs stay local unless a shared area below explicitly allows them.
 /docs/*.md
 /docs/**/*.md
 /docs/memory/
@@ -80,3 +80,23 @@ replay_pid*.log
 /.agents/
 /.codex/
 /scripts/check-agent-docs.js
+
+# Shared cross-agent harness
+!/CLAUDE.md
+!/docs/README.md
+!/docs/DEPENDENCY_SPECIFICATION.md
+!/docs/agent/
+!/docs/agent/PROJECT_RULES.md
+!/docs/agent/ARCHITECTURE_OVERVIEW.md
+!/docs/agent/SCHEMA_OVERVIEW.md
+!/docs/runbooks/
+!/docs/runbooks/DATABASE_RUNBOOK.md
+
+# Shared documentation archive
+!/docs/archive/
+!/docs/archive/*.md
+!/docs/archive/**/*.md
+
+# Per-user Claude Code preferences and permissions
+/CLAUDE.local.md
+/.claude/settings.local.json

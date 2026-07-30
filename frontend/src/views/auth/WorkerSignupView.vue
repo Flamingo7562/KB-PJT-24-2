@@ -6,15 +6,26 @@
  *   →  @/services/auth — role: 'WORKER'
  * 성공 후: 로그인 화면으로 이동.
  * 폼 자체는 사장/알바생 공용 AuthSignupForm(@/components/auth) 에 있다.
+ * 상단 역할 토글은 로그인 화면과 동일하게 상대 역할 화면으로 이동시킨다.
  */
+import { useRouter } from 'vue-router'
+
+import AuthRoleToggle from '@/components/auth/AuthRoleToggle.vue'
 import AuthSignupForm from '@/components/auth/AuthSignupForm.vue'
 import AppBackHeader from '@/components/common/AppBackHeader.vue'
+
+const router = useRouter()
+
+function onChangeRole(next) {
+  if (next === 'OWNER') router.push('/owner/signup')
+}
 </script>
 
 <template>
   <div class="sub-page">
     <AppBackHeader title="알바생 회원가입" to="/?step=auth&role=worker" />
     <main class="screen-body">
+      <AuthRoleToggle model-value="WORKER" @update:model-value="onChangeRole" />
       <AuthSignupForm role="WORKER" />
     </main>
   </div>
@@ -22,6 +33,9 @@ import AppBackHeader from '@/components/common/AppBackHeader.vue'
 
 <style scoped>
 .screen-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
   padding: var(--space-lg);
 }
 </style>

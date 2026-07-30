@@ -1,3 +1,10 @@
+> [!WARNING]
+> 이 문서는 현재 개발 기준이 아닌 보관 문서입니다.
+>
+> - 보관일: 2026-07-29
+> - 보관 사유: 제목·Type·Area 규칙은 현재 협업 문서로, 본문 예시는 실제 GitHub Issue Form으로 통합함
+> - 현재 문서: [`../PROJECT_MANAGEMENT_GUIDE.md`](../PROJECT_MANAGEMENT_GUIDE.md), [`../COMMIT_CONVENTION.md`](../COMMIT_CONVENTION.md), [`../../.github/ISSUE_TEMPLATE/feature_request.yml`](../../.github/ISSUE_TEMPLATE/feature_request.yml), [`../../.github/ISSUE_TEMPLATE/bug_report.yml`](../../.github/ISSUE_TEMPLATE/bug_report.yml), [`../../.github/ISSUE_TEMPLATE/task.yml`](../../.github/ISSUE_TEMPLATE/task.yml)
+
 # 이슈 작성 템플릿 가이드
 
 이슈 제목, 커밋 메시지, PR 제목은 같은 형식을 사용합니다.

@@ -1,3 +1,10 @@
+> [!WARNING]
+> 이 문서는 현재 개발 기준이 아닌 보관 문서입니다.
+>
+> - 보관일: 2026-07-29
+> - 보관 사유: 저장소 구조, 실행 방법, 브랜치와 커밋 안내를 현재 역할별 기준 문서로 통합함
+> - 현재 문서: [`../../README.md`](../../README.md), [`../../frontend/README.md`](../../frontend/README.md), [`../../backend/README.md`](../../backend/README.md), [`../PROJECT_MANAGEMENT_GUIDE.md`](../PROJECT_MANAGEMENT_GUIDE.md), [`../COMMIT_CONVENTION.md`](../COMMIT_CONVENTION.md)
+
 # Monorepo 구조 가이드
 
 이 저장소는 프론트엔드와 백엔드를 하나의 레포지토리에서 관리합니다.

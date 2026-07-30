@@ -4,12 +4,13 @@ import { RouterLink, useRoute } from 'vue-router'
 
 const route = useRoute()
 
-// 알바생 하단 탭: 안심지갑(홈)·근로관리·QR·문서함 (문서·QR 아이콘은 사장과 동일 재사용)
+// 알바생 하단 탭: 안심지갑(홈)·근로관리·문서함·QR (문서·QR 아이콘은 사장과 동일 재사용)
+// 화면 순서는 이 배열 순서를 그대로 따른다(템플릿 v-for).
 const tabs = [
   { key: 'home', label: '안심지갑', icon: Wallet, to: '/worker/home' },
   { key: 'work', label: '근로관리', icon: ClipboardList, to: '/worker/work' },
-  { key: 'scan', label: 'QR', icon: QrCode, to: '/worker/scan' },
-  { key: 'documents', label: '문서함', icon: FileText, to: '/worker/documents' }
+  { key: 'documents', label: '문서함', icon: FileText, to: '/worker/documents' },
+  { key: 'scan', label: 'QR', icon: QrCode, to: '/worker/scan' }
 ]
 
 const isActive = (to) => route.path === to || route.path.startsWith(`${to}/`)

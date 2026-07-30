@@ -1,11 +1,11 @@
 <script setup>
 /**
  * [D] 사장 문서함  ·  /owner/documents  ·  OWNER  (탭 화면)
- * 지점 문서: 자동 생성 계약서 + 직접 업로드(계약서 스캔) + 공유받은 보건증(읽기 전용).
+ * 지점 문서: 자동 생성 계약서 + 계약서 직접 업로드 + 공유받은 보건증.
  * 지점 컨텍스트: useWorkplaceStore().selectedId (AppTopBar 의 전역 지점 select 를 그대로 구독).
  * 연계 API: GET /documents?workplaceId · POST /documents · DELETE /documents/{id}
- *   →  @/services/documents (listDocuments, uploadDocument, deleteDocument, isContractDeletable)
- * 규칙: 계약서 삭제는 근무 종료 후만(서버 409 최종 검증). 보건증 직접 업로드 없음, 삭제 불가.
+ *   →  @/services/documents (listDocuments, uploadDocument, deleteDocument, isDocumentDeletable)
+ * 규칙: 삭제는 계약서·보건증 모두 근무 종료 후만(서버 409 최종 검증). 보건증 직접 업로드 없음.
  * 공통: 카드 클릭 → /owner/documents/:documentId
  */
 import { FileText, Image as ImageIcon, Lock, Plus, Trash2 } from 'lucide-vue-next'
@@ -13,10 +13,12 @@ import { storeToRefs } from 'pinia'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
+import BaseButton from '@/components/common/BaseButton.vue'
+import BaseModal from '@/components/common/BaseModal.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import {
   deleteDocument,
-  isContractDeletable,
+  isDocumentDeletable,
   listDocuments,
   uploadDocument
 } from '@/services/documents'
@@ -72,11 +74,22 @@ function triggerUpload() {
   fileInput.value?.click()
 }
 
-async function onFileSelected(e) {
+/* ---- 계약서 직접 업로드(확인 모달) ---- */
+const pendingFile = ref(null)
+const uploadConfirmOpen = ref(false)
+
+// 파일 선택 시 바로 올리지 않고, 확인 모달로 한 번 더 확인받는다.
+function onFileSelected(e) {
   const file = e.target.files?.[0]
   e.target.value = ''
   if (!file) return
+  pendingFile.value = file
+  uploadConfirmOpen.value = true
+}
 
+async function confirmUpload() {
+  const file = pendingFile.value
+  if (!file) return
   uploading.value = true
   try {
     const formData = new FormData()
@@ -85,21 +98,26 @@ async function onFileSelected(e) {
     formData.append('file', file)
     const res = await uploadDocument(formData)
     // mock 은 저장하지 않으므로, 업로드 결과를 로컬에서 즉시 반영해 화면에 보이게 한다.
-    documents.value.unshift({
-      documentId: res.documentId,
-      docType: 'CONTRACT',
-      workplaceId: selectedId.value,
-      workCaseId: null,
-      fileName: file.name.replace(/\.[^.]+$/, ''),
-      fileExt: file.name.split('.').pop(),
-      issuedDate: new Date().toISOString().slice(0, 10),
-      expiryDate: null,
-      source: 'OWN',
-      sharedByName: null,
-      shiftStatus: null,
-      createdAt: new Date().toISOString()
-    })
-    ui.toast('계약서 스캔본을 업로드했어요.', { type: 'success' })
+    documents.value = [
+      {
+        documentId: res.documentId,
+        docType: 'CONTRACT',
+        workplaceId: selectedId.value,
+        workCaseId: null,
+        fileName: file.name.replace(/\.[^.]+$/, ''),
+        fileExt: file.name.split('.').pop(),
+        issuedDate: new Date().toISOString().slice(0, 10),
+        expiryDate: null,
+        source: 'OWN',
+        sharedByName: null,
+        workCaseStatus: null,
+        createdAt: new Date().toISOString()
+      },
+      ...documents.value
+    ]
+    ui.toast('계약서를 업로드했어요.', { type: 'success' })
+    uploadConfirmOpen.value = false
+    pendingFile.value = null
   } catch (err) {
     ui.toast(err?.response?.data?.message || '업로드에 실패했어요.', { type: 'danger' })
   } finally {
@@ -107,14 +125,36 @@ async function onFileSelected(e) {
   }
 }
 
-async function onDelete(doc) {
+/* ---- 삭제(확인 모달) ---- */
+const deleteTarget = ref(null)
+const deleteOpen = ref(false)
+const deleting = ref(false)
+
+function openDelete(doc) {
+  deleteTarget.value = doc
+  deleteOpen.value = true
+}
+
+async function confirmDelete() {
+  const doc = deleteTarget.value
+  if (!doc) return
+  deleting.value = true
   try {
     await deleteDocument(doc.documentId)
     // 당사자별 독립 삭제(내 문서함에서만 제거) — 로컬 리스트에서만 제거해 흉내낸다.
     documents.value = documents.value.filter((d) => d.documentId !== doc.documentId)
     ui.toast('삭제했어요.', { type: 'success' })
+    deleteOpen.value = false
+    deleteTarget.value = null
   } catch (err) {
-    ui.toast(err?.response?.data?.message || '삭제할 수 없어요.', { type: 'danger' })
+    // 계약서·보건증 모두 근무 종료 후에만 삭제 가능 — 서버가 최종 검증(409).
+    if (err?.response?.status === 409) {
+      ui.toast('진행 중인 근무가 있어 삭제할 수 없어요.', { type: 'warning' })
+    } else {
+      ui.toast(err?.response?.data?.message || '삭제할 수 없어요.', { type: 'danger' })
+    }
+  } finally {
+    deleting.value = false
   }
 }
 </script>
@@ -136,7 +176,7 @@ async function onDelete(doc) {
       </div>
 
       <button type="button" class="upload-btn" :disabled="uploading" @click="triggerUpload">
-        <Plus :size="16" /> 계약서 스캔 업로드
+        <Plus :size="16" /> 계약서 직접 업로드
       </button>
       <input
         ref="fileInput"
@@ -159,33 +199,29 @@ async function onDelete(doc) {
 
           <span class="doc-info">
             <span class="doc-name">{{ doc.fileName }}</span>
+            <!-- 발급일(documents.issued_on) · 만료 예정일(documents.expires_on) -->
             <span class="doc-meta">
               {{ formatDate(doc.issuedDate) }} ·
               {{ doc.docType === 'CONTRACT' ? '근로계약서' : '보건증' }}
-              <template v-if="doc.docType === 'HEALTH_CERT'">
-                · 만료 예정 {{ formatDate(doc.expiryDate) }}
-              </template>
+            </span>
+            <span v-if="doc.docType === 'HEALTH_CERT'" class="doc-expiry">
+              만료 예정 {{ formatDate(doc.expiryDate) }}
             </span>
           </span>
         </button>
 
         <div class="doc-side">
-          <span
-            v-if="doc.docType === 'CONTRACT'"
-            class="badge"
-            :class="isContractDeletable(doc) ? 'badge--ok' : 'badge--locked'"
-          >
-            <Lock v-if="!isContractDeletable(doc)" :size="12" />
-            {{ isContractDeletable(doc) ? '삭제 가능' : '삭제 잠금' }}
+          <span class="badge" :class="isDocumentDeletable(doc) ? 'badge--ok' : 'badge--locked'">
+            <Lock v-if="!isDocumentDeletable(doc)" :size="12" />
+            {{ isDocumentDeletable(doc) ? '삭제 가능' : '삭제 잠금' }}
           </span>
-          <span v-else class="badge badge--shared">공유받음 · 읽기 전용</span>
 
           <button
-            v-if="doc.docType === 'CONTRACT' && isContractDeletable(doc)"
+            v-if="isDocumentDeletable(doc)"
             type="button"
             class="delete-btn"
             aria-label="문서 삭제"
-            @click="onDelete(doc)"
+            @click="openDelete(doc)"
           >
             <Trash2 :size="16" />
           </button>
@@ -194,9 +230,40 @@ async function onDelete(doc) {
     </ul>
 
     <p class="notice">
-      계약서 삭제는 해당 근무 종료 후 가능 · 공유받은 보건증은 읽기 전용(공유 취소는 알바생 권한) ·
-      보건증 직접 업로드 없음
+      문서 삭제는 해당 근무 종료 후 가능 · 공유받은 보건증을 지워도 알바생 원본은 남음 · 보건증 직접
+      업로드 없음
     </p>
+
+    <!-- 업로드 확인 -->
+    <BaseModal
+      :open="uploadConfirmOpen"
+      title="계약서를 업로드할까요?"
+      @close="uploadConfirmOpen = false"
+    >
+      <p class="modal-msg">
+        <strong>{{ pendingFile?.name }}</strong> 파일을 계약서로 등록합니다.
+      </p>
+      <template #footer>
+        <BaseButton variant="secondary" block @click="uploadConfirmOpen = false">취소</BaseButton>
+        <BaseButton variant="owner" block :disabled="uploading" @click="confirmUpload">
+          {{ uploading ? '업로드 중…' : '업로드' }}
+        </BaseButton>
+      </template>
+    </BaseModal>
+
+    <!-- 삭제 확인 -->
+    <BaseModal :open="deleteOpen" title="삭제할까요?" @close="deleteOpen = false">
+      <p class="modal-msg">
+        <strong>{{ deleteTarget?.fileName }}</strong> 문서를 삭제합니다.
+      </p>
+      <p class="modal-note">근무가 종료된 계약서만 삭제할 수 있어요.</p>
+      <template #footer>
+        <BaseButton variant="secondary" block @click="deleteOpen = false">취소</BaseButton>
+        <BaseButton variant="danger" block :disabled="deleting" @click="confirmDelete">
+          {{ deleting ? '삭제 중…' : '삭제' }}
+        </BaseButton>
+      </template>
+    </BaseModal>
   </div>
 </template>
 
@@ -310,6 +377,13 @@ async function onDelete(doc) {
   color: var(--color-text-sub);
   word-break: keep-all;
 }
+/* 만료일은 놓치면 안 되는 정보라 한 줄 내려 주의 색으로 강조한다. */
+.doc-expiry {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--color-warning);
+  word-break: keep-all;
+}
 
 .doc-side {
   display: flex;
@@ -334,10 +408,6 @@ async function onDelete(doc) {
   color: var(--color-text-sub);
   background: var(--color-bg);
 }
-.badge--shared {
-  color: var(--color-worker);
-  background: var(--color-worker-weak);
-}
 .delete-btn {
   color: var(--color-danger);
 }
@@ -346,6 +416,16 @@ async function onDelete(doc) {
   padding: var(--space-md);
   background: var(--color-bg);
   border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  color: var(--color-text-sub);
+}
+
+.modal-msg {
+  font-size: var(--text-md);
+  color: var(--color-text);
+}
+.modal-note {
+  margin-top: var(--space-sm);
   font-size: var(--text-sm);
   color: var(--color-text-sub);
 }

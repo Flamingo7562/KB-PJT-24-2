@@ -1,7 +1,7 @@
 name: 작업 태스크
 description: 설정, 문서, 리팩터링, 조사 작업을 등록합니다.
 title: "chore: [AREA] "
-labels: ["type: task", "status: triage"]
+labels: ["type: task"]
 body:
   - type: markdown
     attributes:
@@ -9,7 +9,7 @@ body:
         작업 이슈 제목은 `<type>: [AREA] 작업 요약` 형식으로 작성합니다.
         예시: `docs: [GITHUB] 이슈 템플릿 정리`, `chore: [HOOK] Husky 설정 추가`
 
-        작업 성격에 따라 `docs`, `refactor`, `test`, `chore`, `ci`, `build` 등을 사용합니다.
+        작업 성격에 따라 `docs`, `style`, `refactor`, `test`, `chore`, `build`, `ci`, `perf`, `revert`를 사용합니다.
   - type: input
     id: summary
     attributes:
@@ -24,12 +24,14 @@ body:
       description: 이슈 제목의 type과 맞춥니다. 조사 작업은 `chore`를 사용합니다.
       options:
         - docs
+        - style
         - refactor
         - test
         - chore
         - build
         - ci
-        - research
+        - perf
+        - revert
     validations:
       required: true
   - type: dropdown
@@ -51,9 +53,9 @@ body:
     id: scope
     attributes:
       label: 작업 범위
-      value: |
-        - [ ] 
-        - [ ] 
+      placeholder: |
+        - [ ] 변경할 코드, 설정 또는 문서
+        - [ ] 이번 작업에서 제외할 범위
     validations:
       required: true
   - type: textarea
