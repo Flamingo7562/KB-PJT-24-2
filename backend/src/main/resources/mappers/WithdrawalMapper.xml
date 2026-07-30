@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.gighub.wallet.mapper.WithdrawalMapper">
+
+    <select id="findByIdempotencyKeyForShare"
+            resultType="com.gighub.wallet.dto.WithdrawalOrder">
+        SELECT id                       AS id,
+               user_id                  AS userId,
+               wallet_id                AS walletId,
+               linked_account_id        AS linkedAccountId,
+               amount                   AS amount,
+               mock_bank_transaction_id AS mockBankTransactionId,
+               status                   AS status
+        FROM withdrawal_requests
+        WHERE idempotency_key = #{idempotencyKey}
+            FOR SHARE
+    </select>
+
+    <insert id="insertWithdrawalRequest" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO withdrawal_requests
+        (user_id, wallet_id, linked_account_id, amount, idempotency_key, status)
+        VALUES
+            (#{userId}, #{walletId}, #{linkedAccountId}, #{amount},
+             #{idempotencyKey}, 'READY')
+    </insert>
+
+    <update id="completeWithdrawalRequest">
+        UPDATE withdrawal_requests
+        SET mock_bank_transaction_id = #{bankTransactionId},
+            status                   = 'COMPLETED',
+            completed_at             = NOW(6),
+            updated_at               = NOW(6)
+        WHERE id = #{id} AND status = 'READY'
+    </update>
+
+</mapper>

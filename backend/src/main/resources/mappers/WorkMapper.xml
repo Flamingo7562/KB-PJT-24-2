@@ -4,6 +4,18 @@
 
 <mapper namespace="com.gighub.work.mapper.WorkMapper">
 
+    <select id="getEscrowContextForUpdate"
+            resultType="com.gighub.work.dto.WorkCaseEscrowContext">
+        SELECT id           AS workCaseId,
+               employer_id  AS employerId,
+               worker_id    AS workerId,
+               agreed_wage  AS agreedWage,
+               status       AS status
+        FROM work_cases
+        WHERE id = #{workCaseId}
+        FOR UPDATE
+    </select>
+
     <!-- 근무 건 상태 변경 -->
     <update id="updateWorkStatus">
         UPDATE work_cases
