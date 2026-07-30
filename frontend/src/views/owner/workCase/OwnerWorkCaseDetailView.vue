@@ -1,7 +1,7 @@
 <script setup>
 /**
  * [C] 근무 상세  ·  /owner/attendance/work-cases/:workCaseId  ·  OWNER
- * 근무 상세 + 매칭 알바생 성실 뱃지. 수정·삭제·연결 링크 복사는 작성중(DRAFT)만.
+ * 근무 상세 + 매칭 알바생 성실 뱃지. 수정·삭제·연결 링크 발급은 수락 전(DRAFT)만.
  * 확정(날인) 후 수정·삭제 버튼 숨김 — 서버도 409 WORK_CASE_LOCKED.
  * 연계 API: GET /work-cases/{id} · PATCH /work-cases/{id} · DELETE /work-cases/{id} · POST /work-cases/{id}/invitations
  *   →  @/services/workCases (getWorkCase, updateWorkCase, deleteWorkCase, createInvite)
@@ -37,10 +37,11 @@ const deleteOpen = ref(false)
 const copying = ref(false) // 연결 링크 생성 중(중복 클릭 방지)
 
 /**
- * 작성중(DRAFT)에서만 수정·삭제·연결 링크 생성이 가능하다.
- * 초대·확정(날인) 이후에는 에스크로 예치가 걸리므로 서버가 409 로 막는다 — 화면도 버튼을 숨긴다.
+ * 수락 전(DRAFT)에만 수정·삭제가 가능하다.
+ * 연결 링크 발급은 서버가 계산한 canIssueInvitation capability를 별도로 따른다.
  */
 const canModify = computed(() => isDraft(workCase.value?.status))
+const canIssueInvitation = computed(() => workCase.value?.canIssueInvitation === true)
 
 const form = reactive({
   title: '',
@@ -141,6 +142,8 @@ async function onCopyInvite() {
   copying.value = true
   try {
     const { inviteUrl } = await createInvite(workCase.value.workCaseId)
+    workCase.value.canIssueInvitation = false
+
     if (await copyText(inviteUrl)) {
       ui.toast('연결 링크를 복사했어요.', { type: 'success' })
     } else {
@@ -206,11 +209,17 @@ async function onCopyInvite() {
             </div>
           </section>
 
-          <!-- 작성중(DRAFT)에서만 노출 — 확정 후에는 서버도 409 로 막는다 -->
+          <!-- 수정·삭제는 DRAFT, 링크 발급은 별도 capability로 제어한다 -->
           <section v-if="canModify" class="actions">
-            <BaseButton variant="secondary" block :disabled="copying" @click="onCopyInvite">
+            <BaseButton
+              v-if="canIssueInvitation"
+              variant="secondary"
+              block
+              :disabled="copying"
+              @click="onCopyInvite"
+            >
               <Link2 :size="16" />
-              {{ copying ? '링크 만드는 중…' : '연결 링크 복사' }}
+              {{ copying ? '링크 만드는 중…' : '연결 링크 발급·복사' }}
             </BaseButton>
             <BaseButton variant="owner" block @click="startEdit">
               <Pencil :size="16" />

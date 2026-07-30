@@ -7,11 +7,11 @@
 | 항목                | 현재 기준                           |
 | ------------------- | ----------------------------------- |
 | 문서 상태           | 현재 기준                           |
-| 마지막 실제 검증    | 2026-07-28                          |
+| 마지막 실제 검증    | 2026-07-30                          |
 | MySQL               | `mysql:8.4.10`                      |
 | Flyway CLI          | `flyway/flyway:12.9.0`              |
 | MySQL Connector/J   | `9.7.0`                             |
-| 현재 Migration Head | `202607221300`                      |
+| 현재 Migration Head | `202607301152`                      |
 | 도메인 테이블       | 23개 (`flyway_schema_history` 제외) |
 
 실행 코드와 이 문서가 다르면 다음 원본을 우선합니다.
@@ -107,13 +107,15 @@ docker compose --profile tools run --rm flyway info
 npm.cmd run db:migrate
 ```
 
-현재 기준으로 다음 세 Migration이 순서대로 적용되어야 합니다.
+현재 기준으로 다음 다섯 Migration이 순서대로 적용되어야 합니다.
 
-| Version        | 파일                                                   |
-| -------------- | ------------------------------------------------------ |
-| `202607200001` | `V202607200001__create_gig_hub_baseline.sql`           |
-| `202607211440` | `V202607211440__add_signup_and_workplace_schema.sql`   |
-| `202607221300` | `V202607221300__support_contract_escrow_test_flow.sql` |
+| Version        | 파일                                                      |
+| -------------- | --------------------------------------------------------- |
+| `202607200001` | `V202607200001__create_gig_hub_baseline.sql`              |
+| `202607211440` | `V202607211440__add_signup_and_workplace_schema.sql`      |
+| `202607221300` | `V202607221300__support_contract_escrow_test_flow.sql`    |
+| `202607301027` | `V202607301027__remove_invited_from_work_case_status.sql` |
+| `202607301152` | `V202607301152__split_workplace_address.sql`              |
 
 같은 명령을 다시 실행했을 때 `Schema ... is up to date. No migration necessary.`가 나오면 반복 실행도 정상입니다.
 
@@ -124,7 +126,7 @@ docker compose --profile tools run --rm flyway validate
 docker compose --profile tools run --rm flyway info
 ```
 
-현재 기준의 정상 결과는 세 Migration의 검증 성공, Schema version `202607221300`, 모든 항목의 `Success`입니다.
+현재 기준의 정상 결과는 다섯 Migration의 검증 성공, Schema version `202607301152`, 모든 항목의 `Success`입니다.
 
 ## Spring·MyBatis 연결 검증
 

@@ -7,10 +7,10 @@ This is the compact database context for repository agents. Read it before chang
 | Item                   | Current baseline                                 |
 | ---------------------- | ------------------------------------------------ |
 | Status                 | Current                                          |
-| Last verified          | 2026-07-28                                       |
+| Last verified          | 2026-07-30                                       |
 | Schema source of truth | `backend/src/main/resources/db/migration/V*.sql` |
-| Migration head         | `202607221300`                                   |
-| Versioned migrations   | 3                                                |
+| Migration head         | `202607301152`                                   |
+| Versioned migrations   | 5                                                |
 | Domain tables          | 23, excluding Flyway's `flyway_schema_history`   |
 | Runtime                | MySQL 8.4.10, InnoDB                             |
 
@@ -28,11 +28,13 @@ When this summary and executable configuration disagree, inspect the migrations,
 
 ## Migration history
 
-| Version        | File                                                   | Main effect                                                                                    |
-| -------------- | ------------------------------------------------------ | ---------------------------------------------------------------------------------------------- |
-| `202607200001` | `V202607200001__create_gig_hub_baseline.sql`           | Baseline identity, work, wallet, banking, escrow, attendance, dispute, and document schema     |
-| `202607211440` | `V202607211440__add_signup_and_workplace_schema.sql`   | Signup identity fields, user withdrawal lifecycle, workplaces, and work-case ownership linkage |
-| `202607221300` | `V202607221300__support_contract_escrow_test_flow.sql` | Contract/escrow fixture support and final withdrawal naming/relationship adjustments           |
+| Version        | File                                                      | Main effect                                                                                          |
+| -------------- | --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `202607200001` | `V202607200001__create_gig_hub_baseline.sql`              | Baseline identity, work, wallet, banking, escrow, attendance, dispute, and document schema           |
+| `202607211440` | `V202607211440__add_signup_and_workplace_schema.sql`      | Signup identity fields, user withdrawal lifecycle, workplaces, and work-case ownership linkage       |
+| `202607221300` | `V202607221300__support_contract_escrow_test_flow.sql`    | Contract/escrow fixture support and final withdrawal naming/relationship adjustments                 |
+| `202607301027` | `V202607301027__remove_invited_from_work_case_status.sql` | Map legacy `INVITED` work cases to `DRAFT` and remove `INVITED` from the work-case status constraint |
+| `202607301152` | `V202607301152__split_workplace_address.sql`              | Preserve legacy workplace addresses as road addresses and add an optional nonblank detail address    |
 
 Applied or shared versioned migrations are immutable. Add a newer `V*.sql` file for every schema correction.
 
@@ -55,12 +57,13 @@ Inspect the ordered migrations before relying on an exact column, key, index, ge
 - `users.email` and `users.login_id` are unique. Roles are `OWNER`, `WORKER`, and `ADMIN`.
 - User status and `deleted_at` are coupled: `WITHDRAWN` requires a deletion timestamp; other statuses require it to be null.
 - `employer_profiles.user_id` is unique, but the database does not prove that the referenced user has the `OWNER` role.
-- A user can own multiple `workplaces`. Business registration numbers are unique, coordinates must be both valid or both null, radius is positive, and `DELETED` status must agree with `deleted_at`.
+- A user can own multiple `workplaces`. Business registration numbers are unique, `workplaces.road_address` is required, `workplaces.detail_address` is null or nonblank, coordinates must be both null or both non-null and in range, radius is positive, and `DELETED` status must agree with `deleted_at`.
 - The composite relationship from `work_cases` to `(workplaces.owner_user_id, workplaces.id)` proves that a selected workplace belongs to the recorded employer.
 
 ### Work and contract
 
-- A `work_case` has one employer, an optional worker until assignment, one workplace, positive agreed wage, valid start/end times, and a constrained lifecycle status.
+- A `work_case` has one employer, an optional worker until assignment, one workplace, positive agreed wage, valid start/end times, and a lifecycle status constrained to `DRAFT`, `ACCEPTED`, `READY`, `IN_PROGRESS`, `COMPLETED`, `NO_SHOW`, or `CANCELED`.
+- Invitation delivery and response states belong to `work_invitations`; an unaccepted work case remains `DRAFT`.
 - `ACCEPTED`, `READY`, `IN_PROGRESS`, `COMPLETED`, and `NO_SHOW` work-case states require a worker.
 - Generated active-slot uniqueness permits at most one pending `work_invitation` per work case while preserving terminal invitation history.
 - `work_contracts.work_case_id` is unique. A composite foreign key proves that contract parties and agreed wage match the work case.

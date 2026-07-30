@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.gighub.bank.mapper.MockBankMapper">
+
+    <!-- camelCase 매핑 설정에 의존하지 않도록 별칭을 명시한다 -->
+    <sql id="accountColumns">
+        id                AS id,
+        user_id           AS userId,
+        bank_code         AS bankCode,
+        mock_account_number AS mockAccountNumber,
+        balance           AS balance,
+        available_amount  AS availableAmount,
+        status            AS status
+    </sql>
+
+    <select id="findActiveAccountsByUserId" resultType="com.gighub.bank.dto.MockBankAccount">
+        SELECT <include refid="accountColumns"/>
+        FROM mock_bank_accounts
+        WHERE user_id = #{userId} AND status = 'ACTIVE'
+        ORDER BY id
+    </select>
+
+    <select id="getAccountById" resultType="com.gighub.bank.dto.MockBankAccount">
+        SELECT <include refid="accountColumns"/>
+        FROM mock_bank_accounts
+        WHERE id = #{accountId}
+    </select>
+
+    <select id="getAccountForUpdate" resultType="com.gighub.bank.dto.MockBankAccount">
+        SELECT <include refid="accountColumns"/>
+        FROM mock_bank_accounts
+        WHERE id = #{accountId}
+        FOR UPDATE
+    </select>
+
+    <!-- ck_mock_bank_accounts_amounts(available <= balance) 때문에 두 컬럼을 한 문장에서 갱신한다 -->
+    <update id="withdrawFromAccount">
+        UPDATE mock_bank_accounts
+        SET balance          = balance - #{amount},
+            available_amount = available_amount - #{amount},
+            updated_at       = NOW(6)
+        WHERE id = #{accountId}
+          AND status = 'ACTIVE'
+          AND available_amount &gt;= #{amount}
+    </update>
+
+    <update id="depositToAccount">
+        UPDATE mock_bank_accounts
+        SET balance          = balance + #{amount},
+            available_amount = available_amount + #{amount},
+            updated_at       = NOW(6)
+        WHERE id = #{accountId}
+          AND status = 'ACTIVE'
+    </update>
+
+    <!-- append-only. status는 SUCCESS로 확정 INSERT한다 -->
+    <insert id="insertBankTransaction" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO mock_bank_transactions
+        (account_id, bank_tran_id, transfer_type, amount,
+         balance_before, balance_after, reference_type, reference_id, status)
+        VALUES
+            (#{accountId}, #{bankTranId}, #{transferType}, #{amount},
+             #{balanceBefore}, #{balanceAfter}, #{referenceType}, #{referenceId}, 'SUCCESS')
+    </insert>
+
+</mapper>

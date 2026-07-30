@@ -4,8 +4,10 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.FilterType;
+import org.springframework.context.annotation.Import;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.servlet.config.annotation.EnableWebMvc;
+import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 import com.gighub.auth.exception.AuthExceptionHandler;
@@ -26,6 +28,7 @@ import com.gighub.auth.exception.AuthExceptionHandler;
  */
 @Configuration
 @EnableWebMvc
+@Import(SwaggerConfig.class)
 @ComponentScan(
         basePackages = "com.gighub",
         includeFilters = @ComponentScan.Filter(
@@ -39,6 +42,16 @@ public class WebMvcConfig implements WebMvcConfigurer {
     @Bean
     public AuthExceptionHandler authExceptionHandler() {
         return new AuthExceptionHandler();
+    }
+
+    @Override
+    public void addResourceHandlers(ResourceHandlerRegistry registry) {
+        // Swagger UI 화면 정적 리소스 매핑 허용
+        registry.addResourceHandler("/swagger-ui/**")
+                .addResourceLocations("classpath:/META-INF/resources/webjars/springfox-swagger-ui/");
+
+        registry.addResourceHandler("/webjars/**")
+                .addResourceLocations("classpath:/META-INF/resources/webjars/");
     }
 }
 

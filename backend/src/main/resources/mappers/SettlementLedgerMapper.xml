@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.gighub.settlement.mapper.SettlementLedgerMapper">
+
+    <select id="findByIdempotencyKeyForShare"
+            resultType="com.gighub.wallet.dto.WalletTransactionSnapshot">
+        SELECT wt.id               AS id,
+               wt.wallet_id        AS walletId,
+               w.user_id           AS walletUserId,
+               wt.work_case_id     AS workCaseId,
+               wt.transaction_type AS transactionType,
+               wt.amount           AS amount,
+               wt.available_before AS availableBefore,
+               wt.available_after  AS availableAfter,
+               wt.locked_before    AS lockedBefore,
+               wt.locked_after     AS lockedAfter,
+               wt.reference_type   AS referenceType,
+               wt.reference_id     AS referenceId
+        FROM wallet_transactions wt
+        JOIN wallets w ON w.id = wt.wallet_id
+        WHERE wt.idempotency_key = #{idempotencyKey}
+        FOR SHARE OF wt
+    </select>
+
+</mapper>

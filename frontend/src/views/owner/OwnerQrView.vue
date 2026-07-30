@@ -8,22 +8,36 @@
  *
  * 토큰 발급·검증은 서버가 한다. 만료·재발급 주기가 없으므로 프론트는 표시만 담당하고,
  * 지점이 바뀔 때만 다시 조회한다.
- * TODO(담당 C): QR 렌더링 라이브러리 선정 후 아래 자리표시자를 실제 QR 이미지로 교체.
- *   (신규 의존성이라 팀 공유 후 도입 — 현재는 토큰 문자열만 노출)
+ * QR 이미지는 qrcode 로 canvas 에 직접 그린다(브라우저 생성 — docs/DEPENDENCY_SPECIFICATION.md).
  */
-import { QrCode } from 'lucide-vue-next'
-import { computed, onMounted, ref, watch } from 'vue'
+import QRCode from 'qrcode'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 
 import EmptyState from '@/components/common/EmptyState.vue'
 import { getWorkplaceQr } from '@/services/workplaces'
 import { useUiStore } from '@/stores/ui'
 import { useWorkplaceStore } from '@/stores/workplace'
 
+/**
+ * 인쇄·부착이 전제라 화면 크기가 아니라 인쇄 선명도 기준으로 그린다.
+ * - width: 표시 크기보다 크게 그려두고 CSS 로 축소한다(작게 그려 늘리면 인쇄물에서 뭉갠다).
+ * - errorCorrectionLevel 'H': 부착물 훼손·조명 저하에도 읽히도록 최대 복원력.
+ * - margin: quiet zone. 여백이 없으면 스캐너가 코드 경계를 못 찾는다.
+ * - color: 테마 변수를 쓰지 않는다. 다크 테마에서 대비가 무너지면 스캔이 실패한다.
+ */
+const QR_OPTIONS = {
+  errorCorrectionLevel: 'H', // QR 코드가 일부 훼손되거나 가려져도 얼마나 복원해서 읽을 수 있는지를 결정하는 옵션. H가 최고 레벨.
+  margin: 4,
+  width: 512,
+  color: { dark: '#000000', light: '#ffffff' }
+}
+
 const ui = useUiStore()
 const workplaceStore = useWorkplaceStore()
 
 const qr = ref(null)
 const loading = ref(false)
+const canvasEl = ref(null)
 
 const workplaceName = computed(() => workplaceStore.selected?.name ?? '')
 
@@ -43,10 +57,30 @@ async function load() {
   }
 }
 
+/** 토큰을 canvas 에 QR 로 그린다. */
+async function draw() {
+  const token = qr.value?.qrToken
+  if (!token) return
+
+  // canvas 는 v-if="qr" 안에 있어 토큰이 채워진 직후에는 아직 DOM 에 없다.
+  await nextTick() // nextTick(): Vue에서 데이터 변경으로 인한 DOM 업데이트가 끝난 다음 실행하도록 기다리는 함수
+  if (!canvasEl.value) return
+
+  try {
+    await QRCode.toCanvas(canvasEl.value, token, QR_OPTIONS)
+  } catch {
+    qr.value = null
+    ui.toast('QR 이미지를 만들지 못했어요.', { type: 'danger' })
+  }
+}
+
 onMounted(() => workplaceStore.load())
 
 // 지점을 바꾸면 그 지점의 QR 을 다시 불러온다.
 watch(() => workplaceStore.selectedId, load, { immediate: true })
+
+// 토큰이 바뀌면(지점 전환 포함) 이미지를 다시 그린다.
+watch(() => qr.value?.qrToken, draw)
 </script>
 
 <template>
@@ -67,11 +101,10 @@ watch(() => workplaceStore.selectedId, load, { immediate: true })
         <p class="desc">QR은 바뀌지 않으니 출력해서 매장에 붙여두고 계속 사용하세요.</p>
       </header>
 
-      <!-- TODO(담당 C): QR 렌더링 라이브러리 도입 후 실제 QR 이미지로 교체 -->
       <div class="qr-box">
         <template v-if="qr">
-          <QrCode :size="72" class="qr-icon" />
-          <p class="qr-placeholder">QR 자리 (렌더링 라이브러리 도입 예정)</p>
+          <canvas ref="canvasEl" class="qr-canvas"></canvas>
+          <!-- 알바생 화면의 토큰 직접 입력 경로가 남아 있어 사장이 값을 읽어줄 수 있어야 한다 -->
           <p class="qr-token">{{ qr.qrToken }}</p>
         </template>
         <p v-else class="qr-placeholder">
@@ -105,7 +138,6 @@ watch(() => workplaceStore.selectedId, load, { immediate: true })
   color: var(--color-text-sub);
 }
 
-/* QR 자리표시자 — 실제 QR 도입 시 이 박스 안만 교체하면 된다 */
 .qr-box {
   display: flex;
   flex-direction: column;
@@ -117,12 +149,18 @@ watch(() => workplaceStore.selectedId, load, { immediate: true })
   aspect-ratio: 1;
   padding: var(--space-lg);
   background: var(--color-surface);
-  border: 1px dashed var(--color-border);
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   text-align: center;
 }
-.qr-icon {
-  color: var(--color-owner);
+
+/* 512px 로 그린 캔버스를 축소해 표시한다(인쇄·확대 시 선명도 확보) */
+.qr-canvas {
+  display: block;
+  width: 100%;
+  max-width: 180px;
+  height: auto;
+  border-radius: var(--radius-sm);
 }
 .qr-placeholder {
   font-size: var(--text-sm);
