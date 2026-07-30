@@ -9,22 +9,24 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 class AuthPrincipalTest {
 
     @Test
-    void exposesUserIdAndRole() {
-        AuthPrincipal principal = new AuthPrincipal(1L, "OWNER");
+    void exposesUserIdRoleAndName() {
+        AuthPrincipal principal = new AuthPrincipal(1L, "OWNER", "김사장");
 
         assertEquals(1L, principal.getUserId());
         assertEquals("OWNER", principal.getRole());
+        assertEquals("김사장", principal.getName());
     }
 
     @Test
     void equalsComparesByValue() {
-        assertEquals(new AuthPrincipal(1L, "OWNER"), new AuthPrincipal(1L, "OWNER"));
-        assertNotEquals(new AuthPrincipal(1L, "OWNER"), new AuthPrincipal(1L, "WORKER"));
+        assertEquals(new AuthPrincipal(1L, "OWNER", "김사장"), new AuthPrincipal(1L, "OWNER", "김사장"));
+        assertNotEquals(new AuthPrincipal(1L, "OWNER", "김사장"), new AuthPrincipal(1L, "WORKER", "김사장"));
     }
 
     @Test
     void rejectsNullArguments() {
-        assertThrows(NullPointerException.class, () -> new AuthPrincipal(null, "OWNER"));
-        assertThrows(NullPointerException.class, () -> new AuthPrincipal(1L, null));
+        assertThrows(NullPointerException.class, () -> new AuthPrincipal(null, "OWNER", "김사장"));
+        assertThrows(NullPointerException.class, () -> new AuthPrincipal(1L, null, "김사장"));
+        assertThrows(NullPointerException.class, () -> new AuthPrincipal(1L, "OWNER", null));
     }
 }
