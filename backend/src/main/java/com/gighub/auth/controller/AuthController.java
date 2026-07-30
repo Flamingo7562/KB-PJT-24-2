@@ -81,4 +81,10 @@ public class AuthController {
                 needsWorkplaceSetup);
         return ResponseEntity.ok(Map.of("data", response));
     }
+
+    @PostMapping("/logout")
+    public ResponseEntity<Map<String, Object>> logout(HttpServletRequest request, HttpServletResponse response) {
+        sessionAuthenticator.logout(request, response);
+        return ResponseEntity.ok(Map.of("data", Map.of()));
+    }
 }

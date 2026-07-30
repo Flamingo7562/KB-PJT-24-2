@@ -166,4 +166,10 @@ class AuthControllerTest {
                 .andExpect(jsonPath("$.data.role").value("WORKER"))
                 .andExpect(jsonPath("$.data.name").value("이알바"));
     }
+
+    @Test
+    void logoutReturns200() throws Exception {
+        mockMvc.perform(post("/api/auth/logout"))
+                .andExpect(status().isOk());
+    }
 }
