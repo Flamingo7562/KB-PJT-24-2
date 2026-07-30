@@ -1,5 +1,7 @@
 package com.gighub.wallet.mapper;
 
+import com.gighub.wallet.dto.WalletBalanceSnapshot;
+import com.gighub.wallet.dto.WalletTransactionSnapshot;
 import com.gighub.wallet.mapper.param.WalletTransactionParam;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -19,6 +21,9 @@ public interface WalletMapper {
 
     // 비관적 락(FOR UPDATE) 잔액 조회
     Long getAvailableBalanceForUpdate(@Param("userId") Long userId);
+
+    // 지갑 잔액 스냅샷 조회 및 행 잠금
+    WalletBalanceSnapshot getWalletSnapshotForUpdate(@Param("userId") Long userId);
 
     // 예치: available >= amount 인 경우에만 1행 갱신
     int lockEmployerFunds(@Param("userId") Long userId, @Param("amount") Long amount);
@@ -42,7 +47,17 @@ public interface WalletMapper {
     // 원장
     int countTransactionByIdempotencyKey(@Param("idempotencyKey") String idempotencyKey);
 
+    WalletTransactionSnapshot findTransactionByIdempotencyKey(
+            @Param("idempotencyKey") String idempotencyKey);
+
+    WalletTransactionSnapshot findFundingTransactionSnapshot(
+            @Param("fundingOrderId") Long fundingOrderId,
+            @Param("employerId") Long employerId,
+            @Param("idempotencyKey") String idempotencyKey);
+
+    WalletTransactionSnapshot findEscrowHoldTransactionSnapshot(
+            @Param("workCaseId") Long workCaseId,
+            @Param("escrowId") Long escrowId);
+
     int insertWalletTransaction(WalletTransactionParam param);
-
-
 }

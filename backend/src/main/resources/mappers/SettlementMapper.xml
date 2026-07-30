@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.gighub.settlement.mapper.SettlementMapper">
+
+    <sql id="settlementSnapshotColumns">
+        id                  AS settlementId,
+        work_case_id        AS workCaseId,
+        amount              AS amount,
+        status              AS status,
+        approved_by_user_id AS approvedByUserId,
+        due_at              AS dueAt,
+        processing_at       AS processingAt,
+        completed_at        AS completedAt,
+        failure_code        AS failureCode
+    </sql>
+
+    <!-- 정산 원장: 상태 검사와 갱신이 끝날 때까지 같은 행을 잠근다. -->
+    <select id="findByWorkCaseIdForUpdate"
+            resultType="com.gighub.settlement.dto.SettlementSnapshot">
+        SELECT <include refid="settlementSnapshotColumns"/>
+        FROM settlements
+        WHERE work_case_id = #{workCaseId}
+        FOR UPDATE
+    </select>
+
+    <select id="findBlockingDisputeIdsForUpdate"
+            resultType="java.lang.Long">
+        SELECT id
+        FROM disputes
+        WHERE work_case_id = #{workCaseId}
+          AND status IN ('OPEN', 'UNDER_REVIEW')
+        FOR UPDATE
+    </select>
+
+    <update id="transitionWaitingToProcessing">
+        UPDATE settlements
+        SET status              = 'PROCESSING',
+            approved_by_user_id = #{approvedByUserId},
+            processing_at       = NOW(6),
+            failure_code        = NULL,
+            updated_at          = NOW(6)
+        WHERE id = #{settlementId}
+          AND status = 'WAITING'
+          AND approved_by_user_id IS NULL
+          AND processing_at IS NULL
+          AND completed_at IS NULL
+    </update>
+
+    <update id="transitionProcessingToCompleted">
+        UPDATE settlements
+        SET status       = 'COMPLETED',
+            completed_at = NOW(6),
+            updated_at   = NOW(6)
+        WHERE id = #{settlementId}
+          AND status = 'PROCESSING'
+          AND approved_by_user_id = #{approvedByUserId}
+          AND processing_at IS NOT NULL
+          AND completed_at IS NULL
+    </update>
+
+</mapper>

@@ -5,8 +5,9 @@ import lombok.Value;
 
 @Value
 @Builder
-public class EscrowReleaseCommand {
-    Long employerId; // 로그인 사용자
-    Long workCaseId;
+public class FundingCommand {
+    Long employerId;
+    Long linkedAccountId;
+    Long amount;
     String idempotencyKey;
 }
