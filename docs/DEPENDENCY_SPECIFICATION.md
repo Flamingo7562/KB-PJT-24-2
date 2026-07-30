@@ -71,6 +71,7 @@
 | JSON               | Jackson BOM, `jackson-databind`, `jackson-datatype-jsr310`                                                              |
 | Logging            | SLF4J API, Log4j2 BOM·API·Core, `log4j-slf4j2-impl`                                                                     |
 | 계약 PDF·QR        | Apache PDFBox, ZXing Core·JavaSE                                                                                        |
+| API 문서 자동화     | Springfox `springfox-swagger2`, `springfox-swagger-ui`, `springfox-oas`(OpenAPI 3.0)                                    |
 | Container 제공 API | Servlet API와 Annotation API를 `compileOnly`로 사용하고, MockMvc 테스트에는 Servlet API를 `testImplementation`으로 사용 |
 | 코드 생성          | Lombok을 compile/test annotation processor로 사용                                                                       |
 | 테스트             | JUnit Jupiter·Platform Launcher, Spring Test, Spring Security Test, Mockito Core·JUnit Jupiter, JSONAssert, JsonPath, Hamcrest, GlassFish EL  |
