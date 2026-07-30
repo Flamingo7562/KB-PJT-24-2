@@ -228,12 +228,23 @@ const goNew = () => router.push('/owner/attendance/work-cases/new')
     <!-- 보기 방식 전환 — 상태 필터·검색어는 그대로 두고 표시 방법만 바꾼다 -->
     <AttendanceViewToggle v-model="viewMode" />
 
+    <!--
+      목록 머리 — 제목 + '근무 포지션 추가'(사업장 관리의 header-row 와 같은 형태).
+      두 뷰가 공유하고 로딩 중에도 남기려고 v-if 분기 밖에 둔다. 캘린더 뷰에는
+      달력이 자체 월 헤더를 갖고 있어 제목을 겹쳐 쓰지 않고 버튼만 보여준다.
+    -->
+    <div class="list-header">
+      <h2 v-if="!isCalendar" class="list-title">{{ listTitle }}</h2>
+      <button type="button" class="add-btn" @click="goNew">
+        <Plus :size="14" />
+        근무 포지션 추가
+      </button>
+    </div>
+
     <p v-if="loading" class="loading">불러오는 중…</p>
 
     <!-- ① 목록형 뷰 -->
     <section v-else-if="!isCalendar" class="list-section">
-      <h2 class="list-title">{{ listTitle }}</h2>
-
       <EmptyState
         v-if="workCases.length === 0 && isFiltered"
         message="조건에 맞는 근무가 없습니다."
@@ -242,7 +253,7 @@ const goNew = () => router.push('/owner/attendance/work-cases/new')
       </EmptyState>
 
       <EmptyState v-else-if="workCases.length === 0" message="등록된 근무가 없습니다.">
-        아래 버튼으로 첫 근무 포지션을 추가해보세요.
+        위 버튼으로 첫 근무 포지션을 추가해보세요.
       </EmptyState>
 
       <AttendanceWorkCaseList
@@ -274,7 +285,7 @@ const goNew = () => router.push('/owner/attendance/work-cases/new')
         v-else-if="workCases.length === 0"
         :message="`${monthLabel}에는 등록된 근무가 없습니다.`"
       >
-        좌우 화살표로 다른 달을 보거나, 아래 버튼으로 근무를 추가해보세요.
+        좌우 화살표로 다른 달을 보거나, 위 버튼으로 근무를 추가해보세요.
       </EmptyState>
 
       <!-- 날짜를 아직 고르지 않은 상태 — 무엇을 하면 되는지 알려준다 -->
@@ -300,11 +311,6 @@ const goNew = () => router.push('/owner/attendance/work-cases/new')
         />
       </div>
     </section>
-
-    <button type="button" class="fab" @click="goNew">
-      <Plus :size="18" />
-      근무 포지션 추가
-    </button>
   </div>
 </template>
 
@@ -373,10 +379,36 @@ const goNew = () => router.push('/owner/attendance/work-cases/new')
 }
 
 /* ---- 근무 리스트 ---- */
+/* 제목 + 추가 버튼. 캘린더 뷰에는 제목이 없으므로 버튼을 margin-left 로 오른쪽에 붙인다
+   (space-between 은 제목이 없을 때 버튼이 왼쪽으로 붙는다). */
+.list-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+/* Bootstrap Reboot 의 heading 기본값을 두 군데 되돌린다. base.css 의 `* { margin: 0 }` 은
+   특이도(0,0,0)라 element 선택자 h2(0,0,1)에 밀린다.
+   - margin-bottom: .5rem → 0. 남겨두면 align-items:center 가 margin 포함 박스를 기준으로
+     잡아 제목이 추가 버튼보다 4px(8px 의 절반) 위로 올라간다.
+   - line-height: 1.2 → 1.5. 16px 에 19.2px 라인박스는 한글 어센더가 잘려 보인다. */
 .list-title {
+  margin: 0;
   font-size: var(--text-lg);
+  line-height: 1.5;
   font-weight: var(--weight-bold);
   color: var(--color-text);
+}
+.add-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  margin-left: auto;
+  padding: var(--space-xs) var(--space-sm);
+  border: 1px solid var(--color-owner);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--color-owner);
 }
 .loading {
   padding: var(--space-xl) 0;
@@ -390,19 +422,5 @@ const goNew = () => router.push('/owner/attendance/work-cases/new')
   display: flex;
   flex-direction: column;
   gap: var(--space-lg);
-}
-
-/* ---- 근무 포지션 추가 ---- */
-.fab {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-xs);
-  width: 100%;
-  padding: var(--space-md);
-  background: var(--color-owner);
-  color: var(--color-on-primary);
-  border-radius: var(--radius-sm);
-  font-weight: var(--weight-medium);
 }
 </style>
