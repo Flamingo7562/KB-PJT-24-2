@@ -8,10 +8,10 @@
  */
 export const DEFAULT_FILTER = {
   keyword: '',
-  txType: 'ALL',
+  type: 'ALL',
   sort: 'LATEST',
-  startDate: '',
-  endDate: '',
+  from: '',
+  to: '',
   minAmount: '',
   maxAmount: ''
 }
@@ -22,10 +22,10 @@ export function buildTransactionFilterParams(draft = {}) {
   const params = {}
   const keyword = String(f.keyword).trim()
   if (keyword) params.keyword = keyword
-  if (f.txType && f.txType !== 'ALL') params.txType = f.txType
+  if (f.type && f.type !== 'ALL') params.type = f.type
   if (f.sort) params.sort = f.sort
-  if (f.startDate) params.startDate = f.startDate
-  if (f.endDate) params.endDate = f.endDate
+  if (f.from) params.from = f.from
+  if (f.to) params.to = f.to
   if (f.minAmount !== '' && Number(f.minAmount) >= 0) params.minAmount = Number(f.minAmount)
   if (f.maxAmount !== '' && Number(f.maxAmount) >= 0) params.maxAmount = Number(f.maxAmount)
   return params
@@ -92,8 +92,8 @@ function onApply() {
             :key="opt.value"
             type="button"
             class="chip"
-            :class="{ 'is-active': draft.txType === opt.value }"
-            @click="draft.txType = opt.value"
+            :class="{ 'is-active': draft.type === opt.value }"
+            @click="draft.type = opt.value"
           >
             {{ opt.label }}
           </button>
@@ -119,9 +119,9 @@ function onApply() {
       <div class="group">
         <p class="group-label">기간</p>
         <div class="row">
-          <AppField v-model="draft.startDate" type="date" />
+          <AppField v-model="draft.from" type="date" />
           <span class="tilde">~</span>
-          <AppField v-model="draft.endDate" type="date" />
+          <AppField v-model="draft.to" type="date" />
         </div>
       </div>
 

@@ -56,17 +56,16 @@ export const TX_STATUS = {
 }
 
 /* ---- 송금상세 필터(GET /api/wallet/transactions) 선택지 ----
- * 화면(송금상세 리스트)에 실제로 노출되는 거래 구분과 필터 유형을 통일한 목록.
- * txType 은 서버 파라미터로만 전달된다(프론트 재계산 없음 — docs/rules/domain.md).
- * 주의(명세 WALLET-004): 공식 txType 화이트리스트는 ALL/PAID/REFUND/HOLD 이며
- * CHARGE·WITHDRAW 는 화면 파생값이다. BE 연동 시 필터 화이트리스트를 함께 넓혀야 한다. */
+ * 값은 백엔드 wallet_transactions.transaction_type 허용 목록과 동일하게 유지한다. */
 export const TX_TYPE_FILTER = [
   { value: 'ALL', label: '전체' },
-  { value: 'PAID', label: '정산완료' },
-  { value: 'HOLD', label: '예치중' },
-  { value: 'CHARGE', label: '충전' },
-  { value: 'WITHDRAW', label: '출금' },
-  { value: 'REFUND', label: '환불' }
+  { value: 'FUNDING', label: '충전' },
+  { value: 'ESCROW_HOLD', label: '예치중' },
+  { value: 'ESCROW_RELEASE', label: '지급완료' },
+  { value: 'ESCROW_REFUND', label: '환불' },
+  { value: 'WITHDRAWAL', label: '출금' },
+  { value: 'WITHDRAWAL_REFUND', label: '출금환불' },
+  { value: 'ADJUSTMENT', label: '조정' }
 ]
 export const TX_SORT = [
   { value: 'LATEST', label: '최신순' },

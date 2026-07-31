@@ -21,68 +21,79 @@ const mockWallet = {
   lockedBalance: 480000 // 예치중 금액(escrow.status='HOLD')
 }
 
-// 사장 관점 거래 이력. txType: CHARGE/WITHDRAW/ESCROW_HOLD/ESCROW_REFUND
-// status: HOLD(예치중)/SETTLED(정산완료)/REFUNDED(환불완료)/DONE(완료)
+// 백엔드 WalletTransaction Item과 같은 필드·Type을 사용하는 화면용 Mock.
 const mockTransactions = [
   {
-    txId: 6,
-    txType: 'ESCROW_HOLD',
-    direction: 'DEBIT',
+    transactionId: 6,
+    type: 'ESCROW_HOLD',
     amount: 90000,
-    balanceAfter: 1250000,
-    description: '주말 홀 서빙 · 예치',
-    status: 'HOLD',
-    createdAt: '2026-07-22T09:10:00'
+    availableAfter: 1250000,
+    lockedAfter: 480000,
+    workCaseId: 106,
+    workTitle: '주말 홀 서빙',
+    workplaceName: '기가 허브',
+    displayStatus: '예치중',
+    createdAt: '2026-07-22T00:10:00Z'
   },
   {
-    txId: 5,
-    txType: 'CHARGE',
-    direction: 'CREDIT',
+    transactionId: 5,
+    type: 'FUNDING',
     amount: 500000,
-    balanceAfter: 1340000,
-    description: '지갑 충전',
-    status: 'DONE',
-    createdAt: '2026-07-21T18:32:00'
+    availableAfter: 1340000,
+    lockedAfter: 390000,
+    workCaseId: null,
+    workTitle: null,
+    workplaceName: null,
+    displayStatus: '충전',
+    createdAt: '2026-07-21T09:32:00Z'
   },
   {
-    txId: 4,
-    txType: 'ESCROW_HOLD',
-    direction: 'DEBIT',
+    transactionId: 4,
+    type: 'ESCROW_RELEASE',
     amount: 120000,
-    balanceAfter: 840000,
-    description: '평일 주방 보조 · 예치',
-    status: 'SETTLED',
-    createdAt: '2026-07-20T08:05:00'
+    availableAfter: 840000,
+    lockedAfter: 270000,
+    workCaseId: 104,
+    workTitle: '평일 주방 보조',
+    workplaceName: '기가 허브',
+    displayStatus: '지급완료',
+    createdAt: '2026-07-19T23:05:00Z'
   },
   {
-    txId: 3,
-    txType: 'ESCROW_REFUND',
-    direction: 'CREDIT',
+    transactionId: 3,
+    type: 'ESCROW_REFUND',
     amount: 100000,
-    balanceAfter: 960000,
-    description: '노쇼 환불 · 홀 마감',
-    status: 'REFUNDED',
-    createdAt: '2026-07-19T22:40:00'
+    availableAfter: 960000,
+    lockedAfter: 150000,
+    workCaseId: 103,
+    workTitle: '홀 마감',
+    workplaceName: '기가 허브',
+    displayStatus: '환불',
+    createdAt: '2026-07-19T13:40:00Z'
   },
   {
-    txId: 2,
-    txType: 'WITHDRAW',
-    direction: 'DEBIT',
+    transactionId: 2,
+    type: 'WITHDRAWAL',
     amount: 300000,
-    balanceAfter: 860000,
-    description: '출금 · 국민은행',
-    status: 'DONE',
-    createdAt: '2026-07-18T11:15:00'
+    availableAfter: 860000,
+    lockedAfter: 150000,
+    workCaseId: null,
+    workTitle: null,
+    workplaceName: null,
+    displayStatus: '출금',
+    createdAt: '2026-07-18T02:15:00Z'
   },
   {
-    txId: 1,
-    txType: 'CHARGE',
-    direction: 'CREDIT',
+    transactionId: 1,
+    type: 'FUNDING',
     amount: 1160000,
-    balanceAfter: 1160000,
-    description: '지갑 충전',
-    status: 'DONE',
-    createdAt: '2026-07-17T14:02:00'
+    availableAfter: 1160000,
+    lockedAfter: 0,
+    workCaseId: null,
+    workTitle: null,
+    workplaceName: null,
+    displayStatus: '충전',
+    createdAt: '2026-07-17T05:02:00Z'
   }
 ]
 
@@ -95,12 +106,17 @@ export async function fetchWallet() {
 
 /**
  * 송금상세(거래내역) 조회.
- * @param {object} params workplaceId, startDate, endDate, txType, sort, minAmount, maxAmount, keyword, page, size
+ * @param {object} params workplaceId, from, to, type, sort, minAmount, maxAmount, keyword, page, size
  */
 export async function fetchTransactions(params = {}) {
-  if (USE_MOCK) return { content: [...mockTransactions], totalPages: 1 }
-  // 페이지 응답 { content, page, size, totalElements } 은 data 래핑이 없어 본문을 그대로 반환.
-  return http.get('/wallet/transactions', { params })
+  if (USE_MOCK) {
+    return {
+      content: [...mockTransactions],
+      page: { number: 0, size: 20, totalElements: mockTransactions.length, totalPages: 1 }
+    }
+  }
+  const { data } = await http.get('/wallet/transactions', { params })
+  return data
 }
 
 /**
