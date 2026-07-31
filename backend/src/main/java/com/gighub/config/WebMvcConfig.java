@@ -1,13 +1,19 @@
 package com.gighub.config;
 
+import com.fasterxml.jackson.databind.SerializationFeature;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.FilterType;
 import org.springframework.context.annotation.Import;
+import org.springframework.http.converter.HttpMessageConverter;
+import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.servlet.config.annotation.EnableWebMvc;
+import org.springframework.web.servlet.config.annotation.CorsRegistry;
 import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
+
+import java.util.List;
 
 /**
  * DispatcherServlet이 사용하는 Spring MVC 전용 설정입니다.
@@ -15,8 +21,9 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
  * <p>{@link Controller} 계열 Bean만 검색하여 Root Context와 책임을 분리합니다. Jackson이
  * classpath에 있으므로 기본 JSON MessageConverter는 Spring MVC가 등록합니다.</p>
  *
- * <p>TODO: API 오류 규격이 정해지면 Validator, ArgumentResolver와 공통 응답 설정을 추가합니다.
- * 배포 Origin이 확정되기 전에는 전역 CORS 허용 규칙을 추가하지 않습니다.</p>
+ * <p>승인된 공통 오류·응답 규격의 Validator와 예외 통합은 별도 구현으로 남아 있습니다.
+ * 현재 CORS는 로컬 Vite 개발 서버만 허용하며, 배포 Origin이 확정되면 환경별 정책으로
+ * 분리합니다.</p>
  */
 @Configuration
 @EnableWebMvc
@@ -32,14 +39,46 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 public class WebMvcConfig implements WebMvcConfigurer {
     // 기본 MVC 설정으로 시작하고 실제 요구가 생길 때 필요한 메서드만 재정의합니다.
 
-        @Override
-        public void addResourceHandlers(ResourceHandlerRegistry registry) {
-                //Swagger UI 화면 정적 리소스 매핑 허용
-                registry.addResourceHandler("/swagger-ui/**")
-                        .addResourceLocations("classpath:/META-INF/resources/webjars/springfox-swagger-ui/");
+    /**
+     * 로컬 Vue 개발 서버가 Session Cookie를 포함해 API를 호출할 수 있게 합니다.
+     *
+     * @param registry Spring MVC CORS 매핑 Registry
+     */
+    @Override
+    public void addCorsMappings(CorsRegistry registry) {
+        registry.addMapping("/api/**")
+                .allowedOrigins("http://localhost:5173")
+                .allowedMethods("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
+                .allowedHeaders(
+                        "Accept",
+                        "Content-Type",
+                        "X-XSRF-TOKEN",
+                        "Idempotency-Key"
+                )
+                .exposedHeaders("Location", "Idempotency-Replayed")
+                .allowCredentials(true)
+                .maxAge(3_600);
+    }
 
-                registry.addResourceHandler("/webjars/**")
-                        .addResourceLocations("classpath:/META-INF/resources/webjars/");
-        }
+    @Override
+    public void extendMessageConverters(List<HttpMessageConverter<?>> converters) {
+        // Instant가 epoch 숫자가 아닌 사람이 읽을 수 있는 UTC ISO-8601 문자열로 노출되도록 고정합니다.
+        converters.stream()
+                .filter(MappingJackson2HttpMessageConverter.class::isInstance)
+                .map(MappingJackson2HttpMessageConverter.class::cast)
+                .forEach(converter -> converter.getObjectMapper().disable(
+                        SerializationFeature.WRITE_DATES_AS_TIMESTAMPS
+                ));
+    }
+
+    @Override
+    public void addResourceHandlers(ResourceHandlerRegistry registry) {
+        // Swagger UI 화면 정적 리소스 매핑 허용
+        registry.addResourceHandler("/swagger-ui/**")
+                .addResourceLocations("classpath:/META-INF/resources/webjars/springfox-swagger-ui/");
+
+        registry.addResourceHandler("/webjars/**")
+                .addResourceLocations("classpath:/META-INF/resources/webjars/");
+    }
 }
 

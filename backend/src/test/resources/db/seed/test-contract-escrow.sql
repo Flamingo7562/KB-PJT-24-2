@@ -184,7 +184,8 @@ DELETE FROM documents WHERE work_case_id = @work_case_id;
 DELETE FROM disputes WHERE work_case_id = @work_case_id;
 DELETE FROM settlements WHERE work_case_id = @work_case_id;
 DELETE FROM attendance_records WHERE work_case_id = @work_case_id;
-DELETE FROM qr_tokens WHERE work_case_id = @work_case_id;
+-- 사업장 고정 QR은 유지하고 이전 근무 단위 QR 이력만 정리한다.
+DELETE FROM qr_tokens WHERE legacy_work_case_id = @work_case_id;
 DELETE FROM wallet_transactions
 WHERE wallet_id IN (@owner_wallet_id, @worker_wallet_id);
 DELETE FROM escrows WHERE work_case_id = @work_case_id;
