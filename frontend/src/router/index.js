@@ -4,7 +4,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
 
 /*
- * 라우팅 테이블(.ai-local) 전 30라우트.
+ * 현재 라우트의 단일 근거는 이 파일이며 탐색 순서는 docs/agent/IMPLEMENTATION_GUIDE.md를 따른다.
  * - 탭 화면(홈·근태/근로·문서·QR)은 역할별 탭 레이아웃의 자식으로 둔다(상단바+하단탭 공유).
  * - 서브 화면(충전·상세·마이 하위 등)·인증·딥링크는 top-level 라우트 + AppBackHeader.
  * - meta: requiresAuth / role('OWNER'|'WORKER') / guestOnly / invite.
