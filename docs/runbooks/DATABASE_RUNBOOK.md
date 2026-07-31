@@ -7,22 +7,27 @@
 | 항목                | 현재 기준                           |
 | ------------------- | ----------------------------------- |
 | 문서 상태           | 현재 기준                           |
-| 마지막 실제 검증    | 2026-07-30                          |
+| Migration Head      | `202607311429`                      |
+| Versioned Migration | 8개                                 |
+| 도메인 테이블       | 24개 (`flyway_schema_history` 제외) |
 | MySQL               | `mysql:8.4.10`                      |
 | Flyway CLI          | `flyway/flyway:12.9.0`              |
 | MySQL Connector/J   | `9.7.0`                             |
-| 현재 Migration Head | `202607301152`                      |
-| 도메인 테이블       | 23개 (`flyway_schema_history` 제외) |
 
 실행 코드와 이 문서가 다르면 다음 원본을 우선합니다.
 
-| 대상                                | 단일 원본                                                     |
-| ----------------------------------- | ------------------------------------------------------------- |
-| 컨테이너·포트·볼륨·Flyway 실행 설정 | 루트 `compose.yaml`                                           |
-| DB 스키마                           | `backend/src/main/resources/db/migration/V*.sql`              |
-| JDBC·MyBatis·트랜잭션 설정          | `backend/src/main/java/com/gighub/config/DatabaseConfig.java` |
-| DB 라이브러리 버전과 검증 작업      | `backend/build.gradle`                                        |
-| 스키마의 작업용 요약                | [`../agent/SCHEMA_OVERVIEW.md`](../agent/SCHEMA_OVERVIEW.md)  |
+| 대상                                | 단일 원본                                                                                              |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| 컨테이너·포트·볼륨·Flyway 실행 설정 | 루트 `compose.yaml`                                                                                    |
+| DB 스키마                           | 소유자가 작성·채택한 `backend/src/main/resources/db/migration/V*.sql`                                  |
+| JDBC·MyBatis·트랜잭션 설정          | `backend/src/main/java/com/gighub/config/DatabaseConfig.java`                                          |
+| DB 라이브러리 버전과 검증 작업      | `backend/build.gradle`                                                                                 |
+| 스키마의 작업용 요약                | [`../agent/SCHEMA_OVERVIEW.md`](../agent/SCHEMA_OVERVIEW.md)                                           |
+| 사람이 읽는 통합 DDL                | [`../database/schema-snapshot-202607311429.sql`](../database/schema-snapshot-202607311429.sql), 참고용 |
+
+`V202607311427`, `V202607311428`, `V202607311429`는 PM·관리자 승인을 거친 현재 정식
+Migration입니다. 통합 DDL은 같은 Head를 빈 DB에서 검토하기 위한 읽기용 Snapshot이며 기존
+DB 업그레이드에는 반드시 Flyway Migration을 사용합니다.
 
 Spring 애플리케이션은 Flyway를 자동 실행하지 않습니다. Migration은 별도 Flyway 컨테이너가 적용하며, 애플리케이션은 호스트에서 외부 설정 파일을 읽어 MySQL에 연결합니다.
 
@@ -30,6 +35,13 @@ Spring 애플리케이션은 Flyway를 자동 실행하지 않습니다. Migrati
 V*.sql ──> Flyway 컨테이너 ── db:3306 ──> MySQL 컨테이너 ──> mysql-data 볼륨
 Spring/Tomcat(호스트) ── localhost:${MYSQL_PORT} ────────────────┘
 ```
+
+### 시간 저장 규칙
+
+- 시점을 뜻하는 DB 컬럼은 `DATETIME(6)`을 유지하며 `Asia/Seoul` 현지 시각으로 저장하고 해석합니다. `DATETIME` 자체에는 timezone 정보가 없습니다.
+- API의 시점 필드는 UTC `Instant`(`2026-07-31T09:00:00Z`)로 주고받고, 서버 경계에서 `Asia/Seoul` DB 값과 변환합니다.
+- 달력 날짜 자체가 의미인 DB `DATE`는 Java `LocalDate`로 처리합니다.
+- DB, JDBC 또는 컨테이너 timezone을 바꾸면 같은 `DATETIME(6)` 값의 의미가 달라질 수 있으므로 Migration이 아니라 별도의 데이터 변환 계획과 검증이 필요합니다.
 
 ## 사전 조건
 
@@ -107,17 +119,56 @@ docker compose --profile tools run --rm flyway info
 npm.cmd run db:migrate
 ```
 
-현재 기준으로 다음 다섯 Migration이 순서대로 적용되어야 합니다.
+현재 다음 여덟 Migration이 순서대로 적용되어야 합니다.
 
-| Version        | 파일                                                      |
-| -------------- | --------------------------------------------------------- |
-| `202607200001` | `V202607200001__create_gig_hub_baseline.sql`              |
-| `202607211440` | `V202607211440__add_signup_and_workplace_schema.sql`      |
-| `202607221300` | `V202607221300__support_contract_escrow_test_flow.sql`    |
-| `202607301027` | `V202607301027__remove_invited_from_work_case_status.sql` |
-| `202607301152` | `V202607301152__split_workplace_address.sql`              |
+| Version        | 파일                                                        |
+| -------------- | ----------------------------------------------------------- |
+| `202607200001` | `V202607200001__create_gig_hub_baseline.sql`                |
+| `202607211440` | `V202607211440__add_signup_and_workplace_schema.sql`        |
+| `202607221300` | `V202607221300__support_contract_escrow_test_flow.sql`      |
+| `202607301027` | `V202607301027__remove_invited_from_work_case_status.sql`   |
+| `202607301152` | `V202607301152__split_workplace_address.sql`                |
+| `202607311427` | `V202607311427__move_qr_tokens_to_workplace_scope.sql`      |
+| `202607311428` | `V202607311428__add_password_reset_tokens.sql`              |
+| `202607311429` | `V202607311429__add_check_out_missing_work_case_status.sql` |
 
 같은 명령을 다시 실행했을 때 `Schema ... is up to date. No migration necessary.`가 나오면 반복 실행도 정상입니다.
+
+#### `202607311427` 적용 전 확인
+
+QR Migration은 기존 근무·동작별 QR을 사업장 고정 QR 구조로 전환합니다.
+
+- 기존 QR 발급자가 해당 근무 사업장의 소유자와 다른 행이 하나라도 있으면 Migration이 중단됩니다. 먼저 읽기 전용 점검 SQL로 불일치를 확인하고 원인을 소유자에게 보고합니다. 보정 여부와 후속 Migration은 소유자가 결정하고 작성합니다.
+- 기존 `ACTIVE` QR은 모두 `REVOKED` 처리되고, 적용 시점의 `ACTIVE` 사업장마다 새 nonce 기반 QR이 하나 생성됩니다.
+- 기존 행은 `legacy_*` 컬럼으로 보존되며 새 고정 QR로 다시 활성화할 수 없습니다.
+- 새 QR 문자열은 DB nonce 원문만 노출하지 않고, 애플리케이션이 외부 설정 HMAC Key로 nonce와 사업장 ID를 서명해야 합니다. 이 Migration은 QR API나 HMAC 설정을 구현하지 않습니다.
+- 운영 데이터에 적용할 때는 새 QR 발급·조회·스캔 API 배포 및 사장님 재출력 안내와 순서를 맞춰야 합니다.
+
+비밀번호 재설정 Migration은 Hash 저장소만 추가합니다. Token 원문 생성·전달·만료
+처리·단일 사용 API가 구현되기 전에는 이 테이블이 있어도 비밀번호 재설정 기능이 동작하지
+않습니다.
+
+#### 현재 DDL과 미결정 제품 Workflow
+
+Head `202607311429`는 `CHECK_OUT_MISSING` 상태와 해당 상태의 근로자 필수 제약을
+반영했습니다. 이는 상태를 저장할 수 있다는 DDL 사실이며 판정·해소·정산 Workflow의 구현
+승인을 뜻하지 않습니다.
+
+| 기능                 | 현재 DDL                                                                                      | 미결정 사항                                                                                            |
+| -------------------- | --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| 퇴근 누락 상태       | `CHECK_OUT_MISSING` 허용, 해당 상태의 `worker_id` 필수. `attendance_records.result` 변경 없음 | 판정 시점·실행 주체·늦은 QR·보정·정산·장기 미해결 임금·기존 행 처리와 실제 조회에 맞춘 Scheduler Index |
+| 100m 고정 반경       | 반경 기본값은 100이지만 두 반경 CHECK는 모든 양수를 허용                                      | 애플리케이션 강제로 충분한지, DB CHECK도 정확히 100으로 바꿀지 결정                                    |
+| 시스템 생성 계약서   | `EMPLOYMENT_CONTRACT`도 `work_case_id=NULL` 허용                                              | 근무 건 필수 연결을 DB에서도 강제할지 결정                                                             |
+| 계약서 3년 자동 삭제 | `documents.status=DELETED`는 있으나 전용 보존 시각·Index 없음                                 | 기준일과 파일·Metadata·Checksum·감사 삭제 범위를 확정한 뒤 추적 컬럼과 Scheduler Index 필요 여부 결정  |
+
+퇴근 누락 상태의 판정 시점·실행 주체, 늦은 퇴근·보정·정산 정책과 기존 `IN_PROGRESS`
+데이터 처리는 여전히 미정입니다. 이 Workflow가 확정되기 전에는 Scheduler, 해소 API,
+Backfill이나 Scheduler 전용 Index를 현재 DDL만 보고 구현하지 않습니다. 계약서 자동 삭제는
+기준일과 삭제 범위를 확정한 뒤 Schema 보강 여부를 판단합니다.
+
+소유자가 후속 Migration을 만든 뒤 이 Runbook의 Head·개수·파일 목록, `SCHEMA_OVERVIEW.md`,
+ERD와 통합 DDL Snapshot을 같은 변경에서 갱신하고 빈 DB와 기존 Head Upgrade를 모두
+검증합니다.
 
 ### 5. 이력과 파일 검증
 
@@ -126,7 +177,8 @@ docker compose --profile tools run --rm flyway validate
 docker compose --profile tools run --rm flyway info
 ```
 
-현재 기준의 정상 결과는 다섯 Migration의 검증 성공, Schema version `202607301152`, 모든 항목의 `Success`입니다.
+현재 기준의 정상 결과는 여덟 Migration의 검증 성공, Schema version `202607311429`, 모든
+항목의 `Success`입니다.
 
 ## Spring·MyBatis 연결 검증
 
@@ -189,6 +241,12 @@ docker compose down
 
 ## 스키마 변경 절차
 
+Flyway Migration과 모든 DDL SQL은 프로젝트 소유자만 생성·수정·삭제합니다. 에이전트는 필요한
+테이블·컬럼·제약·데이터 전환을 분석해 소유자에게 보고하며, Migration이나 통합 DDL을 직접
+작성하거나 재생성하지 않습니다.
+
+소유자가 스키마를 변경할 때는 다음 절차를 따릅니다.
+
 1. 현재 Migration Head보다 큰 새 Version의 `V<version>__<description>.sql`을 추가합니다.
 2. 이미 공유되었거나 적용된 Versioned Migration은 수정하거나 삭제하지 않습니다.
 3. `prepareFlywayDriver`, `info`, `db:migrate`, `validate`, `info` 순서로 확인합니다.
@@ -196,7 +254,11 @@ docker compose down
 5. 같은 PR에서 [`../agent/SCHEMA_OVERVIEW.md`](../agent/SCHEMA_OVERVIEW.md)의 Head, 테이블 관계와 불변식을 갱신합니다.
 6. 파괴적 변경, 수동 데이터 보정 또는 팀원이 수행할 작업이 있으면 PR과 사람용 안내에 명시합니다.
 
-Checksum 불일치가 발생해도 `repair`를 먼저 실행하지 않습니다. 적용된 SQL이 변경되었는지 확인하고 원본을 복구한 뒤, 필요한 변경은 새 Migration으로 추가합니다.
+소유자가 작성한 Migration을 검증하는 에이전트는 격리된 일회용 DB만 사용할 수 있습니다.
+공유·팀·사용자 DB에는 에이전트가 임의로 스키마 변경을 적용하지 않습니다.
+
+Checksum 불일치가 발생해도 `repair`를 먼저 실행하지 않습니다. 적용된 SQL이 변경되었는지
+확인하고 소유자에게 보고합니다. 원본 복구나 후속 Migration 작성도 소유자가 수행합니다.
 
 ## 문제 해결
 
