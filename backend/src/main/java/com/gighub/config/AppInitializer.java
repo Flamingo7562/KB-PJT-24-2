@@ -3,6 +3,9 @@ package com.gighub.config;
 import java.nio.charset.StandardCharsets;
 
 import javax.servlet.Filter;
+import javax.servlet.ServletContext;
+import javax.servlet.ServletException;
+import javax.servlet.SessionCookieConfig;
 
 import org.springframework.web.filter.CharacterEncodingFilter;
 import org.springframework.web.servlet.support.AbstractAnnotationConfigDispatcherServletInitializer;
@@ -17,6 +20,27 @@ import org.springframework.web.servlet.support.AbstractAnnotationConfigDispatche
  * 추가합니다.</p>
  */
 public class AppInitializer extends AbstractAnnotationConfigDispatcherServletInitializer {
+
+    /**
+     * 로컬 HTTP 개발 환경에서 사용할 Session Cookie 범위를 명시합니다.
+     *
+     * <p>Cookie Domain을 지정하지 않아 {@code localhost} 호스트에만 전송하고, JavaScript에서는
+     * Session ID를 읽을 수 없게 합니다. 운영 HTTPS 전환 시 Secure 정책은 배포 설정과 함께
+     * 다시 적용해야 합니다.</p>
+     *
+     * @param servletContext Tomcat이 제공한 Servlet Context
+     * @throws ServletException Spring 애플리케이션 초기화 실패 시
+     */
+    @Override
+    public void onStartup(ServletContext servletContext) throws ServletException {
+        SessionCookieConfig sessionCookie = servletContext.getSessionCookieConfig();
+        sessionCookie.setHttpOnly(true);
+        sessionCookie.setSecure(false);
+        sessionCookie.setPath("/");
+        sessionCookie.setDomain(null);
+
+        super.onStartup(servletContext);
+    }
 
     /**
      * Service와 영속성 Bean이 들어갈 Root Context 설정을 반환합니다.

@@ -24,7 +24,7 @@ public class HealthController {
      */
     @GetMapping
     public HealthResponse health() {
-        // TODO: API 공통 응답 규격이 확정되면 동일한 Envelope를 적용합니다.
+        // 공통 오류 처리와 함께 전환하기 전까지 기존 liveness 응답을 유지합니다.
         return new HealthResponse("gig-hub-backend", "UP", Instant.now());
     }
 }
