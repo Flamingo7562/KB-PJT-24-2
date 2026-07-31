@@ -297,11 +297,13 @@ export async function createInvite(workCaseId) {
 }
 
 /**
- * 정산 즉시 승인 → { settledAt } (SETTLE-002). HOLD 상태만.
+ * 정산 즉시 승인 → { settlementId, status, completedAt } (SETTLE-002). HOLD 상태만.
  * Idempotency-Key(UUID) 필수 — 재시도 시 동일 키로 중복 지급 방지.
  */
 export async function approveSettlement(workCaseId) {
-  if (USE_MOCK) return { settledAt: new Date().toISOString() }
+  if (USE_MOCK) {
+    return { settlementId: 1, status: 'COMPLETED', completedAt: new Date().toISOString() }
+  }
   const { data } = await idempotentPost(`/work-cases/${workCaseId}/settlement/approve`)
   return data
 }
