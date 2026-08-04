@@ -1,6 +1,7 @@
 package com.gighub.common.exception;
 
 import com.gighub.common.api.ApiErrorCode;
+import lombok.Getter;
 import org.springframework.http.HttpStatus;
 
 import java.util.Objects;
@@ -10,6 +11,7 @@ import java.util.Objects;
  *
  * <p>공통 처리기는 구체적인 도메인 예외를 알지 않고 승인 상태·코드·안전한 메시지만 읽습니다.</p>
  */
+@Getter
 public class ApiException extends RuntimeException {
 
     private final HttpStatus status;
@@ -21,11 +23,4 @@ public class ApiException extends RuntimeException {
         this.code = Objects.requireNonNull(code, "code");
     }
 
-    public HttpStatus getStatus() {
-        return status;
-    }
-
-    public ApiErrorCode getCode() {
-        return code;
-    }
 }
