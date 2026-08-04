@@ -1,10 +1,14 @@
 package com.gighub.wallet.controller;
 
-import com.gighub.common.api.ApiTimes;
+import com.gighub.common.api.ApiResponse;
+import com.gighub.common.api.PageRequests;
+import com.gighub.common.api.PageResponse;
 import com.gighub.common.exception.AuthRequiredException;
 import com.gighub.common.exception.ResourceNotFoundException;
 import com.gighub.common.exception.ValidationException;
+import com.gighub.wallet.dto.WalletBalanceResponse;
 import com.gighub.wallet.dto.WalletSummary;
+import com.gighub.wallet.dto.WalletTransactionItem;
 import com.gighub.wallet.dto.WalletTransactionSearch;
 import com.gighub.wallet.dto.WalletTransactionView;
 import com.gighub.wallet.mapper.WalletQueryMapper;
@@ -19,9 +23,7 @@ import javax.servlet.http.HttpSession;
 import java.time.LocalDate;
 
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 
 
@@ -36,7 +38,7 @@ public class WalletController {
 
     // 내 지갑 요약, availableBalance만 대표 잔액이며 lockedBalance와 합산해 제공하지 않는다.
     @GetMapping("/api/wallet")
-    public ResponseEntity<Map<String, Object>> getWallet(HttpSession session){
+    public ResponseEntity<ApiResponse<WalletBalanceResponse>> getWallet(HttpSession session){
         Long loginUserId = (Long) session.getAttribute(LOGIN_USER);
         if (loginUserId == null) {
             throw new AuthRequiredException("로그인이 필요합니다.");
@@ -47,15 +49,10 @@ public class WalletController {
             throw new ResourceNotFoundException("지갑을 찾을 수 없습니다.");
         }
 
-        Map<String, Object> data = new LinkedHashMap<>();
-        data.put("currency", CURRENCY_KRW);
-        data.put("availableBalance", summary.getAvailableBalance());
-        data.put("lockedBalance", summary.getLockedBalance());
-
-        return ResponseEntity.ok(Map.of("data", data));
+        return ResponseEntity.ok(
+                ApiResponse.of(WalletBalanceResponse.from(CURRENCY_KRW, summary)));
     }
 
-    private static final int MAX_PAGE_SIZE = 100;
     private static final Set<String> ALLOWED_SORTS =
             Set.of("LATEST", "OLDEST", "AMOUNT_ASC", "AMOUNT_DESC");
     private static final Set<String> ALLOWED_TYPES = Set.of(
@@ -64,7 +61,7 @@ public class WalletController {
 
     // 지갑 거래 내역
     @GetMapping("/api/wallet/transactions")
-    public ResponseEntity<Map<String, Object>> getTransactions(
+    public ResponseEntity<ApiResponse<PageResponse<WalletTransactionItem>>> getTransactions(
             @RequestParam(value = "workplaceId", required = false) Long workplaceId,
             @RequestParam(value = "from", required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
@@ -75,17 +72,15 @@ public class WalletController {
             @RequestParam(value = "maxAmount", required = false) Long maxAmount,
             @RequestParam(value = "keyword", required = false) String keyword,
             @RequestParam(value = "sort", defaultValue = "LATEST") String sort,
-            @RequestParam(value = "page", defaultValue = "0") int page,
-            @RequestParam(value = "size", defaultValue = "20") int size,
+            @RequestParam(value = "page", defaultValue = PageRequests.DEFAULT_PAGE_TEXT) int page,
+            @RequestParam(value = "size", defaultValue = PageRequests.DEFAULT_SIZE_TEXT) int size,
             HttpSession session) {
 
         Long loginUserId = (Long) session.getAttribute(LOGIN_USER);
         if (loginUserId == null) {
             throw new AuthRequiredException("로그인이 필요합니다.");
         }
-        if (page < 0 || size < 1 || size > MAX_PAGE_SIZE) {
-            throw new ValidationException("page는 0 이상, size는 1~100 사이여야 합니다.");
-        }
+        PageRequests.validate(page, size);
         if (!ALLOWED_SORTS.contains(sort)) {
             throw new ValidationException("지원하지 않는 sort 값입니다.");
         }
@@ -113,7 +108,7 @@ public class WalletController {
                 .maxAmount(maxAmount)
                 .keyword(trimmedKeyword)
                 .sort(sort)
-                .offset((long)page * size)
+                .offset(PageRequests.offset(page, size))
                 .size(size)
                 .build();
 
@@ -121,33 +116,13 @@ public class WalletController {
         List<WalletTransactionView> rows = totalElements == 0
                 ? List.of() : walletQueryMapper.findTransactions(search);
 
-        List<Map<String, Object>> content = new ArrayList<>();
+        List<WalletTransactionItem> content = new ArrayList<>();
         for (WalletTransactionView row : rows) {
-            Map<String, Object> item = new LinkedHashMap<>();
-            item.put("transactionId", row.getTransactionId());
-            item.put("type", row.getType());
-            item.put("amount", row.getAmount());
-            item.put("availableAfter", row.getAvailableAfter());
-            item.put("lockedAfter", row.getLockedAfter());
-            item.put("workCaseId", row.getWorkCaseId());
-            item.put("workTitle", row.getWorkTitle());
-            item.put("workplaceName", row.getWorkplaceName());
-            item.put("displayStatus", resolveDisplayStatus(row.getType()));
-            item.put("createdAt", ApiTimes.toInstant(row.getCreatedAt()));
-            content.add(item);
+            content.add(WalletTransactionItem.from(row, resolveDisplayStatus(row.getType())));
         }
 
-        Map<String, Object> pageInfo = new LinkedHashMap<>();
-        pageInfo.put("number", page);
-        pageInfo.put("size", size);
-        pageInfo.put("totalElements", totalElements);
-        pageInfo.put("totalPages", (int) Math.ceil((double) totalElements / size));
-
-        Map<String, Object> data = new LinkedHashMap<>();
-        data.put("content", content);
-        data.put("page", pageInfo);
-
-        return ResponseEntity.ok(Map.of("data", data));
+        return ResponseEntity.ok(
+                ApiResponse.of(PageResponse.of(content, page, size, totalElements)));
     }
 
     // 화면 거래구분 파생값

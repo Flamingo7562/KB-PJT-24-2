@@ -1,9 +1,14 @@
 package com.gighub.document.controller;
 
+import com.gighub.common.api.ApiResponse;
+import com.gighub.common.api.PageRequests;
+import com.gighub.common.api.PageResponse;
 import com.gighub.common.exception.AuthRequiredException;
 import com.gighub.document.dto.Document;
+import com.gighub.document.dto.DocumentDetailResponse;
 import com.gighub.document.dto.DocumentListItem;
 import com.gighub.document.dto.DocumentShare;
+import com.gighub.document.dto.DocumentShareListResponse;
 import com.gighub.document.dto.DocumentVersion;
 import com.gighub.document.exception.DocumentNotFoundException;
 import com.gighub.document.mapper.DocumentQueryMapper;
@@ -15,9 +20,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import javax.servlet.http.HttpSession;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 
 @RestController
 @RequiredArgsConstructor
@@ -28,34 +31,26 @@ public class DocumentController {
 
     // DOC-001: 문서 목록
     @GetMapping("/api/documents")
-    public ResponseEntity<Map<String, Object>> getDocuments(
+    public ResponseEntity<ApiResponse<PageResponse<DocumentListItem>>> getDocuments(
             @RequestParam(required = false) String documentType,
             @RequestParam(required = false) String source,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(defaultValue = PageRequests.DEFAULT_PAGE_TEXT) int page,
+            @RequestParam(defaultValue = PageRequests.DEFAULT_SIZE_TEXT) int size,
             HttpSession session){
         Long loginUserId = requireLogin(session);
+        PageRequests.validate(page, size);
 
-        long offset = (long) page * size;
         List<DocumentListItem> content = documentQueryMapper.findDocuments(
-                loginUserId, documentType, offset, size);
+                loginUserId, documentType, PageRequests.offset(page, size), size);
         int total = documentQueryMapper.countDocuments(loginUserId, documentType);
 
-        Map<String, Object> pageInfo = new LinkedHashMap<>();
-        pageInfo.put("number", page);
-        pageInfo.put("size", size);
-        pageInfo.put("totalElements", total);
-        pageInfo.put("totalPages", size == 0 ? 0 : (int) Math.ceil((double) total / size));
-
-        Map<String, Object> data = new LinkedHashMap<>();
-        data.put("content", content);
-        data.put("page", pageInfo);
-        return ResponseEntity.ok(Map.of("data", data));
+        return ResponseEntity.ok(
+                ApiResponse.of(PageResponse.of(content, page, size, total)));
     }
 
     // DOC-003: 문서 메타데이터 + 버전 목록
     @GetMapping("/api/documents/{documentId}")
-    public ResponseEntity<Map<String, Object>> getDocument(
+    public ResponseEntity<ApiResponse<DocumentDetailResponse>> getDocument(
             @PathVariable Long documentId,
             HttpSession session) {
         requireLogin(session);
@@ -69,15 +64,13 @@ public class DocumentController {
         List<DocumentVersion> versions =
                 documentQueryMapper.findVersionsByDocumentId(documentId);
 
-        Map<String, Object> data = new LinkedHashMap<>();
-        data.put("document", document);
-        data.put("versions", versions);
-        return ResponseEntity.ok(Map.of("data", data));
+        return ResponseEntity.ok(
+                ApiResponse.of(DocumentDetailResponse.of(document, versions)));
     }
 
     // SHARE-002: 문서 공유 현황
     @GetMapping("/api/documents/{documentId}/shares")
-    public ResponseEntity<Map<String, Object>> getDocumentShares(
+    public ResponseEntity<ApiResponse<DocumentShareListResponse>> getDocumentShares(
             @PathVariable Long documentId,
             HttpSession session){
         requireLogin(session);
@@ -86,9 +79,7 @@ public class DocumentController {
         List<DocumentShare> shares =
                 documentQueryMapper.findSharesByDocumentId(documentId);
 
-        Map<String, Object> data = new LinkedHashMap<>();
-        data.put("items", shares);
-        return ResponseEntity.ok(Map.of("data", data));
+        return ResponseEntity.ok(ApiResponse.of(DocumentShareListResponse.of(shares)));
     }
 
     private Long requireLogin(HttpSession session){

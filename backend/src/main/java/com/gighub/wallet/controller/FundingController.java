@@ -1,9 +1,11 @@
 package com.gighub.wallet.controller;
 
+import com.gighub.common.api.ApiResponse;
 import com.gighub.common.exception.AuthRequiredException;
 import com.gighub.wallet.service.FundingService;
 import com.gighub.wallet.service.command.FundingCommand;
 import com.gighub.wallet.service.result.FundingResult;
+import com.gighub.wallet.dto.FundingOrderResponse;
 import com.gighub.wallet.dto.FundingRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -14,8 +16,6 @@ import org.springframework.web.bind.annotation.RestController;
 
 import javax.servlet.http.HttpSession;
 import javax.validation.Valid;
-import java.util.LinkedHashMap;
-import java.util.Map;
 
 @RestController
 @RequiredArgsConstructor
@@ -27,7 +27,7 @@ public class FundingController {
 
     // Mock 게좌에서 지갑으로 충전
     @PostMapping("/api/wallet/funding-orders")
-    public ResponseEntity<Map<String, Object>> fund(
+    public ResponseEntity<ApiResponse<FundingOrderResponse>> fund(
             @RequestHeader("Idempotency-Key") String idempotencyKey,
             @Valid @RequestBody FundingRequest request,
             HttpSession session) {
@@ -43,17 +43,15 @@ public class FundingController {
                 .idempotencyKey(idempotencyKey)
                 .build());
 
-        Map<String, Object> data = new LinkedHashMap<>();
-        data.put("fundingOrderId", result.getFundingOrderId());
-        data.put("status", result.getStatus());
-        data.put("bankTransactionId", result.getBankTransactionId());
+        ApiResponse<FundingOrderResponse> body =
+                ApiResponse.of(FundingOrderResponse.from(result));
 
         // 최초 201, 멱등 재전송은 200 + Idempotency-Replayed
         if (result.isReplayed()) {
             return ResponseEntity.ok()
                     .header("Idempotency-Replayed", "true")
-                    .body(Map.of("data", data));
+                    .body(body);
         }
-        return ResponseEntity.status(201).body(Map.of("data", data));
+        return ResponseEntity.status(201).body(body);
     }
 }
