@@ -2,8 +2,8 @@
 
 | 항목        | 값              |
 | ----------- | --------------- |
-| 명세 릴리스 | `1.0.0`         |
-| 승인일      | 2026-07-31      |
+| 명세 릴리스 | `1.1.0`         |
+| 승인일      | 2026-08-04      |
 | 소유자      | PM/Admin Master |
 | Base Path   | `/api`          |
 
@@ -65,8 +65,11 @@
 - 승인된 공통 오류 Code는 `VALIDATION_ERROR`, `AUTH_REQUIRED`, `FORBIDDEN`,
   `ROLE_MISMATCH`, `RESOURCE_NOT_FOUND`, `CONFLICT`, `IDEMPOTENCY_KEY_REUSED`,
   `WORK_CASE_LOCKED`, `CONTRACT_RETENTION_REQUIRED`입니다.
-- 추가 도메인 오류 Code는 `DEC-OPEN-ERROR-CATALOG`가 승인하기 전까지 새 규범 값으로
-  확정하지 않습니다.
+- Mock 계좌·지갑 금융 오류의 상황별 매핑은 "지갑과 거래" 절의 계좌·금액 오류 표
+  (`DEC-BANK-ERROR-CATALOG`)를 따르며, 이 표는 위 공통 오류 Code만 사용하고 새 Code를
+  추가하지 않습니다.
+- QR, 초대, 근태, 문서, 정산 등 그 외 도메인 오류 Code는 `DEC-OPEN-ERROR-CATALOG`가
+  승인하기 전까지 새 규범 값으로 확정하지 않습니다.
 
 ### Session, CSRF와 로컬 CORS
 
@@ -116,6 +119,20 @@ Key는 공백 없는 출력 가능한 ASCII 1~100자입니다. 같은 Key와 같
 `409 IDEMPOTENCY_KEY_REUSED`입니다. QR 재발급의 재시도 방식은
 `DEC-OPEN-QR-REISSUE-IDEMPOTENCY`를 따릅니다.
 
+저장·재응답 범위(`DEC-IDEMPOTENCY-STORAGE`)는 다음과 같습니다.
+
+- Raw Key의 저장 범위는 `(인증 사용자, Operation, Idempotency-Key)` 조합입니다. 같은
+  사용자가 다른 Operation에 같은 Key 문자열을 재사용해도 서로 충돌하지 않습니다.
+- 같은 요청 여부는 정규화 후 값(계좌 식별 정규화, 검증 통과 후 `amount` 등)의
+  Fingerprint로 판정합니다.
+- 검증 실패(`VALIDATION_ERROR` 등 자금 이동이 발생하지 않은 오류) 응답은 저장·재생하지
+  않으며 같은 Key로 다시 시도할 수 있습니다. 저장된 성공 결과는 24시간 보존합니다.
+- 같은 Key의 동시 요청은 DB Unique 제약으로 직렬화합니다. 먼저 도착한 요청만 처리하고
+  나중 요청은 대기하지 않고 즉시 `409 IDEMPOTENCY_KEY_REUSED`로 응답하며, 클라이언트는
+  잠시 후 원 요청의 결과를 다시 조회합니다.
+- 완료되어 저장된 재전송(Replay)은 이후 계좌 `BLOCKED` 전환이나 잔액 변경과 무관하게
+  최초 저장된 성공 결과를 그대로 반환합니다.
+
 ## 인증·회원
 
 | Method | Path                                     | 인증         | 요청                            | 성공                                                          |
@@ -154,7 +171,8 @@ Key는 공백 없는 출력 가능한 ASCII 1~100자입니다. 같은 Key와 같
 
 - `role`은 `OWNER` 또는 `WORKER`입니다.
 - `phone`만 선택 필드입니다.
-- 가입은 사용자와 KRW 지갑을 함께 생성합니다.
+- 가입은 사용자, KRW 지갑과 Mock 계좌 1개를 같은 트랜잭션으로 함께 생성합니다. Mock
+  계좌의 초기값과 은행 코드는 "지갑과 거래" 절의 Mock 계좌 프로비저닝을 따릅니다.
 - OWNER의 사업장 입력을 가입 Body에 포함하지 않습니다.
 
 ### 로그인
@@ -269,12 +287,68 @@ expectedNetAmount = dailyWage - incomeTax - localIncomeTax
 
 ## 지갑과 거래
 
-| Method | Path                              | 권한        | 요청        | 성공           |
-| ------ | --------------------------------- | ----------- | ----------- | -------------- |
-| GET    | `/api/wallet`                     | 인증 사용자 | 없음        | 잔액           |
-| GET    | `/api/wallet/transactions`        | 인증 사용자 | 거래 Query  | 거래 Page      |
-| POST   | `/api/wallet/funding-orders`      | OWNER       | 계좌와 금액 | 충전 처리 결과 |
-| POST   | `/api/wallet/withdrawal-requests` | 인증 사용자 | 계좌와 금액 | 출금 처리 결과 |
+| Method | Path                              | 권한        | 요청           | 성공           |
+| ------ | --------------------------------- | ----------- | -------------- | -------------- |
+| GET    | `/api/wallet`                     | 인증 사용자 | 없음           | 잔액           |
+| GET    | `/api/wallet/transactions`        | 인증 사용자 | 거래 Query     | 거래 Page      |
+| GET    | `/api/mock-bank-accounts`         | 인증 사용자 | Query `status?` | 내 Mock 계좌 목록 |
+| POST   | `/api/wallet/funding-orders`      | OWNER       | 계좌와 금액    | 충전 처리 결과 |
+| POST   | `/api/wallet/withdrawal-requests` | 인증 사용자 | 계좌와 금액    | 출금 처리 결과 |
+
+### Mock 계좌 프로비저닝
+
+가입(`POST /api/auth/signup`)은 사용자당 Mock 계좌를 1개 자동 생성합니다(`DEC-MOCK-ACCOUNT-PROVISIONING`).
+
+- OWNER 계좌: 초기 `balance`/`availableAmount` = `10000000`(KRW). 충전 재원과 출금
+  입금계좌를 겸합니다.
+- WORKER 계좌: 초기 `balance`/`availableAmount` = `0`(KRW). 출금 입금계좌 전용입니다.
+- 계좌는 가입 시 한 번만 생성하며 API를 통한 재발급·잔액 Reset·재시드 기능은 제공하지
+  않습니다.
+- `bankCode`는 아래 은행 코드표의 `004`(KB국민)로 고정 발급하고, `accountNo`는 실제
+  계좌 형식과 구분되는 합성 식별자로 `9` + 사용자 ID를 12자리로 0-padding한 13자리
+  숫자입니다(예: 사용자 ID `7` → `9000000000007`). 로그, 이슈, 테스트 데이터에는 이
+  합성 계좌번호만 사용하고 실제 계좌번호를 입력·기록하지 않습니다.
+- 사용자는 `GET /api/mock-bank-accounts`로 본인 계좌의 `bankCode`/`accountNo`를 확인해
+  충전·출금 요청에 사용합니다.
+
+### 계좌 목록
+
+### `GET /api/mock-bank-accounts`
+
+- 인증 사용자 본인 소유 계좌만 반환합니다.
+- Query `status`는 생략하거나 `ACTIVE`만 허용합니다. 다른 값은 `400 INVALID_FILTER`입니다.
+
+```json
+{
+  "data": {
+    "items": [
+      {
+        "bankAccountId": 1,
+        "bankCode": "004",
+        "maskedAccountNumber": "900000******007",
+        "currency": "KRW",
+        "balance": 10000000,
+        "availableAmount": 10000000,
+        "status": "ACTIVE"
+      }
+    ]
+  }
+}
+```
+
+### 지원 은행 코드표
+
+계좌 식별과 Mock 계좌 발급이 사용하는 canonical 은행 코드는 다음 5개로 고정합니다
+(`DEC-BANK-CODE-TABLE`). 그 외 코드나 은행명 별칭(`KB`, `SHINHAN` 등)은 허용하지
+않습니다.
+
+| bankCode | 은행명   |
+| -------- | -------- |
+| `004`    | KB국민   |
+| `088`    | 신한     |
+| `020`    | 우리     |
+| `081`    | 하나     |
+| `011`    | NH농협   |
 
 ### 잔액
 
@@ -292,17 +366,33 @@ expectedNetAmount = dailyWage - incomeTax - localIncomeTax
 
 Query:
 
-- `workplaceId?`
+- `workplaceId?`: 지정하면 해당 사업장에 연결된 거래만 반환하고 `FUNDING`/`WITHDRAWAL`
+  처럼 사업장과 무관한 거래는 제외합니다.
 - `from?`, `to?`
 - `type?`: `FUNDING`, `ESCROW_HOLD`, `ESCROW_RELEASE`, `ESCROW_REFUND`,
   `WITHDRAWAL`, `WITHDRAWAL_REFUND`, `ADJUSTMENT`
-- `minAmount?`, `maxAmount?`, `keyword?`
-- `sort?`: 기본 `LATEST`, 또는 `OLDEST`, `AMOUNT_ASC`, `AMOUNT_DESC`
+- `minAmount?`, `maxAmount?`: `amount` 절대값 기준입니다.
+- `keyword?`: `workTitle`, `workplaceName`만 대상으로 부분 일치합니다.
+- `sort?`: 기본 `LATEST`, 또는 `OLDEST`, `AMOUNT_ASC`, `AMOUNT_DESC`(절대값 기준)
 - `page?`, `size?`
 
-Item은 `transactionId`, `type`, `amount`, `availableAfter`, `lockedAfter`,
-`workCaseId`, `workTitle`, `workplaceName`, `displayStatus`, `createdAt`을
-반환합니다. `createdAt`은 UTC `Instant`입니다.
+Item은 `transactionId`, `type`, `amount`, `direction`, `availableAfter`,
+`lockedAfter`, `workCaseId`, `workTitle`, `workplaceName`, `displayStatus`,
+`createdAt`을 반환합니다(`DEC-TRANSACTION-DISPLAY`).
+
+- `amount`는 항상 0 이상의 절대값입니다. 부호를 포함하지 않습니다.
+- `direction`은 이 거래 row가 속한 사용자 지갑 기준 증감 방향이며 `CREDIT`(증가) 또는
+  `DEBIT`(감소)입니다. 같은 `ESCROW_RELEASE` 사건이라도 OWNER 소유 row는 `DEBIT`,
+  WORKER 소유 row는 `CREDIT`으로 각각 독립적으로 표시합니다. `ADJUSTMENT`도 해당 row가
+  속한 사용자 지갑 기준으로만 방향을 정합니다.
+- `workCaseId`, `workTitle`, `workplaceName`은 사업장·근무와 무관한 거래
+  (`FUNDING`, `WITHDRAWAL`)에서 `null`입니다.
+- `displayStatus`는 `PENDING`, `COMPLETED`, `FAILED`, `REFUNDED` 중 하나이며 원장·
+  에스크로·정산 상태로부터 파생합니다. `FUNDING`/`WITHDRAWAL`/`ESCROW_HOLD`/
+  `ESCROW_RELEASE`/`ADJUSTMENT`는 원장에 반영된 시점에만 생성되므로 `COMPLETED`로
+  고정합니다. `ESCROW_REFUND`도 반영 시점에 생성되므로 `REFUNDED`로 고정합니다.
+  `PENDING`/`FAILED`는 이번 릴리스에서 생성하지 않는 예약값입니다.
+- `createdAt`은 UTC `Instant`입니다.
 
 ### 충전과 출금
 
@@ -318,6 +408,26 @@ Item은 `transactionId`, `type`, `amount`, `availableAfter`, `lockedAfter`,
 
 서버는 인증 사용자, `bankCode`, `accountNo`, ACTIVE 상태로 내부 계좌를 식별합니다.
 클라이언트가 `bankAccountId`를 보내지 않습니다.
+
+입력 검증(`DEC-BANK-INPUT-VALIDATION`):
+
+- `bankCode`는 지원 은행 코드표의 값만 허용합니다.
+- `accountNo`는 공백과 하이픈을 제거한 뒤 10~14자리 숫자만 허용합니다.
+- `amount`는 0보다 크고 최대 100,000,000(1억) KRW입니다.
+- 위 조건을 벗어나면 `400 VALIDATION_ERROR`입니다.
+
+계좌·금액 오류 매핑(`DEC-BANK-ERROR-CATALOG`, 승인된 공통 오류 Code만 사용):
+
+| 상황                                          | Code                 | HTTP  |
+| --------------------------------------------- | -------------------- | ----- |
+| `bankCode`/`accountNo`/`amount` 형식 오류     | `VALIDATION_ERROR`   | `400` |
+| 인증 사용자 소유 ACTIVE 계좌 미발견(타인·비활성 계좌 포함) | `RESOURCE_NOT_FOUND` | `404` |
+| 은행 계좌 잔액 부족(출금 입금 실패 아님 — 충전 시 인출 대상 은행 잔액 부족) | `CONFLICT`           | `409` |
+| 지갑 가용 잔액 부족(출금 시)                  | `CONFLICT`           | `409` |
+| 동시 갱신 충돌(같은 계좌·지갑에 대한 경합)    | `CONFLICT`           | `409` |
+
+타인 소유 계좌와 존재하지 않는 계좌, 비활성 계좌는 모두 `404 RESOURCE_NOT_FOUND`로
+동일하게 응답해 타인 계좌의 존재 여부를 노출하지 않습니다.
 
 최초 충전 성공:
 

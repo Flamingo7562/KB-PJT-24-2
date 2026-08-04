@@ -2,8 +2,8 @@
 
 | 항목        | 값              |
 | ----------- | --------------- |
-| 명세 릴리스 | `1.0.0`         |
-| 승인일      | 2026-07-31      |
+| 명세 릴리스 | `1.1.0`         |
+| 승인일      | 2026-08-04      |
 | 소유자      | PM/Admin Master |
 
 이 표는 요구사항을 승인 REST Operation과 도메인에 연결합니다. 개발 진행률, 임시 데이터
@@ -36,13 +36,15 @@
 | WORKPLACE-002 | `PATCH /api/workplaces/{workplaceId}`                                     | `workplaces`, 근무 조건 Snapshot                                                  | DEC-WORKPLACE-IMMUTABLE, DEC-OPEN-WORKPLACE-COORDINATES |
 | WORKPLACE-003 | `DELETE /api/workplaces/{workplaceId}`                                    | `workplaces.status`, `deleted_at`                                                 | DEC-WORKPLACE-IMMUTABLE                                 |
 | WORKPLACE-004 | `GET /api/workplaces`                                                     | `workplaces.owner_id`                                                             | DEC-AUTH-SESSION                                        |
-| BANK-001      | `POST /api/wallet/funding-orders`, `POST /api/wallet/withdrawal-requests` | `mock_bank_accounts`                                                              | DEC-BANK-INPUT                                          |
+| BANK-001      | `POST /api/wallet/funding-orders`, `POST /api/wallet/withdrawal-requests` | `mock_bank_accounts`                                                              | DEC-BANK-INPUT, DEC-BANK-CODE-TABLE, DEC-BANK-INPUT-VALIDATION, DEC-BANK-ERROR-CATALOG |
+| BANK-002      | `POST /api/auth/signup`                                                  | `mock_bank_accounts`                                                              | DEC-MOCK-ACCOUNT-PROVISIONING, DEC-BANK-CODE-TABLE      |
+| BANK-003      | `GET /api/mock-bank-accounts`                                            | `mock_bank_accounts`                                                              | DEC-BANK-ACCOUNT-LISTING                                |
 | WALLET-001    | `GET /api/wallet`                                                         | `wallets.available_balance`, `locked_balance`                                     | DEC-BALANCE-REFETCH                                     |
-| WALLET-002    | `POST /api/wallet/funding-orders`, `GET /api/wallet`                      | `funding_orders`, `mock_bank_transactions`, `wallet_transactions`, `wallets`      | DEC-BANK-INPUT, DEC-BALANCE-REFETCH, DEC-IDEMPOTENCY    |
-| WALLET-003    | `POST /api/wallet/withdrawal-requests`, `GET /api/wallet`                 | `withdrawal_requests`, `mock_bank_transactions`, `wallet_transactions`, `wallets` | DEC-BANK-INPUT, DEC-BALANCE-REFETCH, DEC-IDEMPOTENCY    |
-| WALLET-004    | `GET /api/wallet/transactions`                                            | `wallet_transactions`, `work_cases`, `workplaces`                                 | DEC-PAGE, DEC-TIME                                      |
+| WALLET-002    | `POST /api/wallet/funding-orders`, `GET /api/wallet`                      | `funding_orders`, `mock_bank_transactions`, `wallet_transactions`, `wallets`      | DEC-BANK-INPUT, DEC-BALANCE-REFETCH, DEC-IDEMPOTENCY, DEC-BANK-INPUT-VALIDATION, DEC-BANK-ERROR-CATALOG, DEC-IDEMPOTENCY-STORAGE |
+| WALLET-003    | `POST /api/wallet/withdrawal-requests`, `GET /api/wallet`                 | `withdrawal_requests`, `mock_bank_transactions`, `wallet_transactions`, `wallets` | DEC-BANK-INPUT, DEC-BALANCE-REFETCH, DEC-IDEMPOTENCY, DEC-BANK-INPUT-VALIDATION, DEC-BANK-ERROR-CATALOG, DEC-IDEMPOTENCY-STORAGE |
+| WALLET-004    | `GET /api/wallet/transactions`                                            | `wallet_transactions`, `work_cases`, `workplaces`                                 | DEC-PAGE, DEC-TIME, DEC-TRANSACTION-DISPLAY             |
 | WALLET-005    | 지갑·계좌 금액 변경 Operation                                             | `wallet_transactions`, `mock_bank_transactions`                                   | DEC-IDEMPOTENCY                                         |
-| WALLET-006    | 충전·출금·초대 수락·정산 승인 Operation                                   | 멱등 Key, 금융 Aggregate                                                          | DEC-IDEMPOTENCY                                         |
+| WALLET-006    | 충전·출금·초대 수락·정산 승인 Operation                                   | 멱등 Key, 금융 Aggregate                                                          | DEC-IDEMPOTENCY, DEC-IDEMPOTENCY-STORAGE                |
 
 ## 홈·근무·초대·계약
 

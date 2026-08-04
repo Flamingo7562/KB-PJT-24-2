@@ -2,8 +2,8 @@
 
 | 항목        | 값              |
 | ----------- | --------------- |
-| 명세 릴리스 | `1.0.0`         |
-| 승인일      | 2026-07-31      |
+| 명세 릴리스 | `1.1.0`         |
+| 승인일      | 2026-08-04      |
 | 소유자      | PM/Admin Master |
 
 이 문서는 제품 계약에 영향을 주는 승인 결정, 아직 답이 필요한 결정과 폐기된 방향만
@@ -37,6 +37,13 @@
 | DEC-DOCUMENT-STORAGE         | 문서 파일은 외부 비공개 저장소에 두고 식별 Key, Checksum, Version과 접근 감사를 보존한다.                                        | DOC-009, DOC-011                     |
 | DEC-DISPUTE-SETTLEMENT       | MVP 임금분쟁 신고는 정산 상태와 예정 시각을 자동으로 바꾸지 않는다.                                                              | DISPUTE-001, DISPUTE-003             |
 | DEC-PASSWORD-RESET           | 비밀번호 재설정은 이메일 식별, Hash 저장, 만료와 1회 사용 Token 방식으로 제공한다.                                               | AUTH-011                             |
+| DEC-MOCK-ACCOUNT-PROVISIONING | 가입 트랜잭션에서 사용자당 Mock 계좌 1개를 자동 생성한다. OWNER 초기값은 10,000,000 KRW, WORKER 초기값은 0 KRW이며 API를 통한 재발급·Reset·재시드는 제공하지 않는다. 계좌는 `bankCode=004` 고정, `accountNo`는 `9`+사용자 ID 12자리 0-padding의 합성 식별자다. | BANK-002, AUTH-002                   |
+| DEC-BANK-ACCOUNT-LISTING      | `GET /api/mock-bank-accounts`를 정식 계약으로 편입한다. 인증 사용자 본인 소유 ACTIVE 계좌 목록을 마스킹된 계좌번호로 반환한다.    | BANK-003                             |
+| DEC-BANK-CODE-TABLE           | 지원 은행 코드는 `004`(KB국민), `088`(신한), `020`(우리), `081`(하나), `011`(NH농협) 5개로 고정하며 별칭·중복 코드는 허용하지 않는다. | BANK-001, BANK-002                   |
+| DEC-BANK-INPUT-VALIDATION     | `accountNo`는 공백·하이픈 제거 후 10~14자리 숫자만 허용하고 `amount`는 0보다 크며 최대 100,000,000 KRW다.                        | BANK-001, WALLET-002, WALLET-003     |
+| DEC-BANK-ERROR-CATALOG        | 계좌·금액 오류는 승인된 공통 오류 Code만으로 매핑한다: 형식 오류 `400 VALIDATION_ERROR`, 본인 ACTIVE 계좌 미발견(타인·비활성 계좌 포함) `404 RESOURCE_NOT_FOUND`, 은행·지갑 잔액 부족과 동시 갱신 충돌 `409 CONFLICT`. 타인 계좌와 미발견 계좌는 같은 Code로 통일해 존재 여부를 노출하지 않는다. `DEC-OPEN-ERROR-CATALOG`의 은행·지갑 범위를 해소한다. | BANK-001, WALLET-002, WALLET-003     |
+| DEC-TRANSACTION-DISPLAY       | 거래 Item의 `amount`는 항상 절대값이며 방향은 별도 `direction`(`CREDIT`/`DEBIT`) 필드로 표시한다. `displayStatus`는 `PENDING/COMPLETED/FAILED/REFUNDED` 중 원장 반영 시점 기준으로 파생한다. 사업장과 무관한 거래는 근무·사업장 필드를 `null`로 반환하고 `workplaceId` 필터에서 제외하며, `keyword`는 `workTitle`/`workplaceName`만 검색하고 `minAmount`/`maxAmount`는 절대값 기준이다. | WALLET-004                           |
+| DEC-IDEMPOTENCY-STORAGE       | Idempotency Key는 `(사용자, Operation, Key)` 단위로 저장하고 정규화 후 값의 Fingerprint로 동일 요청을 판정한다. 검증 실패 응답은 저장·재생하지 않으며 저장된 성공 결과는 24시간 보존한다. 동시 동일 Key 요청은 DB Unique 제약으로 직렬화해 나중 요청을 즉시 `409 IDEMPOTENCY_KEY_REUSED`로 거부한다. 완료된 재전송은 이후 계좌 상태·잔액 변경과 무관하게 저장된 결과를 그대로 반환한다. | WALLET-006                           |
 
 ## Open
 
@@ -57,7 +64,7 @@ Open 항목은 승인된 경계 밖의 선택지입니다. 결론이 나기 전�
 | DEC-OPEN-NOTIFICATION-CONTRACT     | 알림 유형, 이벤트 식별자, 목록·읽음 처리 Payload와 전달 방식을 어떻게 정의할지                                           | 수신자만 자신의 알림을 조회하고 읽음 처리하며 동일 이벤트 중복을 막는다.                            |
 | DEC-OPEN-ADMIN-DISPUTE             | 분쟁을 처리할 관리자 역할, 권한과 상태 변경 절차는 무엇인지                                                              | 당사자는 신고를 조회하며 신고 자체는 정산을 보류하지 않는다.                                        |
 | DEC-OPEN-PAYMENT-PROVIDER          | 외부 결제 Provider, 주문·거래·Webhook 계약과 취소 범위를 어떻게 정할지                                                   | 서버 검증 전에는 지갑을 증가시키지 않고 중복 Webhook을 한 번만 반영한다.                            |
-| DEC-OPEN-ERROR-CATALOG             | QR, 초대, 근태, 문서, 정산별 세부 오류 Code와 HTTP Status를 어떤 목록으로 고정할지                                       | 공통 Envelope, 401/403 구분과 이미 승인된 오류 Code는 유지한다.                                     |
+| DEC-OPEN-ERROR-CATALOG             | QR, 초대, 근태, 문서, 정산별 세부 오류 Code와 HTTP Status를 어떤 목록으로 고정할지 (은행·지갑 오류는 `DEC-BANK-ERROR-CATALOG`로 해소됨) | 공통 Envelope, 401/403 구분과 이미 승인된 오류 Code는 유지한다.                                     |
 | DEC-OPEN-WORK-CASE-RESPONSE-SHAPES | 근무 요약과 상세 응답의 전체 필드, Capability와 중첩 구조를 어떻게 고정할지                                              | 승인된 경로, 핵심 상태와 근무 조건 필드는 유지한다.                                                 |
 | DEC-OPEN-DOCUMENT-RESPONSE-SHAPES  | 문서 목록, 파일 Metadata와 공유 응답의 전체 필드 구조를 어떻게 고정할지                                                  | 계약서 자동 생성·삭제 금지, 보건증 업로드·공유 권한과 승인된 경로는 유지한다.                       |
 
