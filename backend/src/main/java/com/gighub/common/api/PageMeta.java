@@ -27,10 +27,23 @@ public final class PageMeta {
     /**
      * 0-based Page 번호와 Page 크기, 전체 건수로 Metadata를 만듭니다.
      *
-     * <p>{@code totalPages}는 전체 건수를 Page 크기로 올림한 값이며, 결과가 없으면 0입니다.
-     * {@code size}는 {@link PageRequests#validate(int, int)}가 1 이상을 보장합니다.</p>
+     * <p>{@code totalPages}는 전체 건수를 Page 크기로 올림한 값이며, 결과가 없으면 0입니다.</p>
+     *
+     * <p>Controller가 {@link PageRequests#validate(int, int)}를 호출한다는 전제를 여기서 다시
+     * 확인합니다. {@code size}가 0이면 실수 나눗셈이 예외 없이 Infinity나 NaN이 되어
+     * {@code totalPages}가 {@code Integer.MAX_VALUE} 또는 0으로 조용히 응답에 실립니다.
+     * 요청 경계 위반은 Controller에서 {@code 400}으로 거부하고, 검증을 건너뛴 호출은 여기서
+     * 프로그래밍 오류로 끊습니다. 상한 {@code size <= 100}은 요청 규칙이므로 반복하지 않습니다.</p>
+     *
+     * @throws IllegalArgumentException {@code number}가 음수이거나 {@code size}가 1 미만인 경우
      */
     public static PageMeta of(int number, int size, long totalElements) {
+        if (number < 0 || size < 1) {
+            throw new IllegalArgumentException(
+                    "PageMeta는 number 0 이상, size 1 이상에서만 만들 수 있습니다. "
+                            + "Controller가 PageRequests.validate를 먼저 호출해야 합니다.");
+        }
+
         int totalPages = (int) Math.ceil((double) totalElements / size);
         return new PageMeta(number, size, totalElements, totalPages);
     }
