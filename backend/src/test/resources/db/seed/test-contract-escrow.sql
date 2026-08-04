@@ -11,12 +11,12 @@ INSERT INTO users (
     login_id, email, password_hash, name, phone, role, status
 ) VALUES (
     'test_owner_17', 'test-owner-17@example.invalid', @password_hash,
-    '테스트 사장', '010-0000-0017', 'OWNER', 'ACTIVE'
+    '테스트 사장', '01000000017', 'OWNER', 'ACTIVE'
 )
 ON DUPLICATE KEY UPDATE
     password_hash = @password_hash,
     name = '테스트 사장',
-    phone = '010-0000-0017',
+    phone = '01000000017',
     role = 'OWNER',
     status = 'ACTIVE',
     deleted_at = NULL;
@@ -25,12 +25,12 @@ INSERT INTO users (
     login_id, email, password_hash, name, phone, role, status
 ) VALUES (
     'test_worker_17', 'test-worker-17@example.invalid', @password_hash,
-    '테스트 근로자', '010-0000-1017', 'WORKER', 'ACTIVE'
+    '테스트 근로자', '01000001017', 'WORKER', 'ACTIVE'
 )
 ON DUPLICATE KEY UPDATE
     password_hash = @password_hash,
     name = '테스트 근로자',
-    phone = '010-0000-1017',
+    phone = '01000001017',
     role = 'WORKER',
     status = 'ACTIVE',
     deleted_at = NULL;
@@ -42,24 +42,13 @@ SET @worker_id = (
     SELECT id FROM users WHERE login_id = 'test_worker_17'
 );
 
-INSERT INTO employer_profiles (
-    user_id, business_name, contact_phone, default_workplace_address
-) VALUES (
-    @owner_id, 'Gig-Hub 합성 테스트 매장', '02-0000-0017',
-    '서울특별시 영등포구 테스트로 17'
-)
-ON DUPLICATE KEY UPDATE
-    business_name = 'Gig-Hub 합성 테스트 매장',
-    contact_phone = '02-0000-0017',
-    default_workplace_address = '서울특별시 영등포구 테스트로 17';
-
 INSERT INTO workplaces (
     owner_user_id, business_registration_number, name,
     representative_name, road_address, detail_address, phone,
     latitude, longitude, radius_meters, status
 ) VALUES (
     @owner_id, '0000000017', 'Gig-Hub 합성 테스트 매장',
-    '테스트 사장', '서울특별시 영등포구 테스트로 17', NULL, '02-0000-0017',
+    '테스트 사장', '서울특별시 영등포구 테스트로 17', NULL, '0200000017',
     37.5265000, 126.8962000, 100.00, 'ACTIVE'
 )
 ON DUPLICATE KEY UPDATE
@@ -68,7 +57,7 @@ ON DUPLICATE KEY UPDATE
     representative_name = '테스트 사장',
     road_address = '서울특별시 영등포구 테스트로 17',
     detail_address = NULL,
-    phone = '02-0000-0017',
+    phone = '0200000017',
     latitude = 37.5265000,
     longitude = 126.8962000,
     radius_meters = 100.00,
