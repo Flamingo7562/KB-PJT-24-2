@@ -1,7 +1,12 @@
 package com.gighub.wallet.exception;
 
-public class InvalidEscrowStateException extends RuntimeException{
+import com.gighub.common.api.ApiErrorCode;
+import com.gighub.common.exception.ApiException;
+import org.springframework.http.HttpStatus;
+
+public class InvalidEscrowStateException extends ApiException {
+
     public InvalidEscrowStateException(String message) {
-        super(message);
+        super(HttpStatus.CONFLICT, ApiErrorCode.CONFLICT, message);
     }
 }

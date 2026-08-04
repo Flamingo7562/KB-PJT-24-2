@@ -1,6 +1,8 @@
 package com.gighub.wallet.exception;
 
-public class EscrowAccessDeniedException extends RuntimeException {
+import com.gighub.common.exception.ForbiddenException;
+
+public class EscrowAccessDeniedException extends ForbiddenException {
 
     public EscrowAccessDeniedException(String message) {
         super(message);

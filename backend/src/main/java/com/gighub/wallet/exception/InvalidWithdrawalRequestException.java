@@ -1,7 +1,10 @@
 package com.gighub.wallet.exception;
 
-public class InvalidWithdrawalRequestException extends RuntimeException{
-    public InvalidWithdrawalRequestException(String message){
+import com.gighub.common.exception.ValidationException;
+
+public class InvalidWithdrawalRequestException extends ValidationException {
+
+    public InvalidWithdrawalRequestException(String message) {
         super(message);
     }
 }

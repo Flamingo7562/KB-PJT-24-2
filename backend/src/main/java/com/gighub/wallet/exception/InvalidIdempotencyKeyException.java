@@ -1,6 +1,8 @@
 package com.gighub.wallet.exception;
 
-public class InvalidIdempotencyKeyException extends RuntimeException {
+import com.gighub.common.exception.ValidationException;
+
+public class InvalidIdempotencyKeyException extends ValidationException {
 
     public InvalidIdempotencyKeyException(String message) {
         super(message);

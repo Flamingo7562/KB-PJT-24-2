@@ -11,6 +11,7 @@ import com.gighub.wallet.service.EscrowService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.http.MediaType;
 import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
@@ -108,5 +109,29 @@ class EscrowControllerTest {
                 .andExpect(jsonPath("$.code").value("AUTH_REQUIRED"));
 
         verify(settlementService, never()).approve(any());
+    }
+
+    @Test
+    void holdRejectsDifferentWorkerThroughCommonErrorFlow() throws Exception {
+        MockHttpSession session = new MockHttpSession();
+        session.setAttribute("LOGIN_USER", EMPLOYER_ID);
+
+        mockMvc.perform(post("/api/invites/{token}/accept", "test-token")
+                        .session(session)
+                        .header("Idempotency-Key", "ESCROW-HOLD-001")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "employerId": 3,
+                                  "workerId": 9,
+                                  "workCaseId": 1,
+                                  "amount": 100000
+                                }
+                                """))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("FORBIDDEN"))
+                .andExpect(jsonPath("$.traceId").isString());
+
+        verify(escrowService, never()).hold(any());
     }
 }
