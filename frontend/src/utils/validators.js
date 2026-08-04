@@ -1,13 +1,56 @@
 /**
- * 폼 입력 검증 유틸.
+ * 폼 입력 정규화·검증 유틸.
  *
- * 서버가 최종 검증하지만(docs/rules/api.md), 폼 UX 를 위해 프론트에서도 즉시 안내한다.
- * 각 함수는 `{ valid: boolean, message: string }` 를 반환한다(통과 시 message '').
+ * 승인 계약(docs/specs/API_SPEC.md '인증·회원' 절, REQUIREMENTS AUTH-002·AUTH-008)은
+ * 정규화를 먼저 적용한 뒤 검증하도록 정한다. 가용성 조회·가입·로그인이 같은 규칙을 쓰지
+ * 않으면 사전 확인을 통과한 값이 최종 요청에서 거부된다.
+ * 서버가 최종 검증하지만 폼 UX 를 위해 프론트에서도 같은 경계를 즉시 안내한다.
+ *
+ * 각 검증 함수는 `{ valid: boolean, message: string }` 를 반환한다(통과 시 message '').
  * 회원가입·사업장 등록·비밀번호 변경 등 폼 화면에서 공통으로 사용한다.
  */
+import { onlyDigits } from '@/utils/format'
 
 const ok = { valid: true, message: '' }
 const fail = (message) => ({ valid: false, message })
+
+// 승인 계약의 비밀번호 경계. BCrypt 는 입력을 72 byte 까지만 사용하므로 문자 수 상한만으로는
+// 멀티바이트 입력을 막지 못한다. 두 경계를 함께 적용하고 초과분을 잘라내지 않는다.
+export const PASSWORD_MIN_LENGTH = 8
+export const PASSWORD_MAX_LENGTH = 64
+export const PASSWORD_MAX_BYTES = 72
+
+/** 승인 계약의 이름 상한. 정규화(trim) 후 길이를 기준으로 한다. */
+export const NAME_MAX_LENGTH = 100
+
+/** 아이디 정규화 — 앞뒤 공백 제거 후 소문자. 저장·비교·전송 모두 이 형태를 쓴다. */
+export function normalizeLoginId(value) {
+  return String(value ?? '')
+    .trim()
+    .toLowerCase()
+}
+
+/** 이메일 정규화 — 앞뒤 공백 제거 후 소문자. */
+export function normalizeEmail(value) {
+  return String(value ?? '')
+    .trim()
+    .toLowerCase()
+}
+
+/** 이름 정규화 — 앞뒤 공백만 제거한다(대소문자는 입력 그대로 보존). */
+export function normalizeName(value) {
+  return String(value ?? '').trim()
+}
+
+/** 전화번호 정규화 — 공백·하이픈 등 구분 문자를 제거해 숫자만 남긴다. 표시 형식은 화면이 만든다. */
+export function normalizePhone(value) {
+  return value == null ? '' : onlyDigits(value)
+}
+
+/** UTF-8 기준 byte 길이. 한글 1자는 3 byte 이므로 문자 수와 다르다. */
+function utf8ByteLength(value) {
+  return new TextEncoder().encode(value).length
+}
 
 /** 필수값 */
 export function isRequired(value, label = '필수 항목') {
@@ -16,19 +59,29 @@ export function isRequired(value, label = '필수 항목') {
   return ok
 }
 
-/** 이메일 형식 */
+/** 이메일 형식. 정규화한 값으로 검사한다. */
 export function isEmail(value) {
-  if (!value) return fail('이메일을 입력해주세요.')
+  const normalized = normalizeEmail(value)
+  if (!normalized) return fail('이메일을 입력해주세요.')
   const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-  return re.test(value) ? ok : fail('올바른 이메일 형식이 아닙니다.')
+  return re.test(normalized) ? ok : fail('올바른 이메일 형식이 아닙니다.')
 }
 
-/** 비밀번호 규칙: 8자 이상, 영문+숫자 포함 */
+/**
+ * 비밀번호 규칙(승인 계약): 8~64자이면서 UTF-8 기준 72 byte 이하.
+ * 72 byte 를 넘는 입력은 잘라내지 않고 거부한다. 잘라내면 서로 다른 비밀번호가 같은
+ * 해시가 되어 아무 값으로나 로그인할 수 있다.
+ * 문자 종류 조합은 강제하지 않으며, 비밀번호에는 trim·대소문자 변환을 적용하지 않는다.
+ */
 export function passwordRule(value) {
   if (!value) return fail('비밀번호를 입력해주세요.')
-  if (value.length < 8) return fail('비밀번호는 8자 이상이어야 합니다.')
-  if (!/[a-zA-Z]/.test(value) || !/\d/.test(value)) {
-    return fail('영문과 숫자를 모두 포함해야 합니다.')
+  if (value.length < PASSWORD_MIN_LENGTH || value.length > PASSWORD_MAX_LENGTH) {
+    return fail(`비밀번호는 ${PASSWORD_MIN_LENGTH}~${PASSWORD_MAX_LENGTH}자여야 합니다.`)
+  }
+  if (utf8ByteLength(value) > PASSWORD_MAX_BYTES) {
+    return fail(
+      `비밀번호가 너무 깁니다. 한글·이모지를 줄여 ${PASSWORD_MAX_BYTES}byte 이하로 입력해주세요.`
+    )
   }
   return ok
 }
@@ -39,10 +92,24 @@ export function passwordsMatch(password, confirm) {
   return password === confirm ? ok : fail('비밀번호가 일치하지 않습니다.')
 }
 
-/** 아이디: 4~20자 영문/숫자 */
+/**
+ * 아이디: 4~20자 영문·숫자. 정규화한 값으로 검사한다.
+ * 승인 명세는 정규화 규칙만 고정했고 길이·문자 범위는 지정하지 않아 기존 화면 기준을 유지한다.
+ */
 export function loginIdRule(value) {
-  if (!value) return fail('아이디를 입력해주세요.')
-  return /^[a-zA-Z0-9]{4,20}$/.test(value) ? ok : fail('아이디는 4~20자 영문·숫자입니다.')
+  const normalized = normalizeLoginId(value)
+  if (!normalized) return fail('아이디를 입력해주세요.')
+  return /^[a-z0-9]{4,20}$/.test(normalized) ? ok : fail('아이디는 4~20자 영문·숫자입니다.')
+}
+
+/** 이름: 정규화(trim) 후 1~100자. 대소문자와 내부 공백은 입력 그대로 보존한다. */
+export function nameRule(value) {
+  const normalized = normalizeName(value)
+  if (!normalized) return fail('이름을 입력해주세요.')
+  if (normalized.length > NAME_MAX_LENGTH) {
+    return fail(`이름은 ${NAME_MAX_LENGTH}자 이내로 입력해주세요.`)
+  }
+  return ok
 }
 
 /** 사업자등록번호: 10자리 숫자(하이픈 허용) */
@@ -52,10 +119,13 @@ export function isBusinessNumber(value) {
   return /^\d{10}$/.test(digits) ? ok : fail('사업자등록번호는 숫자 10자리입니다.')
 }
 
-/** 전화번호(선택 항목): 값이 있으면 형식 검사 */
+/**
+ * 전화번호(선택 항목): 값이 있으면 형식 검사.
+ * 승인 계약은 정규화한 숫자가 `0`으로 시작하는 9~11자리일 것을 요구한다.
+ */
 export function isPhone(value, { required = false } = {}) {
-  if (!value) return required ? fail('전화번호를 입력해주세요.') : ok
-  const digits = String(value).replace(/-/g, '')
+  const digits = normalizePhone(value)
+  if (!digits) return required ? fail('전화번호를 입력해주세요.') : ok
   return /^0\d{8,10}$/.test(digits) ? ok : fail('올바른 전화번호 형식이 아닙니다.')
 }
 

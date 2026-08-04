@@ -50,8 +50,8 @@ async function handleSubmit() {
 
   submitting.value = true
   try {
-    // 이름은 변경 불가지만 서버가 name 을 null 로 덮지 않도록 로드한 값을 그대로 보낸다.
-    await updateMe({ name: name.value, phone: phone.value })
+    // 승인 계약상 PATCH Body 는 phone 만 허용한다. name 을 함께 보내면 400 으로 거부된다.
+    await updateMe({ phone: phone.value })
     ui.toast('회원정보가 변경됐어요.', { type: 'success' })
     router.back()
   } catch (err) {

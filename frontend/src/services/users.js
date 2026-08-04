@@ -1,21 +1,23 @@
 /**
  * 회원(내 정보·뱃지) API 서비스.
  *
- * 관련 API(명세 USER-001~004, BADGE-001):
+ * 승인 계약: docs/specs/API_SPEC.md '내 프로필' 절, REQUIREMENTS AUTH-008, DEC-PROFILE-IMMUTABLE
  *   GET /api/users/me   PATCH /api/users/me   PATCH /api/users/me/password
  *   POST /api/users/me/withdrawal   GET /api/users/me/badge
  */
 import http from '@/services/http'
+import { normalizePhone } from '@/utils/validators'
 
 const USE_MOCK = true
 
+// 승인 응답 필드만 담는다. 전화번호는 구분 문자 없는 정규화 형식으로 주고받고 화면에서 포맷한다.
 const mockMe = {
   loginId: 'owner01',
-  name: '김사장',
   email: 'owner@test.com',
-  phone: '010-1234-5678',
+  name: '김사장',
+  phone: '01012345678',
   role: 'OWNER',
-  profileImageUrl: null // TODO: 프로필 사진 업로드 연동 전 임시 null
+  status: 'ACTIVE'
 }
 
 // 사장=TRUST_OWNER(안심거래) / 알바생=TRUST_WORKER(성실근로).
@@ -29,17 +31,22 @@ const mockBadge = {
   criterionDesc: '*안심거래란? 임금분쟁 신고 없이 정상 정산 완료'
 }
 
-/** 내 정보 조회 (명세 6) */
+/** 내 정보 조회 (AUTH-008) */
 export async function getMe() {
   if (USE_MOCK) return { ...mockMe }
   const { data } = await http.get('/users/me')
   return data
 }
 
-/** 내 정보 수정(이름·전화번호) (명세 7) */
-export async function updateMe({ name, phone }) {
-  if (USE_MOCK) return { ...mockMe, name, phone }
-  const { data } = await http.patch('/users/me', { name, phone })
+/**
+ * 내 정보 수정 (AUTH-008). PATCH Body 는 `phone` 만 허용한다.
+ * `loginId`·`email`·`name`·`role`·`status` 를 함께 보내면 서버가 무시하지 않고
+ * 400 VALIDATION_ERROR 로 거부하므로 절대 싣지 않는다.
+ */
+export async function updateMe({ phone }) {
+  const normalized = normalizePhone(phone)
+  if (USE_MOCK) return { ...mockMe, phone: normalized }
+  const { data } = await http.patch('/users/me', { phone: normalized })
   return data
 }
 
