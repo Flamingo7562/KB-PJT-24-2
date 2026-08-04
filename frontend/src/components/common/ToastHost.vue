@@ -2,6 +2,11 @@
 /**
  * 토스트 호스트 — ui 스토어의 토스트 큐를 화면 상단에 렌더한다.
  * App.vue 에 한 번만 배치한다. 표시는 어디서든 `useUiStore().toast('메시지')`.
+ *
+ * 클래스 이름에 `app-` 접두사를 붙인 이유: main.js 가 Bootstrap 전체 CSS 를 로드하고,
+ * Bootstrap 에도 Toast 컴포넌트가 있어 `.toast:not(.show) { display: none }` 규칙이 걸린다.
+ * 여기 토스트에는 `.show` 가 없으므로 `.toast` 를 그대로 쓰면 렌더되어도 화면에 뜨지 않는다.
+ * 특이도로 겨루는 대신(삽입 순서에 의존한다) 이름을 분리해 충돌 자체를 없앤다.
  */
 import { storeToRefs } from 'pinia'
 
@@ -14,8 +19,8 @@ const { toasts } = storeToRefs(ui)
 <template>
   <Teleport to="body">
     <div class="toast-host" aria-live="polite">
-      <TransitionGroup name="toast">
-        <div v-for="t in toasts" :key="t.id" class="toast" :class="`toast--${t.type}`">
+      <TransitionGroup name="app-toast">
+        <div v-for="t in toasts" :key="t.id" class="app-toast" :class="`app-toast--${t.type}`">
           {{ t.message }}
         </div>
       </TransitionGroup>
@@ -38,7 +43,7 @@ const { toasts } = storeToRefs(ui)
   padding: 0 var(--space-lg);
   pointer-events: none;
 }
-.toast {
+.app-toast {
   align-self: center;
   max-width: 100%;
   padding: var(--space-sm) var(--space-lg);
@@ -48,22 +53,22 @@ const { toasts } = storeToRefs(ui)
   font-size: var(--text-sm);
   box-shadow: var(--shadow-card);
 }
-.toast--success {
+.app-toast--success {
   background: var(--color-success);
 }
-.toast--warning {
+.app-toast--warning {
   background: var(--color-warning);
 }
-.toast--danger {
+.app-toast--danger {
   background: var(--color-danger);
 }
 
-.toast-enter-active,
-.toast-leave-active {
+.app-toast-enter-active,
+.app-toast-leave-active {
   transition: all 0.25s ease;
 }
-.toast-enter-from,
-.toast-leave-to {
+.app-toast-enter-from,
+.app-toast-leave-to {
   opacity: 0;
   transform: translateY(-8px);
 }

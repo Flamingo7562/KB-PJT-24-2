@@ -163,6 +163,9 @@ const mockWorkCaseList = [
 /**
  * 지점 + 검색어(제목·알바생 이름) + 상태 + 기간으로 거르는 mock 필터.
  * from/to 는 `YYYY-MM-DD` 양끝 포함 구간(캘린더 뷰가 보고 있는 달). 문자열 비교로 충분하다.
+ *
+ * 정렬은 서버가 정하므로(WORK-002) 클라이언트 파라미터를 두지 않는다. mock 은 실제 API 의
+ * 기본 정렬(근무 날짜 최신순, 같은 날짜는 시작 시간순)을 흉내 낸다.
  */
 function filterMockWorkCases(workplaceId, { keyword = '', status = '', from = '', to = '' } = {}) {
   const q = String(keyword).trim().toLowerCase()
@@ -176,6 +179,13 @@ function filterMockWorkCases(workplaceId, { keyword = '', status = '', from = ''
         q === '' ||
         s.title.toLowerCase().includes(q) ||
         (s.workerName ?? '').toLowerCase().includes(q)
+    )
+    .sort(
+      (a, b) =>
+        -(
+          String(a.workDate).localeCompare(String(b.workDate)) ||
+          String(a.startTime).localeCompare(String(b.startTime))
+        )
     )
 }
 

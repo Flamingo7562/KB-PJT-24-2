@@ -7,21 +7,21 @@ This is the compact database context for repository agents. Read it before chang
 | Item                   | Current baseline                                                                                               |
 | ---------------------- | -------------------------------------------------------------------------------------------------------------- |
 | Status                 | Current                                                                                                        |
-| Last verified          | 2026-07-31                                                                                                     |
+| Last verified          | 2026-08-04                                                                                                     |
 | Schema and DDL editor  | PM or Repository Administrator controlled; ordinary implementation agents have read-only access                |
 | Schema source of truth | Owner-authored or owner-adopted tracked `backend/src/main/resources/db/migration/V*.sql`                       |
-| Migration head         | `202607311429`                                                                                                 |
-| Versioned migrations   | 8                                                                                                              |
-| Domain tables          | 24, excluding Flyway's `flyway_schema_history`                                                                 |
+| Migration head         | `202608041138`                                                                                                 |
+| Versioned migrations   | 9                                                                                                              |
+| Domain tables          | 23, excluding Flyway's `flyway_schema_history`                                                                 |
 | Runtime                | MySQL 8.4.10, InnoDB                                                                                           |
-| Readable DDL snapshot  | [`schema-snapshot-202607311429.sql`](../database/schema-snapshot-202607311429.sql), owner-maintained reference |
+| Readable DDL snapshot  | [`schema-snapshot-202608041138.sql`](../database/schema-snapshot-202608041138.sql), owner-maintained reference |
 
 When this summary and executable configuration disagree, inspect the owner-authored or
 owner-adopted migrations, Git tracking, `compose.yaml`, `DatabaseConfig.java`, and
-`backend/build.gradle`. Versions `202607311427`, `202607311428`, and `202607311429` are approved
-parts of the current schema. Update this document when those authoritative sources prove the
-summary is stale. If the executable schema itself needs correction, report the required change to
-the owner and do not edit or regenerate SQL.
+`backend/build.gradle`. Versions `202607311427` through `202608041138` are approved parts of the
+current schema. Update this document when those authoritative sources prove the summary is stale.
+If the executable schema itself needs correction, report the required change to the owner and do
+not edit or regenerate SQL.
 
 ## Runtime semantics
 
@@ -46,6 +46,7 @@ the owner and do not edit or regenerate SQL.
 | `202607311427` | `V202607311427__move_qr_tokens_to_workplace_scope.sql`      | Replace work/action QR issuance with one active fixed QR per workplace while preserving legacy rows  |
 | `202607311428` | `V202607311428__add_password_reset_tokens.sql`              | Add hashed, expiring, single-active password-reset token lifecycle storage                           |
 | `202607311429` | `V202607311429__add_check_out_missing_work_case_status.sql` | Allow the distinct `CHECK_OUT_MISSING` work-case state and require an assigned worker for that state |
+| `202608041138` | `V202608041138__remove_employer_profiles.sql`               | Drop the unused employer profile table without renaming or copying its legacy contact data           |
 
 Applied or shared versioned migrations are immutable. A newer `V*.sql` file or another DDL artifact may be created only in a scoped administrative release explicitly authorized by the human Project Manager or Repository Administrator.
 
@@ -53,7 +54,7 @@ Applied or shared versioned migrations are immutable. A newer `V*.sql` file or a
 
 | Domain                                   | Tables                                                                                                                                              |
 | ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Identity and organization                | `users`, `password_reset_tokens`, `employer_profiles`, `workplaces`, `user_badges`                                                                  |
+| Identity and organization                | `users`, `password_reset_tokens`, `workplaces`, `user_badges`                                                                                       |
 | Work and contract                        | `work_cases`, `work_invitations`, `work_contracts`                                                                                                  |
 | Wallet, mock banking, escrow, settlement | `wallets`, `mock_bank_accounts`, `mock_bank_transactions`, `funding_orders`, `withdrawal_requests`, `wallet_transactions`, `escrows`, `settlements` |
 | Attendance and dispute                   | `qr_tokens`, `attendance_records`, `disputes`                                                                                                       |
@@ -67,7 +68,8 @@ Inspect the ordered migrations before relying on an exact column, key, index, ge
 
 - `users.email` and `users.login_id` are unique. Roles are `OWNER`, `WORKER`, and `ADMIN`.
 - User status and `deleted_at` are coupled: `WITHDRAWN` requires a deletion timestamp; other statuses require it to be null.
-- `employer_profiles.user_id` is unique, but the database does not prove that the referenced user has the `OWNER` role.
+- M2 has no separate employer profile table. OWNER identity remains in `users`, while business and workplace details belong to `workplaces`.
+- `users.phone` and `workplaces.phone` are independent values. The schema keeps their existing `VARCHAR(30)` storage and relies on the application to apply the approved normalization and disclosure policy.
 - A user can own multiple `workplaces`. Business registration numbers are unique, `workplaces.road_address` is required, `workplaces.detail_address` is null or nonblank, coordinates must be both null or both non-null and in range, radius is positive, and `DELETED` status must agree with `deleted_at`.
 - The composite relationship from `work_cases` to `(workplaces.owner_user_id, workplaces.id)` proves that a selected workplace belongs to the recorded employer.
 - `password_reset_tokens` stores only a unique `BINARY(32)` token hash. Generated active-slot uniqueness permits one `ACTIVE` token per user while retaining `USED`, `EXPIRED`, and `REVOKED` history.
@@ -140,6 +142,7 @@ Database constraints do not replace application authorization or transaction rul
 
 - actor roles and ownership where no composite relationship proves them;
 - immutable profile identity fields (`login_id`, `email`, and `name`) and phone-only profile updates;
+- normalize `users.phone` and `workplaces.phone` to approved digit-only values and keep phone values out of request, response, and SQL binding logs;
 - a fixed 100m workplace radius and the workplace update allowlist that excludes representative, coordinates, and radius; address changes on coordinate-bearing workplaces wait for an approved geocoding/reverification or restriction policy;
 - complete state-transition graphs;
 - ownership alignment across funding or withdrawal actors, wallets, linked accounts, and bank transactions;

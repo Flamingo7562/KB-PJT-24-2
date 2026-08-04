@@ -7,9 +7,9 @@
 | 항목                | 현재 기준                           |
 | ------------------- | ----------------------------------- |
 | 문서 상태           | 현재 기준                           |
-| Migration Head      | `202607311429`                      |
-| Versioned Migration | 8개                                 |
-| 도메인 테이블       | 24개 (`flyway_schema_history` 제외) |
+| Migration Head      | `202608041138`                      |
+| Versioned Migration | 9개                                 |
+| 도메인 테이블       | 23개 (`flyway_schema_history` 제외) |
 | MySQL               | `mysql:8.4.10`                      |
 | Flyway CLI          | `flyway/flyway:12.9.0`              |
 | MySQL Connector/J   | `9.7.0`                             |
@@ -23,9 +23,9 @@
 | JDBC·MyBatis·트랜잭션 설정          | `backend/src/main/java/com/gighub/config/DatabaseConfig.java`                                          |
 | DB 라이브러리 버전과 검증 작업      | `backend/build.gradle`                                                                                 |
 | 스키마의 작업용 요약                | [`../agent/SCHEMA_OVERVIEW.md`](../agent/SCHEMA_OVERVIEW.md)                                           |
-| 사람이 읽는 통합 DDL                | [`../database/schema-snapshot-202607311429.sql`](../database/schema-snapshot-202607311429.sql), 참고용 |
+| 사람이 읽는 통합 DDL                | [`../database/schema-snapshot-202608041138.sql`](../database/schema-snapshot-202608041138.sql), 참고용 |
 
-`V202607311427`, `V202607311428`, `V202607311429`는 PM·관리자 승인을 거친 현재 정식
+`V202607311427`부터 `V202608041138`까지는 PM·관리자 승인을 거친 현재 정식
 Migration입니다. 통합 DDL은 같은 Head를 빈 DB에서 검토하기 위한 읽기용 Snapshot이며 기존
 DB 업그레이드에는 반드시 Flyway Migration을 사용합니다.
 
@@ -119,7 +119,7 @@ docker compose --profile tools run --rm flyway info
 npm.cmd run db:migrate
 ```
 
-현재 다음 여덟 Migration이 순서대로 적용되어야 합니다.
+현재 다음 아홉 Migration이 순서대로 적용되어야 합니다.
 
 | Version        | 파일                                                        |
 | -------------- | ----------------------------------------------------------- |
@@ -131,6 +131,7 @@ npm.cmd run db:migrate
 | `202607311427` | `V202607311427__move_qr_tokens_to_workplace_scope.sql`      |
 | `202607311428` | `V202607311428__add_password_reset_tokens.sql`              |
 | `202607311429` | `V202607311429__add_check_out_missing_work_case_status.sql` |
+| `202608041138` | `V202608041138__remove_employer_profiles.sql`               |
 
 같은 명령을 다시 실행했을 때 `Schema ... is up to date. No migration necessary.`가 나오면 반복 실행도 정상입니다.
 
@@ -148,11 +149,23 @@ QR Migration은 기존 근무·동작별 QR을 사업장 고정 QR 구조로 전
 처리·단일 사용 API가 구현되기 전에는 이 테이블이 있어도 비밀번호 재설정 기능이 동작하지
 않습니다.
 
+#### `202608041138` 적용 전 확인
+
+이 Migration은 M2에서 사용하지 않는 `employer_profiles`를 제거합니다.
+
+- `business_name`, `contact_phone`, `default_workplace_address`를 다른 컬럼으로 옮기거나 이름을
+  바꾸지 않고 테이블과 함께 삭제합니다.
+- OWNER 식별정보는 `users`, 사업체·사업장 기준정보와 공개 전화번호는 `workplaces`를
+  사용합니다. `users.phone`과 `workplaces.phone`은 서로 독립된 값입니다.
+- 일회용 또는 폐기 가능한 로컬 DB가 아닌 곳에 적용하려면 관리자가 기존 행의 보존 필요성을
+  먼저 확인하고, 필요하면 Migration 실행과 분리된 승인된 추출·보관 절차를 준비해야 합니다.
+- 이 저장소 작업에서는 공유·Staging·Production DB에 Migration을 적용하지 않습니다.
+
 #### 현재 DDL과 미결정 제품 Workflow
 
-Head `202607311429`는 `CHECK_OUT_MISSING` 상태와 해당 상태의 근로자 필수 제약을
-반영했습니다. 이는 상태를 저장할 수 있다는 DDL 사실이며 판정·해소·정산 Workflow의 구현
-승인을 뜻하지 않습니다.
+Head `202608041138`은 `employer_profiles`를 제거하며, 직전 `202607311429`가 추가한
+`CHECK_OUT_MISSING` 상태와 해당 상태의 근로자 필수 제약도 유지합니다. 이는 상태를 저장할
+수 있다는 DDL 사실이며 판정·해소·정산 Workflow의 구현 승인을 뜻하지 않습니다.
 
 | 기능                 | 현재 DDL                                                                                      | 미결정 사항                                                                                            |
 | -------------------- | --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
@@ -177,7 +190,7 @@ docker compose --profile tools run --rm flyway validate
 docker compose --profile tools run --rm flyway info
 ```
 
-현재 기준의 정상 결과는 여덟 Migration의 검증 성공, Schema version `202607311429`, 모든
+현재 기준의 정상 결과는 아홉 Migration의 검증 성공, Schema version `202608041138`, 모든
 항목의 `Success`입니다.
 
 ## Spring·MyBatis 연결 검증
