@@ -44,7 +44,7 @@
 | WALLET-003    | `POST /api/wallet/withdrawal-requests`, `GET /api/wallet`                 | `withdrawal_requests`, `mock_bank_transactions`, `wallet_transactions`, `wallets` | DEC-BANK-INPUT, DEC-BALANCE-REFETCH, DEC-IDEMPOTENCY, DEC-BANK-INPUT-VALIDATION, DEC-BANK-ERROR-CATALOG, DEC-IDEMPOTENCY-STORAGE |
 | WALLET-004    | `GET /api/wallet/transactions`                                            | `wallet_transactions`, `work_cases`, `workplaces`                                 | DEC-PAGE, DEC-TIME, DEC-TRANSACTION-DISPLAY                                                |
 | WALLET-005    | 지갑·계좌 금액 변경 Operation                                             | `wallet_transactions`, `mock_bank_transactions`                                   | DEC-IDEMPOTENCY                                                                            |
-| WALLET-006    | 충전·출금·초대 수락·정산 승인 Operation                                   | 멱등 Key, 금융 Aggregate                                                          | DEC-IDEMPOTENCY, DEC-IDEMPOTENCY-STORAGE                                                   |
+| WALLET-006    | 충전·출금·초대 수락·정산 승인 Operation                                   | `idempotency_requests`, 멱등 Key, 금융 Aggregate                                  | DEC-IDEMPOTENCY, DEC-IDEMPOTENCY-STORAGE, DEC-IDEMPOTENCY-CLAIM-LIFECYCLE                  |
 
 ## 홈·근무·초대·계약
 

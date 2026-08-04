@@ -156,11 +156,49 @@ Key는 공백 없는 출력 가능한 ASCII 1~100자입니다. 같은 Key와 같
   Fingerprint로 판정합니다.
 - 검증 실패(`VALIDATION_ERROR` 등 자금 이동이 발생하지 않은 오류) 응답은 저장·재생하지
   않으며 같은 Key로 다시 시도할 수 있습니다. 저장된 성공 결과는 24시간 보존합니다.
-- 같은 Key의 동시 요청은 DB Unique 제약으로 직렬화합니다. 먼저 도착한 요청만 처리하고
-  나중 요청은 대기하지 않고 즉시 `409 IDEMPOTENCY_KEY_REUSED`로 응답하며, 클라이언트는
-  잠시 후 원 요청의 결과를 다시 조회합니다.
 - 완료되어 저장된 재전송(Replay)은 이후 계좌 `BLOCKED` 전환이나 잔액 변경과 무관하게
-  최초 저장된 성공 결과를 그대로 반환합니다.
+  최초 저장된 성공 결과를 그대로 반환합니다. 재전송 응답의 HTTP 상태는 저장된 최초 성공
+  상태(예: `201`)를 그대로 쓰지 않고 항상 `200`입니다.
+
+#### Claim 상태 모델(`DEC-IDEMPOTENCY-CLAIM-LIFECYCLE`)
+
+멱등 처리는 요청 본체를 실행하기 전에 Claim을 먼저 선점하는 2단계
+`PROCESSING → COMPLETED` 모델을 사용합니다.
+
+1. **Claim 선점**: 요청 검증을 통과하면 별도의 짧은 트랜잭션에서 Claim을
+   `status=PROCESSING`으로 삽입하고 즉시 Commit합니다. 이 삽입은 본 처리 트랜잭션과
+   분리해, 본 처리가 오래 걸려도 다른 요청이 Row Lock을 기다리지 않게 합니다.
+2. **본 처리**: Claim 선점에 성공한 요청만 자금 이동 본 트랜잭션을 수행합니다.
+3. **완료 기록**: 본 처리가 성공하면 같은 Claim을 `status=COMPLETED`로 갱신하고 최초
+   성공 응답의 HTTP 상태와 Body Snapshot, 완료 시각을 함께 저장합니다.
+
+Claim 선점이 Unique 제약으로 거부되면 **대기하지 않고** 기존 Claim의 상태를 즉시 읽어
+다음과 같이 응답합니다.
+
+| 기존 Claim 상태 | Fingerprint | 응답                                                          |
+| --------------- | ----------- | ------------------------------------------------------------- |
+| `COMPLETED`     | 같음        | 저장된 Body와 `200` + `Idempotency-Replayed: true`            |
+| `COMPLETED`     | 다름        | `409 IDEMPOTENCY_KEY_REUSED`                                  |
+| `PROCESSING`    | 같음        | `409 CONFLICT` — 아직 처리 중이며 클라이언트가 잠시 후 재시도 |
+| `PROCESSING`    | 다름        | `409 IDEMPOTENCY_KEY_REUSED`                                  |
+
+어떤 경우에도 서버가 잠금 해제를 기다리며 응답을 지연시키지 않습니다.
+
+#### 실패·중단 시 정리와 복구
+
+- **본 처리 실패**: 자금 이동 트랜잭션이 실패하거나 롤백되면 서버는 같은 요청 처리
+  흐름에서 자신이 선점한 `PROCESSING` Claim 행을 **삭제**합니다. Claim 삭제는 실패한 본
+  트랜잭션과 분리된 트랜잭션에서 수행하므로 롤백에 휩쓸리지 않습니다. 삭제 후 같은 Key로
+  다시 시도할 수 있으며, 이는 "실패 응답은 저장·재생하지 않는다"는 규칙과 일치합니다.
+- **처리 중단**: 프로세스 강제 종료 등으로 정리 단계까지 도달하지 못한 `PROCESSING`
+  Claim은 고아 행으로 남습니다. 고아 Claim은 `expires_at`이 지나면 만료 정리 대상이며,
+  만료 전까지 같은 Key 재시도는 위 표에 따라 `409 CONFLICT`로 응답합니다. 클라이언트가
+  즉시 진행해야 하면 새 `Idempotency-Key`로 재요청합니다.
+- **만료 정리**: `expires_at`이 지난 Claim은 `PROCESSING`·`COMPLETED` 모두 삭제 대상이며,
+  삭제 뒤 같은 Key를 새 요청으로 다시 사용할 수 있습니다. 자금 이동 자체의 중복 방지는
+  Claim 만료와 무관하게 각 금융 Aggregate의 고유 제약이 계속 보장합니다.
+- Claim 선점, Fingerprint 비교, 즉시 충돌 응답, 재생, 실패 정리, 만료 정리는 모두
+  애플리케이션 책임이며 DB는 범위 유일성과 상태 필드 정합성만 강제합니다.
 
 ## 인증·회원
 
@@ -412,22 +450,32 @@ expectedNetAmount = dailyWage - incomeTax - localIncomeTax
 ### `GET /api/mock-bank-accounts`
 
 - 인증 사용자 본인 소유 계좌만 반환합니다.
-- Query `status`는 생략하거나 `ACTIVE`만 허용합니다. 다른 값은 `400 INVALID_FILTER`입니다.
+- Query `status`는 생략하거나 `ACTIVE`만 허용합니다. 다른 값은 `400 VALIDATION_ERROR`입니다.
+- Query `page`, `size`는 공통 페이지네이션 기본값을 따릅니다.
+- 응답은 공통 목록 Page Envelope(`data.content`, `data.page`)를 사용합니다.
+- `accountNo`는 본인 소유 합성 계좌이므로 마스킹하지 않고 13자리 전체를 반환합니다.
+  클라이언트는 이 값을 충전·출금 요청의 `accountNo`에 그대로 사용합니다.
 
 ```json
 {
   "data": {
-    "items": [
+    "content": [
       {
         "bankAccountId": 1,
         "bankCode": "004",
-        "maskedAccountNumber": "900000******007",
+        "accountNo": "9000000000007",
         "currency": "KRW",
         "balance": 10000000,
         "availableAmount": 10000000,
         "status": "ACTIVE"
       }
-    ]
+    ],
+    "page": {
+      "number": 0,
+      "size": 20,
+      "totalElements": 1,
+      "totalPages": 1
+    }
   }
 }
 ```
@@ -517,13 +565,15 @@ Item은 `transactionId`, `type`, `amount`, `direction`, `availableAfter`,
 | 상황                                          | Code                 | HTTP  |
 | --------------------------------------------- | -------------------- | ----- |
 | `bankCode`/`accountNo`/`amount` 형식 오류     | `VALIDATION_ERROR`   | `400` |
-| 인증 사용자 소유 ACTIVE 계좌 미발견(타인·비활성 계좌 포함) | `RESOURCE_NOT_FOUND` | `404` |
+| 인증 사용자 소유 ACTIVE 계좌 미발견(타인·비활성 계좌 포함) | `FORBIDDEN`          | `403` |
 | 은행 계좌 잔액 부족(출금 입금 실패 아님 — 충전 시 인출 대상 은행 잔액 부족) | `CONFLICT`           | `409` |
 | 지갑 가용 잔액 부족(출금 시)                  | `CONFLICT`           | `409` |
 | 동시 갱신 충돌(같은 계좌·지갑에 대한 경합)    | `CONFLICT`           | `409` |
 
-타인 소유 계좌와 존재하지 않는 계좌, 비활성 계좌는 모두 `404 RESOURCE_NOT_FOUND`로
-동일하게 응답해 타인 계좌의 존재 여부를 노출하지 않습니다.
+존재하지 않는 계좌, 타인 소유 계좌, 비활성 계좌는 모두 `403 FORBIDDEN`과 동일한 메시지
+`계좌에 접근할 수 없습니다.`로 응답합니다. 세 경우의 Code·HTTP 상태·메시지를 하나로
+통일하므로 응답만으로는 계좌가 존재하는지, 존재하지만 타인 소유인지, 비활성인지를 구분할
+수 없으며 타인 계좌의 존재 여부가 노출되지 않습니다.
 
 최초 충전 성공:
 
