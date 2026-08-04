@@ -2,7 +2,7 @@
 
 | 항목        | 값              |
 | ----------- | --------------- |
-| 명세 릴리스 | `2.0.0`         |
+| 명세 릴리스 | `2.1.0`         |
 | 승인일      | 2026-08-04      |
 | 소유자      | PM/Admin Master |
 | Base Path   | `/api`          |
@@ -64,11 +64,17 @@
 - 내부 SQL, Stack Trace, Token 원문과 타인의 리소스 존재 여부를 노출하지 않습니다.
 - 승인된 공통 오류 Code는 `VALIDATION_ERROR`, `AUTH_REQUIRED`, `FORBIDDEN`,
   `ROLE_MISMATCH`, `RESOURCE_NOT_FOUND`, `CONFLICT`, `IDEMPOTENCY_KEY_REUSED`,
-  `WORK_CASE_LOCKED`, `CONTRACT_RETENTION_REQUIRED`입니다.
+  `WORK_CASE_LOCKED`, `CONTRACT_RETENTION_REQUIRED`, `INTERNAL_ERROR`입니다.
 - 아이디 없음·비밀번호 불일치·비활성 또는 잠금 계정은 이유를 구분하지 않고
   `401 AUTH_REQUIRED`로 응답합니다.
 - CSRF 검증 실패는 `403 FORBIDDEN`, 중복 가입은 `409 CONFLICT`, 역할 불일치는
   `403 ROLE_MISMATCH`, 입력 검증 실패는 `400 VALIDATION_ERROR`입니다.
+- 더 구체적인 승인 오류로 변환되지 않은 예상 밖의 서버 오류는
+  `500 INTERNAL_ERROR`와 `서버 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.` 메시지로
+  응답하며 `fieldErrors`를 포함하지 않습니다.
+- `500 INTERNAL_ERROR` 응답의 `traceId`는 서버 오류 로그에도 같은 값으로 기록합니다. 내부
+  예외 메시지, SQL, Stack Trace와 민감 정보는 서버 로그에서만 다루고 응답에는 노출하지
+  않습니다.
 - 추가 도메인 오류 Code는 `DEC-OPEN-ERROR-CATALOG`가 승인하기 전까지 새 규범 값으로
   확정하지 않습니다.
 
