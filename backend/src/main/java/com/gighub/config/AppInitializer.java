@@ -1,5 +1,7 @@
 package com.gighub.config;
 
+import com.gighub.common.trace.TraceIdFilter;
+
 import java.nio.charset.StandardCharsets;
 
 import javax.servlet.Filter;
@@ -82,7 +84,7 @@ public class AppInitializer extends AbstractAnnotationConfigDispatcherServletIni
         CharacterEncodingFilter encodingFilter = new CharacterEncodingFilter();
         encodingFilter.setEncoding(StandardCharsets.UTF_8.name());
         encodingFilter.setForceEncoding(true);
-        return new Filter[]{encodingFilter};
+        return new Filter[]{encodingFilter, new TraceIdFilter()};
     }
 }
 

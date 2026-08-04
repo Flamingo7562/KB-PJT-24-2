@@ -16,7 +16,14 @@ import EmptyState from '@/components/common/EmptyState.vue'
 import StatusChip from '@/components/common/StatusChip.vue'
 import { getOwnerContact, getWorkCase } from '@/services/workCases'
 import { useUiStore } from '@/stores/ui'
-import { formatDate, formatDuration, formatKRW, formatTimeRange } from '@/utils/format'
+import {
+  formatDate,
+  formatDuration,
+  formatKRW,
+  formatPhoneInput,
+  formatTimeRange,
+  onlyDigits
+} from '@/utils/format'
 
 const route = useRoute()
 const router = useRouter()
@@ -117,10 +124,11 @@ function goReport() {
 
     <BaseBottomSheet :open="contactOpen" title="사장님 연락처" @close="contactOpen = false">
       <p v-if="contactLoading" class="contact-loading">연락처 불러오는 중…</p>
-      <a v-else-if="contact" class="contact-row" :href="`tel:${contact.phone}`">
+      <!-- 서버는 구분 문자 없는 숫자를 주므로 tel: 은 그대로 쓰고 화면 표기만 포맷한다. -->
+      <a v-else-if="contact" class="contact-row" :href="`tel:${onlyDigits(contact.phone)}`">
         <Phone :size="18" />
         <span>{{ contact.ownerName }}</span>
-        <strong>{{ contact.phone }}</strong>
+        <strong>{{ formatPhoneInput(contact.phone) }}</strong>
       </a>
       <p v-else class="contact-loading">연락처를 불러오지 못했습니다.</p>
     </BaseBottomSheet>

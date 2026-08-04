@@ -1,0 +1,19 @@
+package com.gighub.common.api;
+
+/**
+ * 보호 명세에서 외부 공개를 승인한 공통 오류 코드입니다.
+ *
+ * <p>도메인별 세부 오류 카탈로그가 확정되기 전에는 이 목록 안에서만 응답 코드를 선택합니다.</p>
+ */
+public enum ApiErrorCode {
+    VALIDATION_ERROR,
+    AUTH_REQUIRED,
+    FORBIDDEN,
+    ROLE_MISMATCH,
+    RESOURCE_NOT_FOUND,
+    CONFLICT,
+    IDEMPOTENCY_KEY_REUSED,
+    WORK_CASE_LOCKED,
+    CONTRACT_RETENTION_REQUIRED,
+    INTERNAL_ERROR
+}

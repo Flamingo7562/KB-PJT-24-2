@@ -1,6 +1,8 @@
 package com.gighub.wallet.exception;
 
-public class InvalidFundingRequestException extends RuntimeException {
+import com.gighub.common.exception.ValidationException;
+
+public class InvalidFundingRequestException extends ValidationException {
 
     public InvalidFundingRequestException(String message) {
         super(message);

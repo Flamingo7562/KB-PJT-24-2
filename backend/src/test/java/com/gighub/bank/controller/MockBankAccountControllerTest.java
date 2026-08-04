@@ -157,7 +157,8 @@ class MockBankAccountControllerTest {
                         .param("status", "CLOSED")
                         .session(session))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("INVALID_FILTER"));
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.traceId").isString());
 
         verify(mockBankQueryMapper, never()).findAccountsByUserId(any(), any());
     }
@@ -171,7 +172,8 @@ class MockBankAccountControllerTest {
     void rejectsRequestWithoutSession() throws Exception {
         mockMvc.perform(get("/api/mock-bank-accounts"))
                 .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.code").value("AUTH_REQUIRED"));
+                .andExpect(jsonPath("$.code").value("AUTH_REQUIRED"))
+                .andExpect(jsonPath("$.traceId").isString());
 
         verify(mockBankQueryMapper, never()).findAccountsByUserId(any(), any());
     }

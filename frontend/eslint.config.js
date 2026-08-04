@@ -28,6 +28,7 @@ export default [
         URL: 'readonly',
         Blob: 'readonly',
         File: 'readonly',
+        TextEncoder: 'readonly',
         alert: 'readonly',
         confirm: 'readonly',
         structuredClone: 'readonly',

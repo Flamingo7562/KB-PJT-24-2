@@ -1,13 +1,15 @@
 import axios from 'axios'
 
 /**
- * 공통 HTTP 클라이언트 (docs/rules/frontend.md 'HTTP · 인증' 절 기준).
+ * 공통 HTTP 클라이언트.
+ * 승인 계약: docs/specs/API_SPEC.md 'Session, CSRF와 로컬 CORS' · 공통 성공/오류 응답 절
  *
  * - 인증은 Session(JSESSIONID) 전용 — accessToken 저장·전송 금지. withCredentials 로 쿠키 동봉.
  * - CSRF: XSRF-TOKEN 쿠키를 읽어 모든 상태변경(POST/PUT/PATCH/DELETE)에 X-XSRF-TOKEN 자동 첨부.
+ *   CSRF 검증 실패는 403 FORBIDDEN 이며 실패한 요청을 자동으로 재실행하지 않는다.
  * - 성공 응답 { data } 언래핑: 서비스는 본문(response.data)만 받는다.
  * - 오류 { code, message, traceId, fieldErrors } 필드를 axios error 에 부착(원본 error.response 보존).
- * - 401(AUTH_REQUIRED/SESSION_EXPIRED): 세션 상태를 버리고 온보딩(/)으로 이동(G5).
+ * - 401 AUTH_REQUIRED: 세션 상태를 버리고 온보딩(/)으로 이동(G5).
  *
  * ※ 현재 서비스는 USE_MOCK=true 라 실제 요청은 발화하지 않는다(교체 시 변경 지점 한정).
  */
@@ -96,7 +98,8 @@ export function newIdempotencyKey() {
 
 /**
  * 멱등 POST — 하나의 Idempotency-Key 로 전송하고, 네트워크/5xx 일시 오류 시 같은 키로 재시도한다.
- * 서버가 응답한 4xx(검증·상태충돌·중복 등)는 재시도하지 않는다(docs/rules/api.md 멱등성).
+ * 서버가 응답한 4xx(검증·상태충돌·중복 등)는 재시도하지 않는다
+ * (docs/specs/API_SPEC.md '멱등 요청').
  * 더블클릭·네트워크 재시도로 인한 중복 반영(중복 충전·출금·지급)을 방지한다.
  */
 export async function idempotentPost(url, body = null, { retries = 2, config = {} } = {}) {

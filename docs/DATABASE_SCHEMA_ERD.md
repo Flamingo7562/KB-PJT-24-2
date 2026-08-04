@@ -2,18 +2,19 @@
 
 > 저장소 원본: `docs/DATABASE_SCHEMA_ERD.md`
 >
-> 기준: 로컬 Docker MySQL 8.4, Flyway Schema Version `202608041138`
+> 기준: 로컬 Docker MySQL 8.4, Flyway Schema Version `202608041614`
 >
-> 범위: 도메인 테이블 23개와 Flyway 내부 관리 테이블 1개, 총 24개입니다.
+> 범위: 도메인 테이블 24개와 Flyway 내부 관리 테이블 1개, 총 25개입니다.
 >
-> 읽기용 통합 DDL: [`database/schema-snapshot-202608041138.sql`](database/schema-snapshot-202608041138.sql)
+> 읽기용 통합 DDL: [`database/schema-snapshot-202608041614.sql`](database/schema-snapshot-202608041614.sql)
 >
 > 편집 정책: Migration과 통합 DDL은 프로젝트 소유자 전용입니다. 에이전트는 소유자가 변경한
 > 스키마를 근거로 이 설명 문서만 갱신할 수 있습니다.
 
-현재 소유자 승인 기준은 Head `202608041138`의 Migration 9개·도메인 테이블 23개입니다.
+현재 소유자 승인 기준은 Head `202608041614`의 Migration 10개·도메인 테이블 24개입니다.
 사업장 고정 QR `202607311427`, 비밀번호 재설정 Token `202607311428`, 퇴근 누락 상태
-`202607311429`와 OWNER Profile 제거 `202608041138`을 모두 현재 스키마로 사용합니다.
+`202607311429`, OWNER Profile 제거 `202608041138`, 멱등 요청 Claim `202608041614`를 모두 현재
+스키마로 사용합니다.
 
 ## 한 장 요약
 
@@ -21,7 +22,7 @@ Gig-Hub 데이터베이스는 `users`를 중심으로 회원, 사업장, 근무,
 
 근무 흐름의 중심은 `work_cases`입니다. 한 근무 건은 사장님과 사업장을 반드시 가지며 근로자는 초대 전까지 비어 있을 수 있습니다. 초대 수락 후에는 `work_contracts`에 조건을 스냅샷으로 보존하고, 계약 당사자와 일급이 원래 근무 건과 달라질 수 없도록 복합 외래키로 묶습니다. `escrows`와 `settlements`는 근무 건당 최대 한 건이며 금액은 확정 일급과 같아야 합니다. `due_at`은 자동 정산 예정 시간을 저장할 뿐이고 DB Scheduler나 Trigger는 없습니다. 실제 자동 지급은 추후 Spring Scheduler가 수행합니다.
 
-자금은 `mock_bank_accounts`, `wallets`, `escrows`로 분리합니다. 지갑의 `available_balance`만 사용·출금 가능하고 `locked_balance`는 에스크로 예치액입니다. 충전·출금 요청과 지갑 원장은 멱등 키를 고유값으로 저장하여 같은 요청이 중복 반영되지 않게 설계했습니다. Mock 은행 거래와 지갑 거래는 서로 다른 원장이고, 실제 금융망과 연결되지 않습니다.
+자금은 `mock_bank_accounts`, `wallets`, `escrows`로 분리합니다. 지갑의 `available_balance`만 사용·출금 가능하고 `locked_balance`는 에스크로 예치액입니다. 충전·출금 요청과 지갑 원장은 멱등 키를 고유값으로 저장하여 같은 요청이 중복 반영되지 않게 설계했습니다. `idempotency_requests`는 사용자·Operation별 요청 Claim과 최초 성공 응답을 별도로 저장합니다. Mock 은행 거래와 지갑 거래는 서로 다른 원장이고, 실제 금융망과 연결되지 않습니다.
 
 사업장에는 nonce 기반 고정 QR을 하나만 활성화할 수 있습니다. 재발급 시 기존 QR을 `REVOKED`로 남기며, 과거 근무·동작별 QR도 `legacy_*` 컬럼으로 보존합니다. 실제 출퇴근 시도와 조기 퇴근 확인 시각은 `attendance_records`에 기록합니다. 분쟁은 근무 건별 활성 건을 제한합니다. 문서는 논리 정보인 `documents`, 불변 파일 버전인 `document_versions`, 서명 증거인 `document_signatures`, 공유와 접근 감사 테이블로 나뉩니다. 모든 외래키 삭제 정책은 `RESTRICT`이므로 과거 계약·정산·문서 기록이 연결된 부모 행은 임의 삭제할 수 없습니다.
 
@@ -194,6 +195,21 @@ erDiagram
         varchar status
         varchar failure_code "NULL"
         datetime completed_at "NULL"
+        datetime created_at
+        datetime updated_at
+    }
+
+    IDEMPOTENCY_REQUESTS {
+        bigint id PK
+        bigint user_id FK
+        varchar operation_code
+        varchar idempotency_key
+        binary request_fingerprint
+        varchar status
+        smallint response_http_status "NULL"
+        json response_body "NULL"
+        datetime completed_at "NULL"
+        datetime expires_at
         datetime created_at
         datetime updated_at
     }
@@ -401,6 +417,7 @@ erDiagram
     USERS ||--o{ WORK_CONTRACTS : "worker party"
     MOCK_BANK_ACCOUNTS ||--o{ MOCK_BANK_TRANSACTIONS : "records"
     USERS ||--o{ FUNDING_ORDERS : "requests funding"
+    USERS ||--o{ IDEMPOTENCY_REQUESTS : "claims operations"
     MOCK_BANK_ACCOUNTS ||--o{ FUNDING_ORDERS : "funding source"
     MOCK_BANK_TRANSACTIONS o|--o| FUNDING_ORDERS : "funding result"
     USERS ||--o{ WITHDRAWAL_REQUESTS : "requests withdrawal"
@@ -446,6 +463,7 @@ erDiagram
 | 초대                 | Token Hash 고유. 생성 컬럼 `active_slot`으로 근무 건당 활성 초대 1개 제한                                                                                |
 | 계약                 | 근무 건당 1개. `(work_case_id, employer_id, worker_id, agreed_wage)`가 원 근무 건과 일치                                                                 |
 | 지갑·Mock 계좌       | 통화는 KRW 고정. 계좌 가용액은 총액 이하. 계좌·거래번호·멱등 키 고유                                                                                     |
+| 멱등 요청 Claim      | `(user_id, operation_code, idempotency_key)`별 1개. 완료 Claim은 2xx 상태와 JSON 응답 Snapshot을 함께 보존                                               |
 | 에스크로·정산        | 근무 건당 각각 1개. `(work_case_id, amount)`가 확정 일급과 일치                                                                                          |
 | QR·근태·분쟁         | 사업장별 nonce 기반 활성 QR 1개. 발급자는 해당 사업장 소유자. 근무 건과 출퇴근 유형별 성공 기록 1개. 생성 컬럼으로 근무 건당 열린 분쟁 1개 제한          |
 | 문서                 | 근무 건과 문서 유형별 1개. 저장 키와 문서별 버전 번호 고유. 서명 원본·완성 버전은 서로 달라야 함                                                         |
@@ -457,6 +475,7 @@ QR과 비밀번호 재설정의 상태·형태 제약은 다음과 같습니다.
 - 기존 근무·동작별 QR 행은 `legacy_token_hash`, `legacy_work_case_id`, `legacy_action`, `legacy_expires_at`을 보존하며 `ACTIVE`로 되돌릴 수 없습니다. Migration 적용 시 기존 `ACTIVE` 행은 즉시 `REVOKED` 처리됩니다.
 - Migration은 적용 시점에 `ACTIVE` 사업장마다 무작위 16바이트 nonce를 가진 고정 QR 행을 하나씩 만듭니다. `active_slot` 고유키가 이후에도 사업장별 활성 행을 하나로 제한합니다.
 - 비밀번호 재설정은 `ACTIVE`, `USED`, `EXPIRED`, `REVOKED` 상태를 사용합니다. `USED`만 `used_at`, `REVOKED`만 `revoked_at`을 요구하며 사용자별 `ACTIVE` 행은 하나뿐입니다.
+- 멱등 요청 Claim은 `PROCESSING`, `COMPLETED` 상태를 사용합니다. `COMPLETED` 행만 2xx 상태·응답 Snapshot·완료 시각을 가지며 만료 시각은 생성 시각 이후여야 합니다.
 - `work_cases.status=CHECK_OUT_MISSING`은 허용되고 배정 근로자가 필수지만, DB는 성공 출근·퇴근 부재나 상태 판정 시점을 검증하지 않습니다.
 - `attendance_records.early_checkout_confirmed_at`은 성공한 `CHECK_OUT` 행에서만 기록할 수 있습니다.
 
@@ -491,6 +510,7 @@ QR과 비밀번호 재설정의 상태·형태 제약은 다음과 같습니다.
 | `workplaces.business_registration_number`                         | 숫자 10자리                                | 불가 | `ck_workplaces_business_registration_number` |
 | `workplaces.name`, `representative_name`, `road_address`, `phone` | 각 값이 앞뒤 공백 제거 후 한 글자 이상     | 불가 | `ck_workplaces_required_text`                |
 | `workplaces.detail_address`                                       | `NULL` 또는 앞뒤 공백 제거 후 한 글자 이상 | 가능 | `ck_workplaces_detail_address`               |
+| `idempotency_requests.operation_code`, `idempotency_key`          | 빈 문자열 불가, ASCII 대소문자 구분         | 불가 | `ck_idempotency_requests_operation`, `ck_idempotency_requests_key` |
 
 ### 아직 유한값 CHECK가 없는 코드성 문자열
 
@@ -500,6 +520,7 @@ QR과 비밀번호 재설정의 상태·형태 제약은 다음과 같습니다.
 | --------------------------------------- | ------------------------------ | -------------------- |
 | `mock_bank_transactions.reference_type` | 거래가 참조하는 업무 종류      | 길이만 `VARCHAR(30)` |
 | `wallet_transactions.reference_type`    | 지갑 원장이 참조하는 업무 종류 | 길이만 `VARCHAR(30)` |
+| `idempotency_requests.operation_code`    | 멱등성 적용 Operation           | 빈 값이 아닌 `VARCHAR(64)` |
 | `disputes.dispute_type`                 | 분쟁 유형                      | 길이만 `VARCHAR(30)` |
 | `document_access_logs.action`           | 문서 접근 행위                 | 길이만 `VARCHAR(30)` |
 | `user_badges.badge_type`                | 배지 유형                      | 길이만 `VARCHAR(40)` |
@@ -508,13 +529,14 @@ QR과 비밀번호 재설정의 상태·형태 제약은 다음과 같습니다.
 
 복합 FK는 `work_cases(employer_id, workplace_id) → workplaces(owner_user_id, id)`, `qr_tokens(issued_by_user_id, workplace_id) → workplaces(owner_user_id, id)`, `work_contracts(work_case_id, employer_id, worker_id, agreed_wage) → work_cases(id, employer_id, worker_id, agreed_wage)`, `escrows/settlements(work_case_id, amount) → work_cases(id, agreed_wage)`, `document_signatures(document_id, source_version_id 또는 signed_version_id) → document_versions(document_id, id)`의 7개입니다.
 
-복합 UK는 `password_reset_tokens(user_id, active_slot)`, `wallets(user_id, currency)`, `mock_bank_accounts(bank_code, mock_account_number)`, `workplaces(owner_user_id, id)`, `work_cases(id, employer_id, worker_id, agreed_wage)`와 `(id, agreed_wage)`, `work_invitations(work_case_id, active_slot)`, `mock_bank_transactions(reference_type, reference_id, transfer_type)`, `qr_tokens(workplace_id, active_slot)`, `attendance_records(work_case_id, attendance_type, success_slot)`, `disputes(work_case_id, open_slot)`, `documents(work_case_id, document_type)`, `document_versions(document_id, version_no)`와 `(document_id, id)`, `document_signatures(document_id, source_version_id, signer_user_id)`, `document_shares(document_id, work_case_id, shared_with_user_id, purpose, active_slot)`, `user_badges(user_id, badge_type)`입니다. Mermaid 열의 `UK`는 단독 고유키에만 표시하고 이 복합키들은 여기에서 묶음 단위로 설명합니다.
+복합 UK는 `password_reset_tokens(user_id, active_slot)`, `wallets(user_id, currency)`, `mock_bank_accounts(bank_code, mock_account_number)`, `workplaces(owner_user_id, id)`, `work_cases(id, employer_id, worker_id, agreed_wage)`와 `(id, agreed_wage)`, `work_invitations(work_case_id, active_slot)`, `mock_bank_transactions(reference_type, reference_id, transfer_type)`, `idempotency_requests(user_id, operation_code, idempotency_key)`, `qr_tokens(workplace_id, active_slot)`, `attendance_records(work_case_id, attendance_type, success_slot)`, `disputes(work_case_id, open_slot)`, `documents(work_case_id, document_type)`, `document_versions(document_id, version_no)`와 `(document_id, id)`, `document_signatures(document_id, source_version_id, signer_user_id)`, `document_shares(document_id, work_case_id, shared_with_user_id, purpose, active_slot)`, `user_badges(user_id, badge_type)`입니다. Mermaid 열의 `UK`는 단독 고유키에만 표시하고 이 복합키들은 여기에서 묶음 단위로 설명합니다.
 
 ### DB만으로 보장하지 않는 항목
 
 - `users.role`과 사장님·근로자 역할의 일치는 Service에서 검증해야 합니다.
 - 충전 주문의 `employer_id`와 `linked_account_id`가 같은 사용자 소유인지는 Service에서 검증해야 합니다.
 - 출금 요청의 `user_id`, `wallet_id`, `linked_account_id`가 모두 같은 사용자 소유인지는 Service에서 검증해야 합니다.
+- Claim 획득·동시 요청 응답·Fingerprint 비교·성공 응답 재전송·만료 행 정리는 Service와 운영 작업에서 구현해야 합니다.
 - 비밀번호 재설정 Token 생성·원문 전달·만료 전환·단일 사용과 기존 활성 Token 폐기는 Service에서 구현해야 합니다. DB에는 원문이 아니라 SHA-256 Hash만 저장합니다.
 - QR의 외부 노출 문자열은 `token_nonce`와 `workplace_id`를 외부 설정의 HMAC Key로 서명해 만들고, Service가 서명·상태·소유권·위치를 검증해야 합니다. DB의 nonce는 비밀값이 아닙니다.
 - 근태의 `worker_id`가 해당 근무 건의 배정 근로자인지, `qr_token_id`의 사업장이 근무 건 사업장과 같은지는 Service에서 검증해야 합니다.
@@ -524,7 +546,7 @@ QR과 비밀번호 재설정의 상태·형태 제약은 다음과 같습니다.
 
 ### 현재 DDL과 미결정 제품 Workflow
 
-아래 표는 현재 Head `202608041138`이 보장하는 사실과 제품 결정 또는 추가 DDL 검토가 남은
+아래 표는 현재 Head `202608041614`가 보장하는 사실과 제품 결정 또는 추가 DDL 검토가 남은
 부분을 분리합니다. Migration과 통합 DDL은 프로젝트 소유자만 변경합니다.
 
 | 기능                 | 현재 DB                                                                                           | 미결정 제품 Workflow·추가 검토                                                                                               |
@@ -533,6 +555,7 @@ QR과 비밀번호 재설정의 상태·형태 제약은 다음과 같습니다.
 | 사업장 고정 반경     | `workplaces.radius_meters`와 근무 Snapshot `allowed_radius_meters`가 모든 양수를 허용             | 애플리케이션은 두 값에 항상 100m를 저장·검증. DB에서도 정확히 100을 강제할지는 소유자가 결정                                 |
 | 시스템 생성 계약서   | `EMPLOYMENT_CONTRACT`도 `work_case_id=NULL`을 가질 수 있음                                        | 계약서는 계약 확정 때 시스템만 생성하고 근무 건에 연결. DB 제약으로도 강제할지는 소유자가 결정                               |
 | 계약서 3년 자동 삭제 | `documents.status=DELETED`는 있으나 기준일·삭제 범위와 전용 추적 컬럼·Index가 없음                | 시작일·종료일 기준과 파일·Metadata·Checksum·감사 삭제 범위를 먼저 확정한 뒤 소유자가 필요한 Schema 보강을 결정               |
+| 멱등 요청 처리       | 사용자·Operation·Key Claim, Fingerprint, 완료 응답과 만료 시각을 저장                            | Claim 획득·대기 없는 충돌 처리·중단 복구·응답 재전송·만료 정리는 애플리케이션에서 구현                                       |
 
 퇴근 누락의 상태값과 근로자 필수 제약은 현재 DDL입니다. 반면 성공 출근과 퇴근 부재를 판정하는
 Scheduler, 해소 API, Escrow·Settlement 전이, 기존 `IN_PROGRESS` 데이터 Backfill은 승인된
@@ -707,6 +730,16 @@ erDiagram
         bigint mock_bank_transaction_id FK, UK "NULL"
         varchar idempotency_key UK
     }
+    IDEMPOTENCY_REQUESTS {
+        bigint id PK
+        bigint user_id FK
+        varchar operation_code
+        varchar idempotency_key
+        binary request_fingerprint
+        varchar status
+        json response_body "NULL"
+        datetime expires_at
+    }
     WITHDRAWAL_REQUESTS {
         bigint id PK
         bigint user_id FK
@@ -745,6 +778,7 @@ erDiagram
     USERS ||--o{ MOCK_BANK_ACCOUNTS : "owns"
     MOCK_BANK_ACCOUNTS ||--o{ MOCK_BANK_TRANSACTIONS : "bank ledger"
     USERS ||--o{ FUNDING_ORDERS : "charges"
+    USERS ||--o{ IDEMPOTENCY_REQUESTS : "operation claims"
     MOCK_BANK_ACCOUNTS ||--o{ FUNDING_ORDERS : "funding source"
     MOCK_BANK_TRANSACTIONS o|--o| FUNDING_ORDERS : "result"
     USERS ||--o{ WITHDRAWAL_REQUESTS : "withdraws"

@@ -97,14 +97,9 @@ async function confirmWithdraw() {
     <main class="screen-body">
       <section v-if="me && badge" class="profile-card">
         <div class="profile-top">
+          <!-- 승인 프로필 응답에 사진 필드가 없어 기본 아이콘만 노출한다. -->
           <span class="avatar">
-            <img
-              v-if="me.profileImageUrl"
-              :src="me.profileImageUrl"
-              :alt="`${me.name} 프로필 사진`"
-              class="avatar__img"
-            />
-            <UserRound v-else :size="24" />
+            <UserRound :size="24" />
           </span>
 
           <div class="profile-info">
@@ -208,12 +203,6 @@ async function confirmWithdraw() {
   background: var(--color-owner-weak);
   border-radius: var(--radius-pill);
 }
-.avatar__img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
 .profile-info {
   flex: 1;
   min-width: 0;

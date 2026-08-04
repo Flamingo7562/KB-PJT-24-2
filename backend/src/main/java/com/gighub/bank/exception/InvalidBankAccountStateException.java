@@ -1,8 +1,12 @@
 package com.gighub.bank.exception;
 
-// 계좌가 BLOCKED/CLOSED이거나 이체를 수행할 수 없는 상태인 경우 -> 409
-public class InvalidBankAccountStateException extends RuntimeException {
+import com.gighub.common.api.ApiErrorCode;
+import com.gighub.common.exception.ApiException;
+import org.springframework.http.HttpStatus;
+
+public class InvalidBankAccountStateException extends ApiException {
+
     public InvalidBankAccountStateException(String message) {
-        super(message);
+        super(HttpStatus.CONFLICT, ApiErrorCode.CONFLICT, message);
     }
 }

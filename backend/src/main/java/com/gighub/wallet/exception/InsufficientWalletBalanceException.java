@@ -1,7 +1,12 @@
 package com.gighub.wallet.exception;
 
-public class InsufficientWalletBalanceException extends RuntimeException{
+import com.gighub.common.api.ApiErrorCode;
+import com.gighub.common.exception.ApiException;
+import org.springframework.http.HttpStatus;
+
+public class InsufficientWalletBalanceException extends ApiException {
+
     public InsufficientWalletBalanceException(String message) {
-        super(message);
+        super(HttpStatus.CONFLICT, ApiErrorCode.CONFLICT, message);
     }
 }
