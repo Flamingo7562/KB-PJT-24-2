@@ -1,5 +1,6 @@
 package com.gighub.common.api;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
@@ -24,10 +25,11 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -42,12 +44,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class ApiResponseContractTest {
 
     private MockMvc mockMvc;
+    private ObjectMapper objectMapper;
 
     @BeforeEach
     void setUp() {
         // 운영 설정(WebMvcConfig.extendMessageConverters)과 같은 직렬화 규칙을 적용한다.
         // standaloneSetup은 그 설정을 상속하지 않으므로 Instant 규칙을 여기서 맞춘다.
-        ObjectMapper objectMapper = new ObjectMapper();
+        objectMapper = new ObjectMapper();
         objectMapper.registerModule(new JavaTimeModule());
         objectMapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
 
@@ -83,20 +86,16 @@ class ApiResponseContractTest {
 
     @Test
     void pageMetadataHasOnlyApprovedFields() throws Exception {
-        MvcResult result = mockMvc.perform(get("/test/page"))
-                .andExpect(status().isOk())
-                .andReturn();
+        // 금지 필드 이름을 나열하면 first, last처럼 미리 떠올린 이름만 막는다.
+        // 승인된 네 필드와 정확히 같은 집합인지 비교해 새로 생기는 파생 필드도 잡는다.
+        assertEquals(
+                Set.of("number", "size", "totalElements", "totalPages"),
+                fieldNames(pageBody().path("data").path("page")));
+    }
 
-        String body = result.getResponse().getContentAsString();
-        // 명세에 없는 파생 필드를 구현 편의로 추가하지 않는다.
-        assertTrue(body.contains("\"number\""));
-        assertTrue(body.contains("\"size\""));
-        assertTrue(body.contains("\"totalElements\""));
-        assertTrue(body.contains("\"totalPages\""));
-        assertEquals(-1, body.indexOf("\"first\""));
-        assertEquals(-1, body.indexOf("\"last\""));
-        assertEquals(-1, body.indexOf("\"hasNext\""));
-        assertEquals(-1, body.indexOf("\"numberOfElements\""));
+    @Test
+    void listEnvelopeHasOnlyContentAndPage() throws Exception {
+        assertEquals(Set.of("content", "page"), fieldNames(pageBody().path("data")));
     }
 
     @Test
@@ -165,6 +164,21 @@ class ApiResponseContractTest {
                 .andReturn();
 
         assertEquals("raw-bytes", result.getResponse().getContentAsString());
+    }
+
+    /** 기본 Page Query로 목록을 호출하고 직렬화 결과를 JSON Tree로 돌려줍니다. */
+    private JsonNode pageBody() throws Exception {
+        MvcResult result = mockMvc.perform(get("/test/page"))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        return objectMapper.readTree(result.getResponse().getContentAsString());
+    }
+
+    private Set<String> fieldNames(JsonNode node) {
+        Set<String> names = new LinkedHashSet<>();
+        node.fieldNames().forEachRemaining(names::add);
+        return names;
     }
 
     @Value
