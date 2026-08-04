@@ -1,5 +1,6 @@
 package com.gighub.common.exception;
 
+import com.gighub.bank.exception.BankAccountForbiddenException;
 import com.gighub.bank.exception.InsufficientBankBalanceException;
 import com.gighub.common.api.ApiErrorCode;
 import com.gighub.common.trace.TraceIdFilter;
@@ -88,6 +89,17 @@ class CommonExceptionHandlerTest {
         mockMvc.perform(get("/test/document-not-found"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("RESOURCE_NOT_FOUND"));
+    }
+
+    @Test
+    void bankAuthorizationFailureDoesNotRevealAccountExistence() {
+        String missingMessage = new BankAccountForbiddenException("계좌를 찾을 수 없습니다.")
+                .getMessage();
+        String otherOwnerMessage = new BankAccountForbiddenException("타인 소유 계좌입니다.")
+                .getMessage();
+
+        assertEquals("계좌에 접근할 수 없습니다.", missingMessage);
+        assertEquals(missingMessage, otherOwnerMessage);
     }
 
     @Test
