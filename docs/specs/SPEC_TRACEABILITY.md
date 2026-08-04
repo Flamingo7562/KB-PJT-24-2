@@ -2,8 +2,8 @@
 
 | 항목        | 값              |
 | ----------- | --------------- |
-| 명세 릴리스 | `1.0.0`         |
-| 승인일      | 2026-07-31      |
+| 명세 릴리스 | `2.0.0`         |
+| 승인일      | 2026-08-04      |
 | 소유자      | PM/Admin Master |
 
 이 표는 요구사항을 승인 REST Operation과 도메인에 연결합니다. 개발 진행률, 임시 데이터
@@ -11,38 +11,38 @@
 
 ## 회원·인증·뱃지
 
-| 요구사항  | REST Operation                                                                                     | 도메인·데이터                                  | 연결 결정                                            |
-| --------- | -------------------------------------------------------------------------------------------------- | ---------------------------------------------- | ---------------------------------------------------- |
-| AUTH-001  | `POST /api/auth/signup`, `POST /api/auth/login`                                                    | 사용자 역할 선택                               | DEC-AUTH-SESSION                                     |
-| AUTH-002  | `POST /api/auth/signup`                                                                            | `users`, `employer_profiles`, `wallets`        | DEC-PROFILE-IMMUTABLE                                |
-| AUTH-003  | `GET /api/auth/login-id-availability`, `GET /api/auth/email-availability`, `POST /api/auth/signup` | `users.login_id`, `users.email` 고유성         | DEC-API-ENVELOPE                                     |
-| AUTH-004  | `POST /api/auth/login`, `POST /api/auth/logout`, `GET /api/auth/session`                           | 사용자 인증 상태, Session                      | DEC-AUTH-SESSION, DEC-OPEN-AUTH-SESSION-ANONYMOUS    |
-| AUTH-005  | `GET /api/auth/session`, `GET /api/workplaces`, `POST /api/workplaces`                             | OWNER Profile, 사업장 보유 여부                | DEC-WORKPLACE-RADIUS                                 |
-| AUTH-006  | `GET /api/auth/csrf`, `GET /api/auth/session`, `POST /api/auth/login`, `POST /api/auth/logout`     | Session, CSRF Token                            | DEC-AUTH-SESSION, DEC-LOCAL-CORS                     |
-| AUTH-007  | 모든 보호 Operation                                                                                | 역할, 리소스 소유권                            | DEC-AUTH-SESSION                                     |
-| AUTH-008  | `GET /api/users/me`, `PATCH /api/users/me`                                                         | `users`                                        | DEC-PROFILE-IMMUTABLE                                |
-| AUTH-009  | `PATCH /api/users/me/password`                                                                     | `users.password_hash`                          | DEC-AUTH-SESSION                                     |
-| AUTH-010  | `POST /api/users/me/withdrawal`                                                                    | `users.status`, 잔액·예치·근무 제약            | DEC-AUTH-SESSION                                     |
-| AUTH-011  | `POST /api/auth/password-reset/requests`, `POST /api/auth/password-reset/confirmations`            | `password_reset_tokens`, `users.password_hash` | DEC-PASSWORD-RESET, DEC-OPEN-PASSWORD-RESET-DELIVERY |
-| BADGE-001 | HTTP 없음 — 이력 기반 산정                                                                         | `user_badges`, 정산·근태 이력                  | DEC-OPEN-WORK-CASE-RESPONSE-SHAPES                   |
-| BADGE-002 | `GET /api/users/me/badge`                                                                          | `user_badges`                                  | DEC-PROFILE-IMMUTABLE                                |
-| BADGE-003 | `GET /api/invitations/{token}`                                                                     | `work_invitations`, `user_badges`              | DEC-INVITE-LOGIN-BADGE                               |
+| 요구사항  | REST Operation                                                                                     | 도메인·데이터                                  | 연결 결정                                                                |
+| --------- | -------------------------------------------------------------------------------------------------- | ---------------------------------------------- | ------------------------------------------------------------------------ |
+| AUTH-001  | `POST /api/auth/signup`, `POST /api/auth/login`                                                    | 사용자 역할 선택                               | DEC-AUTH-SESSION, DEC-AUTH-ERRORS                                        |
+| AUTH-002  | `POST /api/auth/signup`                                                                            | `users`, `wallets`                             | DEC-AUTH-INPUT, DEC-AUTH-ERRORS, DEC-PHONE-STORAGE, DEC-OWNER-ONBOARDING |
+| AUTH-003  | `GET /api/auth/login-id-availability`, `GET /api/auth/email-availability`, `POST /api/auth/signup` | `users.login_id`, `users.email` 고유성         | DEC-API-ENVELOPE, DEC-AUTH-INPUT, DEC-AUTH-ERRORS                        |
+| AUTH-004  | `POST /api/auth/login`, `POST /api/auth/logout`, `GET /api/auth/session`                           | 사용자 인증 상태, Session                      | DEC-AUTH-SESSION, DEC-AUTH-ERRORS                                        |
+| AUTH-005  | `GET /api/auth/session`, `GET /api/workplaces`, `POST /api/workplaces`                             | `users.role`, `workplaces.status`, ACTIVE 개수 | DEC-OWNER-ONBOARDING, DEC-WORKPLACE-LIST                                 |
+| AUTH-006  | `GET /api/auth/csrf`, `GET /api/auth/session`, `POST /api/auth/login`, `POST /api/auth/logout`     | Session, CSRF Token                            | DEC-AUTH-SESSION, DEC-AUTH-CSRF, DEC-LOCAL-CORS, DEC-AUTH-ERRORS         |
+| AUTH-007  | 모든 보호 Operation                                                                                | 역할, 리소스 소유권                            | DEC-AUTH-SESSION                                                         |
+| AUTH-008  | `GET /api/users/me`, `PATCH /api/users/me`                                                         | `users.phone`                                  | DEC-PROFILE-IMMUTABLE, DEC-AUTH-INPUT, DEC-PHONE-STORAGE                 |
+| AUTH-009  | `PATCH /api/users/me/password`                                                                     | `users.password_hash`                          | DEC-AUTH-SESSION, DEC-AUTH-INPUT                                         |
+| AUTH-010  | `POST /api/users/me/withdrawal`                                                                    | `users.status`, 잔액·예치·근무 제약            | DEC-AUTH-SESSION                                                         |
+| AUTH-011  | `POST /api/auth/password-reset/requests`, `POST /api/auth/password-reset/confirmations`            | `password_reset_tokens`, `users.password_hash` | DEC-PASSWORD-RESET, DEC-AUTH-INPUT, DEC-OPEN-PASSWORD-RESET-DELIVERY     |
+| BADGE-001 | HTTP 없음 — 이력 기반 산정                                                                         | `user_badges`, 정산·근태 이력                  | DEC-OPEN-WORK-CASE-RESPONSE-SHAPES                                       |
+| BADGE-002 | `GET /api/users/me/badge`                                                                          | `user_badges`                                  | DEC-PROFILE-IMMUTABLE                                                    |
+| BADGE-003 | `GET /api/invitations/{token}`                                                                     | `work_invitations`, `user_badges`              | DEC-INVITE-LOGIN-BADGE                                                   |
 
 ## 사업장·은행 계좌·지갑
 
-| 요구사항      | REST Operation                                                            | 도메인·데이터                                                                     | 연결 결정                                               |
-| ------------- | ------------------------------------------------------------------------- | --------------------------------------------------------------------------------- | ------------------------------------------------------- |
-| WORKPLACE-001 | `POST /api/workplaces`                                                    | `workplaces`, `employer_profiles`                                                 | DEC-WORKPLACE-RADIUS                                    |
-| WORKPLACE-002 | `PATCH /api/workplaces/{workplaceId}`                                     | `workplaces`, 근무 조건 Snapshot                                                  | DEC-WORKPLACE-IMMUTABLE, DEC-OPEN-WORKPLACE-COORDINATES |
-| WORKPLACE-003 | `DELETE /api/workplaces/{workplaceId}`                                    | `workplaces.status`, `deleted_at`                                                 | DEC-WORKPLACE-IMMUTABLE                                 |
-| WORKPLACE-004 | `GET /api/workplaces`                                                     | `workplaces.owner_id`                                                             | DEC-AUTH-SESSION                                        |
-| BANK-001      | `POST /api/wallet/funding-orders`, `POST /api/wallet/withdrawal-requests` | `mock_bank_accounts`                                                              | DEC-BANK-INPUT                                          |
-| WALLET-001    | `GET /api/wallet`                                                         | `wallets.available_balance`, `locked_balance`                                     | DEC-BALANCE-REFETCH                                     |
-| WALLET-002    | `POST /api/wallet/funding-orders`, `GET /api/wallet`                      | `funding_orders`, `mock_bank_transactions`, `wallet_transactions`, `wallets`      | DEC-BANK-INPUT, DEC-BALANCE-REFETCH, DEC-IDEMPOTENCY    |
-| WALLET-003    | `POST /api/wallet/withdrawal-requests`, `GET /api/wallet`                 | `withdrawal_requests`, `mock_bank_transactions`, `wallet_transactions`, `wallets` | DEC-BANK-INPUT, DEC-BALANCE-REFETCH, DEC-IDEMPOTENCY    |
-| WALLET-004    | `GET /api/wallet/transactions`                                            | `wallet_transactions`, `work_cases`, `workplaces`                                 | DEC-PAGE, DEC-TIME                                      |
-| WALLET-005    | 지갑·계좌 금액 변경 Operation                                             | `wallet_transactions`, `mock_bank_transactions`                                   | DEC-IDEMPOTENCY                                         |
-| WALLET-006    | 충전·출금·초대 수락·정산 승인 Operation                                   | 멱등 Key, 금융 Aggregate                                                          | DEC-IDEMPOTENCY                                         |
+| 요구사항      | REST Operation                                                            | 도메인·데이터                                                                     | 연결 결정                                                                                  |
+| ------------- | ------------------------------------------------------------------------- | --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| WORKPLACE-001 | `POST /api/workplaces`                                                    | `workplaces`                                                                      | DEC-WORKPLACE-RADIUS, DEC-AUTH-INPUT, DEC-PHONE-STORAGE, DEC-OWNER-ONBOARDING              |
+| WORKPLACE-002 | `PATCH /api/workplaces/{workplaceId}`                                     | `workplaces`, 근무 조건 Snapshot                                                  | DEC-WORKPLACE-IMMUTABLE, DEC-AUTH-INPUT, DEC-PHONE-STORAGE, DEC-OPEN-WORKPLACE-COORDINATES |
+| WORKPLACE-003 | `DELETE /api/workplaces/{workplaceId}`                                    | `workplaces.status`, `deleted_at`                                                 | DEC-WORKPLACE-IMMUTABLE, DEC-WORKPLACE-LIST                                                |
+| WORKPLACE-004 | `GET /api/workplaces`                                                     | `workplaces.owner_user_id`, `workplaces.status`                                   | DEC-AUTH-SESSION, DEC-OWNER-ONBOARDING, DEC-WORKPLACE-LIST                                 |
+| BANK-001      | `POST /api/wallet/funding-orders`, `POST /api/wallet/withdrawal-requests` | `mock_bank_accounts`                                                              | DEC-BANK-INPUT                                                                             |
+| WALLET-001    | `GET /api/wallet`                                                         | `wallets.available_balance`, `locked_balance`                                     | DEC-BALANCE-REFETCH                                                                        |
+| WALLET-002    | `POST /api/wallet/funding-orders`, `GET /api/wallet`                      | `funding_orders`, `mock_bank_transactions`, `wallet_transactions`, `wallets`      | DEC-BANK-INPUT, DEC-BALANCE-REFETCH, DEC-IDEMPOTENCY                                       |
+| WALLET-003    | `POST /api/wallet/withdrawal-requests`, `GET /api/wallet`                 | `withdrawal_requests`, `mock_bank_transactions`, `wallet_transactions`, `wallets` | DEC-BANK-INPUT, DEC-BALANCE-REFETCH, DEC-IDEMPOTENCY                                       |
+| WALLET-004    | `GET /api/wallet/transactions`                                            | `wallet_transactions`, `work_cases`, `workplaces`                                 | DEC-PAGE, DEC-TIME                                                                         |
+| WALLET-005    | 지갑·계좌 금액 변경 Operation                                             | `wallet_transactions`, `mock_bank_transactions`                                   | DEC-IDEMPOTENCY                                                                            |
+| WALLET-006    | 충전·출금·초대 수락·정산 승인 Operation                                   | 멱등 Key, 금융 Aggregate                                                          | DEC-IDEMPOTENCY                                                                            |
 
 ## 홈·근무·초대·계약
 
@@ -80,7 +80,7 @@
 | SETTLE-003  | HTTP 없음 — 예정 정산 실행                                                              | `settlements`, 실행 선점·재시도                             | DEC-SETTLEMENT-TIME                                    |
 | SETTLE-004  | 정산 승인·자동 정산 내부 처리                                                           | `escrows`, `wallets`, `wallet_transactions`                 | DEC-IDEMPOTENCY                                        |
 | SETTLE-005  | HTTP 없음 — 노쇼 환불                                                                   | `escrows`, `wallet_transactions`, `settlements`             | DEC-OPEN-NO-SHOW-SETTLEMENT                            |
-| CONTACT-001 | `GET /api/work-cases/{workCaseId}/workplace-contact`                                    | `work_cases`, `workplaces.phone`, OWNER                     | DEC-AUTH-SESSION                                       |
+| CONTACT-001 | `GET /api/work-cases/{workCaseId}/workplace-contact`                                    | `work_cases`, `workplaces.phone`, OWNER                     | DEC-AUTH-SESSION, DEC-PHONE-STORAGE                    |
 | DISPUTE-001 | `POST /api/work-cases/{workCaseId}/disputes`                                            | `disputes`                                                  | DEC-DISPUTE-SETTLEMENT                                 |
 | DISPUTE-002 | `GET /api/work-cases/{workCaseId}/disputes`                                             | `disputes`, 근무 당사자                                     | DEC-DISPUTE-SETTLEMENT                                 |
 | DISPUTE-003 | 분쟁 조회·처리 Operation                                                                | `disputes.status`, 처리자·결과                              | DEC-DISPUTE-SETTLEMENT, DEC-OPEN-ADMIN-DISPUTE         |
@@ -95,7 +95,7 @@
 | DOC-004  | `GET /api/documents`, `GET /api/documents/{documentId}/file`                   | `work_contracts`, `documents`, `document_versions`         | DEC-CONTRACT-AUTO-GENERATION, DEC-OPEN-E-SIGN-EVIDENCE    |
 | DOC-005  | `POST /api/documents`                                                          | `documents`, `document_versions`                           | DEC-DOCUMENT-STORAGE                                      |
 | DOC-006  | `PATCH /api/documents/{documentId}`, `DELETE /api/documents/{documentId}`      | 보건증 `documents`, `document_versions`, `document_shares` | DEC-DOCUMENT-STORAGE                                      |
-| DOC-007  | `GET /api/worker/workplaces`, `POST /api/documents/{documentId}/shares`        | `document_shares`, `work_cases`, `workplaces`              | DEC-DOCUMENT-STORAGE                                      |
+| DOC-007  | `GET /api/worker/workplaces`, `POST /api/documents/{documentId}/shares`        | `document_shares`, `work_cases`, `workplaces`              | DEC-DOCUMENT-STORAGE, DEC-WORKPLACE-LIST                  |
 | DOC-008  | `DELETE /api/documents/{documentId}/shares/{workplaceId}`                      | `document_shares`                                          | DEC-DOCUMENT-STORAGE                                      |
 | DOC-009  | `GET /api/documents/{documentId}/file`                                         | `document_versions`, `document_shares`, 접근 권한          | DEC-DOCUMENT-STORAGE                                      |
 | DOC-010  | `POST /api/documents`, 계약 확정 내부 생성                                     | 파일 형식 검증, `document_versions`                        | DEC-CONTRACT-AUTO-GENERATION, DEC-DOCUMENT-STORAGE        |
@@ -108,7 +108,7 @@
 | ---------- | ----------------------------- | --------------------------------- | --------------------------------------------------------- |
 | ALERT-001  | 결정 후 정의                  | 사용자 알림, 읽음 시각            | DEC-OPEN-NOTIFICATION-CONTRACT                            |
 | ALERT-002  | 결정 후 정의                  | 도메인 이벤트, 중복 식별자        | DEC-OPEN-NOTIFICATION-CONTRACT                            |
-| COMMON-001 | 모든 Operation                | 성공·목록·오류 Envelope           | DEC-API-ENVELOPE, DEC-OPEN-ERROR-CATALOG                  |
+| COMMON-001 | 모든 Operation                | 성공·목록·오류 Envelope           | DEC-API-ENVELOPE, DEC-AUTH-ERRORS, DEC-OPEN-ERROR-CATALOG |
 | COMMON-002 | 모든 보호·상태 변경 Operation | 역할, 소유권, 당사자 불변식       | DEC-AUTH-SESSION                                          |
 | COMMON-003 | HTTP 없음 — 보존 정책         | 금융·계약·근태·문서·감사 이력     | DEC-CONTRACT-RETENTION, DEC-OPEN-DOCUMENT-RETENTION-SCOPE |
 | COMMON-004 | 모든 금액·시간·목록 Operation | KRW, `Instant`, `LocalDate`, Page | DEC-TIME, DEC-PAGE                                        |

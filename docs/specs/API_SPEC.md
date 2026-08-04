@@ -2,8 +2,8 @@
 
 | 항목        | 값              |
 | ----------- | --------------- |
-| 명세 릴리스 | `1.0.0`         |
-| 승인일      | 2026-07-31      |
+| 명세 릴리스 | `2.0.0`         |
+| 승인일      | 2026-08-04      |
 | 소유자      | PM/Admin Master |
 | Base Path   | `/api`          |
 
@@ -65,6 +65,10 @@
 - 승인된 공통 오류 Code는 `VALIDATION_ERROR`, `AUTH_REQUIRED`, `FORBIDDEN`,
   `ROLE_MISMATCH`, `RESOURCE_NOT_FOUND`, `CONFLICT`, `IDEMPOTENCY_KEY_REUSED`,
   `WORK_CASE_LOCKED`, `CONTRACT_RETENTION_REQUIRED`입니다.
+- 아이디 없음·비밀번호 불일치·비활성 또는 잠금 계정은 이유를 구분하지 않고
+  `401 AUTH_REQUIRED`로 응답합니다.
+- CSRF 검증 실패는 `403 FORBIDDEN`, 중복 가입은 `409 CONFLICT`, 역할 불일치는
+  `403 ROLE_MISMATCH`, 입력 검증 실패는 `400 VALIDATION_ERROR`입니다.
 - 추가 도메인 오류 Code는 `DEC-OPEN-ERROR-CATALOG`가 승인하기 전까지 새 규범 값으로
   확정하지 않습니다.
 
@@ -75,12 +79,31 @@
 - 로그인 성공 시 Session ID를 교체하고 로그아웃 시 Session을 무효화합니다.
 - `JSESSIONID`는 `HttpOnly=true`, 로컬 환경에서 `Secure=false`, `SameSite=Lax`인 Host-only
   Cookie입니다.
-- `GET /api/auth/csrf`가 `XSRF-TOKEN` Cookie를 준비합니다.
+- `GET /api/auth/csrf`는 `204 No Content`로 `XSRF-TOKEN` Cookie를 준비합니다.
+- 앱 최초 실행, 로그인 성공 후, 로그아웃 성공 후 `GET /api/auth/csrf`를 다시 호출합니다.
+- 로그인과 로그아웃 POST도 CSRF를 검증합니다.
 - 상태 변경 요청은 Cookie 값을 `X-XSRF-TOKEN` Header로 보냅니다.
+- CSRF 실패는 `403 FORBIDDEN`이며 실패한 상태 변경 요청을 자동 재실행하지 않습니다.
 - 로컬 CORS 허용 Origin은 `http://localhost:5173` 하나이며 Credential을 허용합니다.
 - 로컬 허용 요청 Header는 `Accept`, `Content-Type`, `X-XSRF-TOKEN`,
   `Idempotency-Key`입니다.
 - 노출 응답 Header는 `Location`, `Idempotency-Replayed`입니다.
+
+### 입력 정규화와 검증
+
+입력은 정규화한 뒤 검증하며 가용성 조회와 실제 가입은 같은 규칙을 사용합니다.
+
+- `loginId`: trim 후 소문자로 저장·비교합니다.
+- `email`: trim 후 소문자로 저장·비교합니다.
+- `name`: trim만 적용하며 최대 100자입니다.
+- `phone`: 공백과 하이픈을 제거한 뒤 `0`으로 시작하는 9~11자리 숫자인지 검증합니다.
+- API는 정규화된 전화번호 숫자만 반환하고 화면 표시 형식은 클라이언트가 적용합니다.
+- 비밀번호에는 trim이나 대소문자 변환을 적용하지 않습니다.
+- 비밀번호는 8~64자이면서 UTF-8 기준 72byte 이하여야 합니다. 72byte를 넘는 입력은
+  절단하지 않고 `400 VALIDATION_ERROR`로 거부하며 문자 종류 조합은 강제하지 않습니다.
+- 전화번호 저장 대상은 서로 독립된 `users.phone`, `workplaces.phone`입니다.
+  `employer_profiles.contact_phone`으로 옮기거나 이름을 변경하지 않습니다.
+- 전화번호 값은 요청·응답·SQL 바인딩 로그에 남기지 않습니다.
 
 ### 시간과 날짜
 
@@ -120,7 +143,7 @@ Key는 공백 없는 출력 가능한 ASCII 1~100자입니다. 같은 Key와 같
 
 | Method | Path                                     | 인증         | 요청                            | 성공                                                          |
 | ------ | ---------------------------------------- | ------------ | ------------------------------- | ------------------------------------------------------------- |
-| GET    | `/api/auth/csrf`                         | 불필요       | 없음                            | CSRF Cookie 준비                                              |
+| GET    | `/api/auth/csrf`                         | 불필요       | 없음                            | `204` + `XSRF-TOKEN` Cookie 준비                              |
 | GET    | `/api/auth/session`                      | Session 확인 | 없음                            | `200 {data:{authenticated,role?,name?,needsWorkplaceSetup?}}` |
 | GET    | `/api/auth/login-id-availability`        | 불필요       | Query `loginId`                 | `200 {data:{available}}`                                      |
 | GET    | `/api/auth/email-availability`           | 불필요       | Query `email`                   | `200 {data:{available}}`                                      |
@@ -135,16 +158,43 @@ Key는 공백 없는 출력 가능한 ASCII 1~100자입니다. 같은 Key와 같
 | POST   | `/api/auth/password-reset/requests`      | 불필요       | `{email}`                       | `202 {data:{accepted:true}}`                                  |
 | POST   | `/api/auth/password-reset/confirmations` | 불필요       | `{token,newPassword}`           | `204`                                                         |
 
-비인증 상태의 `GET /api/auth/session`을 `200 authenticated=false`로 처리할지 401로 처리할지는
-`DEC-OPEN-AUTH-SESSION-ANONYMOUS`를 따릅니다.
+### Session 조회
+
+`GET /api/auth/session`은 공개 부트스트랩 API입니다. 비인증 상태는 다음 200 응답입니다.
+
+```json
+{
+  "data": {
+    "authenticated": false
+  }
+}
+```
+
+인증된 OWNER 응답에는 현재 DB를 기준으로 계산한 `needsWorkplaceSetup`을 포함합니다.
+
+```json
+{
+  "data": {
+    "authenticated": true,
+    "role": "OWNER",
+    "name": "김사장",
+    "needsWorkplaceSetup": true
+  }
+}
+```
+
+`needsWorkplaceSetup`은 요청 시점에 `role == OWNER`이면서 `status=ACTIVE`인 소유 사업장이
+0개일 때만 true입니다. 계산 결과를 Session에 저장하지 않고 로그인과 Session 조회마다
+현재 DB 상태로 계산합니다. 다른 보호 API는 인증이 없거나 만료되면
+`401 AUTH_REQUIRED`를 반환합니다.
 
 ### 가입
 
 ```json
 {
   "loginId": "worker01",
-  "password": "secret",
-  "passwordConfirm": "secret",
+  "password": "secret123",
+  "passwordConfirm": "secret123",
   "name": "김근로",
   "email": "worker@example.com",
   "phone": "01012345678",
@@ -154,21 +204,25 @@ Key는 공백 없는 출력 가능한 ASCII 1~100자입니다. 같은 Key와 같
 
 - `role`은 `OWNER` 또는 `WORKER`입니다.
 - `phone`만 선택 필드입니다.
-- 가입은 사용자와 KRW 지갑을 함께 생성합니다.
-- OWNER의 사업장 입력을 가입 Body에 포함하지 않습니다.
+- 가입은 `users`의 사용자와 KRW `wallets`를 함께 생성합니다.
+- OWNER 가입도 `employer_profiles`를 만들지 않습니다.
+- OWNER의 사업장 입력을 가입 Body에 포함하지 않고 사업체·사업장 기준정보는 후속
+  `workplaces` 등록에서 관리합니다.
 
 ### 로그인
 
 ```json
 {
   "loginId": "owner01",
-  "password": "secret",
+  "password": "secret123",
   "expectedRole": "OWNER"
 }
 ```
 
 서버의 실제 역할과 `expectedRole`이 다르면 `403 ROLE_MISMATCH`입니다. 성공 응답에 Token을
-포함하지 않습니다.
+포함하지 않습니다. 아이디 없음, 비밀번호 불일치, 비활성 또는 잠금 계정은 모두
+`401 AUTH_REQUIRED`로 응답하고 계정 존재 여부나 상태를 구분해 노출하지 않습니다.
+OWNER의 `needsWorkplaceSetup`은 Session 조회와 같은 ACTIVE 사업장 실시간 기준으로 계산합니다.
 
 ### 내 프로필
 
@@ -188,7 +242,14 @@ Key는 공백 없는 출력 가능한 ASCII 1~100자입니다. 같은 Key와 같
 ```
 
 PATCH Body는 `phone`만 허용합니다. `loginId`, `email`, `name`, `role`, `status`를 보내면
-무시하지 않고 `400 VALIDATION_ERROR`로 거부합니다.
+무시하지 않고 `400 VALIDATION_ERROR`로 거부합니다. 전화번호는 공통 정규화 규칙을 적용한
+숫자 문자열로 저장·반환합니다.
+
+### 비밀번호 입력
+
+가입, 로그인, 비밀번호 변경과 비밀번호 재설정의 비밀번호 입력은 공통 8~64자 및 UTF-8
+72byte 이하 경계를 사용합니다. 비밀번호와 확인값은 변환하지 않은 원문이 같아야 하며,
+새 비밀번호를 72byte에서 절단하거나 문자 종류 조합을 추가로 강제하지 않습니다.
 
 ### 최신 뱃지
 
@@ -201,6 +262,7 @@ PATCH Body는 `phone`만 허용합니다. `loginId`, `email`, `name`, `role`, `s
 - Token 원문 전달 채널은 `DEC-OPEN-PASSWORD-RESET-DELIVERY`를 따릅니다.
 - 확인은 유효하고 사용되지 않은 Token만 한 번 허용하며 성공 시 기존 Session 정책에 따라
   인증 상태를 갱신합니다.
+- `newPassword`는 공통 비밀번호 경계를 적용합니다.
 
 ## 사업장
 
@@ -229,6 +291,31 @@ PATCH Body는 `phone`만 허용합니다. `loginId`, `email`, `name`, `role`, `s
 - `detailAddress`, `latitude`, `longitude`는 선택값입니다.
 - 위도와 경도는 함께 보내거나 모두 생략합니다.
 - `radiusMeters`, `radiusM`은 받지 않으며 서버가 100m를 적용합니다.
+- `phone`은 공통 전화번호 정규화 후 숫자 문자열로 저장·반환합니다.
+
+### OWNER 사업장 목록
+
+`GET /api/workplaces`는 공통 Page Envelope를 사용하며, 각 `content` Item은 다음 필드만
+반환합니다.
+
+```json
+{
+  "workplaceId": 1,
+  "businessRegistrationNumber": "1234567890",
+  "name": "강남점",
+  "representativeName": "김사장",
+  "roadAddress": "서울 강남구 테헤란로 1",
+  "detailAddress": "2층",
+  "phone": "0212345678",
+  "radiusMeters": 100,
+  "status": "INACTIVE"
+}
+```
+
+- OWNER가 소유한 `ACTIVE`, `INACTIVE` 사업장을 반환합니다.
+- `DELETED` 사업장은 반환하지 않습니다.
+- 목록 Item에 `latitude`, `longitude`를 포함하지 않습니다.
+- 전역 작업 Context로 선택할 수 있는 사업장은 기존 계약대로 `ACTIVE`만 허용합니다.
 
 ### 사업장 수정
 
@@ -266,6 +353,9 @@ expectedNetAmount = dailyWage - incomeTax - localIncomeTax
 `DEC-OPEN-DASHBOARD-BREAK`를 따릅니다.
 
 근무 목록과 상세 응답은 `CHECK_OUT_MISSING`을 `NO_SHOW`와 구분하여 전달합니다.
+
+`GET /api/worker/workplaces`는 WORKER에게 노출 가능한 별도 목록이며 `ACTIVE` 사업장만
+반환합니다. 전체 Item 필드는 별도 승인 전까지 이 계약에서 추정하지 않습니다.
 
 ## 지갑과 거래
 
