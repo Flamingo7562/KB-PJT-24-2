@@ -318,9 +318,12 @@ export async function approveSettlement(workCaseId) {
   return data
 }
 
-/** 사장 연락처 조회(문의하기) → { ownerName, phone } (CONTACT-001). 해당 알바생 */
+/**
+ * 사장 연락처 조회(문의하기) → { ownerName, phone } (CONTACT-001). 해당 알바생.
+ * phone 은 승인 계약대로 구분 문자 없는 숫자다. 표시 형식은 화면에서 만든다.
+ */
 export async function getOwnerContact(workCaseId) {
-  if (USE_MOCK) return { ownerName: '김사장', phone: '010-1234-5678' }
+  if (USE_MOCK) return { ownerName: '김사장', phone: '01012345678' }
   const { data } = await http.get(`/work-cases/${workCaseId}/workplace-contact`)
   return data
 }

@@ -8,8 +8,19 @@
  *   PATCH /api/workplaces/{workplaceId}   DELETE /api/workplaces/{workplaceId}
  */
 import http from '@/services/http'
+import { normalizePhone } from '@/utils/validators'
 
 const USE_MOCK = true
+
+/**
+ * 승인 전화번호 계약(`users.phone`과 독립된 `workplaces.phone`)은 구분 문자 없는 숫자만
+ * 저장·반환한다. 화면은 하이픈이 들어간 표시 형식을 유지하므로 전송 직전에 정규화한다.
+ * phone 을 보내지 않는 부분 수정 요청은 키를 만들지 않고 그대로 통과시킨다.
+ */
+function withNormalizedPhone(payload) {
+  if (!payload || payload.phone === undefined) return payload
+  return { ...payload, phone: normalizePhone(payload.phone) }
+}
 
 const mockWorkplaces = [
   { workplaceId: 1, name: '강남점', address: '서울 강남구 테헤란로 1', radiusMeters: 100 },
@@ -28,28 +39,30 @@ export async function listWorkplaces() {
  * @param {object} payload businessNumber, name, representativeName, address, phone, latitude?, longitude?, radiusM?
  */
 export async function createWorkplace(payload) {
+  const body = withNormalizedPhone(payload)
   if (USE_MOCK) {
     const workplaceId = Date.now()
     mockWorkplaces.push({
       workplaceId,
-      name: payload.name,
-      address: payload.address,
-      radiusMeters: payload.radiusM ?? 100
+      name: body.name,
+      address: body.address,
+      radiusMeters: body.radiusM ?? 100
     })
     return { workplaceId }
   }
-  const { data } = await http.post('/workplaces', payload)
+  const { data } = await http.post('/workplaces', body)
   return data
 }
 
 /** 사업장 수정 (명세 13). 본인 소유 검증(서버) */
 export async function updateWorkplace(workplaceId, payload) {
+  const body = withNormalizedPhone(payload)
   if (USE_MOCK) {
     const target = mockWorkplaces.find((w) => w.workplaceId === workplaceId)
-    if (target) Object.assign(target, payload)
-    return { workplaceId, ...payload }
+    if (target) Object.assign(target, body)
+    return { workplaceId, ...body }
   }
-  const { data } = await http.patch(`/workplaces/${workplaceId}`, payload)
+  const { data } = await http.patch(`/workplaces/${workplaceId}`, body)
   return data
 }
 
