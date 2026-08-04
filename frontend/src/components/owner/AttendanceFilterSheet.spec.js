@@ -4,8 +4,8 @@ import { buildAttendanceFilterParams } from '@/components/owner/AttendanceFilter
 import { WORK_CASE_STATUS_FILTER } from '@/constants/workCaseStatus'
 
 describe('buildAttendanceFilterParams', () => {
-  it('기본값(전체·최신순·빈 값)은 sort 만 남긴다', () => {
-    expect(buildAttendanceFilterParams()).toEqual({ sort: 'LATEST' })
+  it('기본값(전체·빈 값)은 아무 파라미터도 만들지 않는다', () => {
+    expect(buildAttendanceFilterParams()).toEqual({})
   })
 
   it("status 가 'ALL' 이면 제외하고, 그 외에는 전달한다", () => {
@@ -19,37 +19,33 @@ describe('buildAttendanceFilterParams', () => {
   })
 
   it('기간을 채우면 서비스와 같은 키(from·to)로 넣는다', () => {
-    const params = buildAttendanceFilterParams({
-      from: '2026-07-01',
-      to: '2026-07-31',
-      sort: 'OLDEST'
-    })
-    expect(params).toEqual({ sort: 'OLDEST', from: '2026-07-01', to: '2026-07-31' })
+    const params = buildAttendanceFilterParams({ from: '2026-07-01', to: '2026-07-31' })
+    expect(params).toEqual({ from: '2026-07-01', to: '2026-07-31' })
   })
 
   it('기간 한쪽만 채워도 그 값만 전달한다', () => {
-    expect(buildAttendanceFilterParams({ from: '2026-07-01' })).toEqual({
-      sort: 'LATEST',
-      from: '2026-07-01'
-    })
+    expect(buildAttendanceFilterParams({ from: '2026-07-01' })).toEqual({ from: '2026-07-01' })
   })
 
   it('초안에 없는 키는 만들어내지 않는다', () => {
-    expect(Object.keys(buildAttendanceFilterParams({ keyword: '서빙' })).sort()).toEqual([
-      'keyword',
-      'sort'
-    ])
+    expect(Object.keys(buildAttendanceFilterParams({ keyword: '서빙' }))).toEqual(['keyword'])
+  })
+
+  // 목록 Query 계약(API_SPEC 'OWNER 근무 관리')에 sort 가 없다 — 정렬은 서버가 정한다.
+  it('정렬 값을 넣어도 서버 파라미터로 새어 나가지 않는다', () => {
+    expect(buildAttendanceFilterParams({ sort: 'OLDEST' })).not.toHaveProperty('sort')
   })
 })
 
 describe('WORK_CASE_STATUS_FILTER', () => {
-  it("'전체' 를 맨 앞에 두고 7단계 상태를 전이 순서로 잇는다", () => {
+  it("'전체' 를 맨 앞에 두고 8단계 상태를 전이 순서로 잇는다", () => {
     expect(WORK_CASE_STATUS_FILTER.map((o) => o.value)).toEqual([
       'ALL',
       'DRAFT',
       'ACCEPTED',
       'READY',
       'IN_PROGRESS',
+      'CHECK_OUT_MISSING',
       'COMPLETED',
       'NO_SHOW',
       'CANCELED'
@@ -60,6 +56,7 @@ describe('WORK_CASE_STATUS_FILTER', () => {
     const labels = Object.fromEntries(WORK_CASE_STATUS_FILTER.map((o) => [o.value, o.label]))
     expect(labels.ALL).toBe('전체')
     expect(labels.IN_PROGRESS).toBe('근무중')
+    expect(labels.CHECK_OUT_MISSING).toBe('퇴근 확인 필요')
     expect(labels.CANCELED).toBe('취소')
   })
 })

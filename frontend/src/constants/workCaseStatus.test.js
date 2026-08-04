@@ -7,11 +7,13 @@ import {
 } from '@/constants/workCaseStatus'
 import { getWorkCaseSummary, listWorkCases } from '@/services/workCases'
 
+// ck_work_cases_status(V202607311429) 가 허용하는 8개. 순서는 그 제약의 나열 순서다.
 const PERSISTED_WORK_CASE_STATUSES = [
   'DRAFT',
   'ACCEPTED',
   'READY',
   'IN_PROGRESS',
+  'CHECK_OUT_MISSING',
   'COMPLETED',
   'NO_SHOW',
   'CANCELED'

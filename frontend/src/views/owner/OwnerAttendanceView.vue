@@ -55,7 +55,7 @@ const loading = ref(false)
 
 /* ---- 검색·필터 -----------------------------------------------------------
  * 적용 중인 필터를 **서버 파라미터 형태 그대로** 들고 있다(사장 홈의 송금상세와 같은 방식).
- * 기본값은 { sort: 'LATEST' } — 비어 있는 항목은 애초에 키가 없다.
+ * 기본값은 빈 객체 — 비어 있는 항목은 애초에 키가 없다. 정렬은 서버가 정한다(WORK-002).
  * 요약 카드 토글과 시트의 '유형' 선택이 이 하나의 status 를 함께 쓴다. */
 const appliedFilter = ref(buildAttendanceFilterParams())
 const filterOpen = ref(false)
@@ -135,8 +135,8 @@ function toggleStatus(status) {
   load()
 }
 
-// sort 는 항상 들어 있으므로 그 외 키가 하나라도 있으면 무언가 걸러진 상태다.
-const isFiltered = computed(() => Object.keys(appliedFilter.value).some((key) => key !== 'sort'))
+// 빈 값·기본값은 애초에 키가 없으므로, 키가 하나라도 있으면 무언가 걸러진 상태다.
+const isFiltered = computed(() => Object.keys(appliedFilter.value).length > 0)
 
 // 상태 라벨·색은 상수 단일 소스만 사용(컴포넌트에 문자열 하드코딩 금지).
 const statusLabel = (status) => workCaseStatusLabel(status)

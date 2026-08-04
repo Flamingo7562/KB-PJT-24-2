@@ -10,14 +10,17 @@
 export const DEFAULT_FILTER = {
   keyword: '',
   status: 'ALL',
-  sort: 'LATEST',
   from: '',
   to: ''
 }
 
 /**
  * 필터 초안 → 서버 파라미터(빈 값·기본값 제외). 순수 함수라 단위 테스트 대상.
- * 키 이름은 서비스(listWorkCases)가 받는 이름과 같아야 한다 — keyword/status/sort/from/to.
+ * 키 이름은 서비스(listWorkCases)가 받는 이름과 같아야 한다 — keyword/status/from/to.
+ *
+ * 정렬 선택지는 두지 않는다. 목록 Query 계약(API_SPEC 'OWNER 근무 관리')은
+ * keyword/status/from/to/page/size 뿐이고 정렬은 서버가 정한다(REQUIREMENTS WORK-002).
+ * 지갑 거래(WALLET-004)만 sort 를 계약에 두고 있어 그쪽 시트와는 다르다.
  */
 export function buildAttendanceFilterParams(draft = {}) {
   const f = { ...DEFAULT_FILTER, ...draft }
@@ -25,7 +28,6 @@ export function buildAttendanceFilterParams(draft = {}) {
   const keyword = String(f.keyword).trim()
   if (keyword) params.keyword = keyword
   if (f.status && f.status !== 'ALL') params.status = f.status
-  if (f.sort) params.sort = f.sort
   if (f.from) params.from = f.from
   if (f.to) params.to = f.to
   return params
@@ -38,7 +40,7 @@ import { reactive, watch } from 'vue'
 import AppField from '@/components/common/AppField.vue'
 import BaseBottomSheet from '@/components/common/BaseBottomSheet.vue'
 import BaseButton from '@/components/common/BaseButton.vue'
-import { WORK_CASE_SORT, WORK_CASE_STATUS_FILTER } from '@/constants/workCaseStatus'
+import { WORK_CASE_STATUS_FILTER } from '@/constants/workCaseStatus'
 
 const props = defineProps({
   open: { type: Boolean, default: false },
@@ -88,22 +90,6 @@ function onApply() {
             class="chip"
             :class="{ 'is-active': draft.status === opt.value }"
             @click="draft.status = opt.value"
-          >
-            {{ opt.label }}
-          </button>
-        </div>
-      </div>
-
-      <div class="group">
-        <p class="group-label">정렬</p>
-        <div class="chips">
-          <button
-            v-for="opt in WORK_CASE_SORT"
-            :key="opt.value"
-            type="button"
-            class="chip"
-            :class="{ 'is-active': draft.sort === opt.value }"
-            @click="draft.sort = opt.value"
           >
             {{ opt.label }}
           </button>
