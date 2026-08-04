@@ -15,7 +15,7 @@ import AppField from '@/components/common/AppField.vue'
 import BaseButton from '@/components/common/BaseButton.vue'
 import { checkEmail, checkLoginId, signup } from '@/services/auth'
 import { useUiStore } from '@/stores/ui'
-import { formatPhoneInput } from '@/utils/format'
+import { blockNonDigitKeydown, formatPhoneInput } from '@/utils/format'
 import {
   isEmail,
   isPhone,
@@ -237,6 +237,7 @@ async function onSubmit() {
       digits-only
       maxlength="13"
       :error="errors.phone"
+      @keydown="blockNonDigitKeydown"
       @update:model-value="onPhoneInput"
     />
 
