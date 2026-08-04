@@ -1,6 +1,6 @@
 -- GigHub 참고용 최종 스키마 스냅샷
 -- NOT A FLYWAY MIGRATION
--- 기준: MySQL 8.4.10 / Flyway head 202607311429 / Migration 8개 / 도메인 테이블 24개 (2026-07-31 확인)
+-- 기준: MySQL 8.4.10 / Flyway head 202608041138 / Migration 9개 / 도메인 테이블 23개 (2026-08-04 확인)
 -- 단일 원본: backend/src/main/resources/db/migration/V*.sql
 -- 대상: 빈 데이터베이스. 기존 DB 업그레이드에는 사용하지 않는다.
 -- 제외: 데이터, flyway_schema_history, DROP 문, 실행 환경의 AUTO_INCREMENT 현재값
@@ -168,19 +168,6 @@ CREATE TABLE `documents` (
   CONSTRAINT `ck_documents_expiry` CHECK (((`expires_on` is null) or (`issued_on` is null) or (`expires_on` >= `issued_on`))),
   CONSTRAINT `ck_documents_status` CHECK ((`status` in (_utf8mb4'DRAFT',_utf8mb4'AWAITING_SIGNATURE',_utf8mb4'SIGNED',_utf8mb4'ACTIVE',_utf8mb4'CANCELED',_utf8mb4'DELETED'))),
   CONSTRAINT `ck_documents_type` CHECK ((`document_type` in (_utf8mb4'EMPLOYMENT_CONTRACT',_utf8mb4'HEALTH_CERTIFICATE')))
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
-CREATE TABLE `employer_profiles` (
-  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
-  `user_id` bigint unsigned NOT NULL,
-  `business_name` varchar(120) NOT NULL,
-  `contact_phone` varchar(30) DEFAULT NULL,
-  `default_workplace_address` varchar(255) DEFAULT NULL,
-  `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-  `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_employer_profiles_user_id` (`user_id`),
-  CONSTRAINT `fk_employer_profiles_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE RESTRICT ON UPDATE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE `escrows` (

@@ -2,22 +2,22 @@
 
 > 저장소 원본: `docs/DATABASE_SCHEMA_ERD.md`
 >
-> 기준: 로컬 Docker MySQL 8.4, Flyway Schema Version `202607311429`
+> 기준: 로컬 Docker MySQL 8.4, Flyway Schema Version `202608041138`
 >
-> 범위: 도메인 테이블 24개와 Flyway 내부 관리 테이블 1개, 총 25개입니다.
+> 범위: 도메인 테이블 23개와 Flyway 내부 관리 테이블 1개, 총 24개입니다.
 >
-> 읽기용 통합 DDL: [`database/schema-snapshot-202607311429.sql`](database/schema-snapshot-202607311429.sql)
+> 읽기용 통합 DDL: [`database/schema-snapshot-202608041138.sql`](database/schema-snapshot-202608041138.sql)
 >
 > 편집 정책: Migration과 통합 DDL은 프로젝트 소유자 전용입니다. 에이전트는 소유자가 변경한
 > 스키마를 근거로 이 설명 문서만 갱신할 수 있습니다.
 
-현재 소유자 승인 기준은 Head `202607311429`의 Migration 8개·도메인 테이블 24개입니다.
+현재 소유자 승인 기준은 Head `202608041138`의 Migration 9개·도메인 테이블 23개입니다.
 사업장 고정 QR `202607311427`, 비밀번호 재설정 Token `202607311428`, 퇴근 누락 상태
-`202607311429`를 모두 현재 스키마로 사용합니다.
+`202607311429`와 OWNER Profile 제거 `202608041138`을 모두 현재 스키마로 사용합니다.
 
 ## 한 장 요약
 
-Gig-Hub 데이터베이스는 `users`를 중심으로 회원, 사업장, 근무, 지갑, 근태와 문서 기능을 연결합니다. 사장님과 근로자는 별도 회원 테이블로 나누지 않고 `users.role`로 구분합니다. 사장님 부가정보는 `employer_profiles`, 실제 사업장 정보는 `workplaces`에 저장하며 한 사용자는 여러 사업장과 Mock 계좌를 가질 수 있습니다. 로그인 아이디와 이메일은 각각 고유하고, 회원 탈퇴 상태에서는 `deleted_at`이 반드시 기록되어야 합니다. 비밀번호 재설정 원문 Token은 DB에 저장하지 않고 `password_reset_tokens.token_hash`로만 추적합니다. `flyway_schema_history`는 업무 데이터가 아니라 적용한 Migration의 버전·체크섬·성공 여부를 기록합니다.
+Gig-Hub 데이터베이스는 `users`를 중심으로 회원, 사업장, 근무, 지갑, 근태와 문서 기능을 연결합니다. 사장님과 근로자는 별도 회원 테이블로 나누지 않고 `users.role`로 구분합니다. OWNER 식별정보는 `users`, 사업체·사업장 기준정보는 `workplaces`에 저장하며 한 사용자는 여러 사업장과 Mock 계좌를 가질 수 있습니다. 별도 OWNER Profile 테이블은 사용하지 않습니다. 로그인 아이디와 이메일은 각각 고유하고, 회원 탈퇴 상태에서는 `deleted_at`이 반드시 기록되어야 합니다. 비밀번호 재설정 원문 Token은 DB에 저장하지 않고 `password_reset_tokens.token_hash`로만 추적합니다. `flyway_schema_history`는 업무 데이터가 아니라 적용한 Migration의 버전·체크섬·성공 여부를 기록합니다.
 
 근무 흐름의 중심은 `work_cases`입니다. 한 근무 건은 사장님과 사업장을 반드시 가지며 근로자는 초대 전까지 비어 있을 수 있습니다. 초대 수락 후에는 `work_contracts`에 조건을 스냅샷으로 보존하고, 계약 당사자와 일급이 원래 근무 건과 달라질 수 없도록 복합 외래키로 묶습니다. `escrows`와 `settlements`는 근무 건당 최대 한 건이며 금액은 확정 일급과 같아야 합니다. `due_at`은 자동 정산 예정 시간을 저장할 뿐이고 DB Scheduler나 Trigger는 없습니다. 실제 자동 지급은 추후 Spring Scheduler가 수행합니다.
 
@@ -63,16 +63,6 @@ erDiagram
         datetime revoked_at "NULL"
         tinyint active_slot "generated, NULL"
         datetime created_at
-    }
-
-    EMPLOYER_PROFILES {
-        bigint id PK
-        bigint user_id FK, UK
-        varchar business_name
-        varchar contact_phone "NULL"
-        varchar default_workplace_address "NULL"
-        datetime created_at
-        datetime updated_at
     }
 
     WALLETS {
@@ -398,7 +388,6 @@ erDiagram
     }
 
     USERS ||--o{ PASSWORD_RESET_TOKENS : "requests password reset"
-    USERS ||--o| EMPLOYER_PROFILES : "has owner profile"
     USERS ||--o| WALLETS : "owns KRW wallet"
     USERS ||--o{ MOCK_BANK_ACCOUNTS : "owns mock accounts"
     USERS ||--o{ WORKPLACES : "owns workplaces"
@@ -535,7 +524,7 @@ QR과 비밀번호 재설정의 상태·형태 제약은 다음과 같습니다.
 
 ### 현재 DDL과 미결정 제품 Workflow
 
-아래 표는 현재 Head `202607311429`가 보장하는 사실과 제품 결정 또는 추가 DDL 검토가 남은
+아래 표는 현재 Head `202608041138`이 보장하는 사실과 제품 결정 또는 추가 DDL 검토가 남은
 부분을 분리합니다. Migration과 통합 DDL은 프로젝트 소유자만 변경합니다.
 
 | 기능                 | 현재 DB                                                                                           | 미결정 제품 Workflow·추가 검토                                                                                               |
@@ -554,9 +543,9 @@ Workflow가 아니므로 구현하지 않습니다.
 ### 2.1 로그인·회원가입·사업장
 
 현재 로그인 Session이나 Refresh Token 전용 테이블은 없습니다. 인증 기준정보는 `users`이고,
-역할에 따라 부가정보가 연결됩니다. `password_reset_tokens`는 비밀번호 재설정용 Hash와
-수명주기만 저장합니다. Token 원문 전달 방식을 결정한 뒤 요청·전달·확정 API를 별도로
-구현해야 합니다.
+OWNER의 사업체·사업장 기준정보는 `workplaces`에만 저장합니다. 별도 OWNER Profile은 만들지
+않습니다. `password_reset_tokens`는 비밀번호 재설정용 Hash와 수명주기만 저장합니다. Token
+원문 전달 방식을 결정한 뒤 요청·전달·확정 API를 별도로 구현해야 합니다.
 
 프로필 수정은 애플리케이션에서 `phone`만 허용하고 `login_id`, `email`, `name`을 읽기 전용으로
 취급합니다. 사업장 등록은 `radius_meters=100`을 사용하고 대표자·좌표·반경을 직접 수정하지
@@ -586,11 +575,6 @@ erDiagram
         datetime revoked_at "NULL"
         tinyint active_slot "generated, NULL"
     }
-    EMPLOYER_PROFILES {
-        bigint id PK
-        bigint user_id FK, UK
-        varchar business_name
-    }
     WALLETS {
         bigint id PK
         bigint user_id FK
@@ -615,7 +599,6 @@ erDiagram
     }
 
     USERS ||--o{ PASSWORD_RESET_TOKENS : "reset token history"
-    USERS ||--o| EMPLOYER_PROFILES : "owner profile"
     USERS ||--o| WALLETS : "KRW wallet"
     USERS ||--o{ MOCK_BANK_ACCOUNTS : "mock accounts"
     USERS ||--o{ WORKPLACES : "owned workplaces"
