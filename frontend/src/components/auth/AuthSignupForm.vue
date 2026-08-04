@@ -19,8 +19,11 @@ import { formatPhoneInput } from '@/utils/format'
 import {
   isEmail,
   isPhone,
-  isRequired,
   loginIdRule,
+  NAME_MAX_LENGTH,
+  nameRule,
+  PASSWORD_MAX_LENGTH,
+  PASSWORD_MIN_LENGTH,
   passwordRule,
   passwordsMatch
 } from '@/utils/validators'
@@ -108,12 +111,12 @@ async function onCheckEmail() {
 
 /** 전 필드 검증. 하나라도 실패하면 false. */
 function validate() {
-  const nameRule = isRequired(form.name, '이름')
+  const nameCheck = nameRule(form.name)
   const pwRule = passwordRule(form.password)
   const pwConfirmRule = passwordsMatch(form.password, form.passwordConfirm)
   const phoneRule = isPhone(form.phone)
 
-  errors.name = nameRule.message
+  errors.name = nameCheck.message
   errors.password = pwRule.message
   errors.passwordConfirm = pwConfirmRule.message
   errors.phone = phoneRule.message
@@ -147,13 +150,14 @@ async function onSubmit() {
 
   submitting.value = true
   try {
+    // 화면은 하이픈이 들어간 표시 형식을 유지하고, 전송 값 정규화는 서비스 계층이 담당한다.
     await signup({
       loginId: form.loginId,
       password: form.password,
       passwordConfirm: form.passwordConfirm,
       name: form.name,
       email: form.email,
-      phone: form.phone || undefined,
+      phone: form.phone,
       role: props.role
     })
     ui.toast('회원가입이 완료되었습니다. 로그인해주세요.', { type: 'success' })
@@ -185,7 +189,8 @@ async function onSubmit() {
       v-model="form.password"
       type="password"
       label="비밀번호"
-      placeholder="8자 이상, 영문+숫자"
+      :placeholder="`${PASSWORD_MIN_LENGTH}~${PASSWORD_MAX_LENGTH}자`"
+      :maxlength="PASSWORD_MAX_LENGTH"
       required
       :error="errors.password"
     />
@@ -199,7 +204,14 @@ async function onSubmit() {
       :error="errors.passwordConfirm"
     />
 
-    <AppField v-model="form.name" label="이름" placeholder="이름" required :error="errors.name" />
+    <AppField
+      v-model="form.name"
+      label="이름"
+      placeholder="이름"
+      :maxlength="NAME_MAX_LENGTH"
+      required
+      :error="errors.name"
+    />
 
     <AppField
       v-model="form.email"
