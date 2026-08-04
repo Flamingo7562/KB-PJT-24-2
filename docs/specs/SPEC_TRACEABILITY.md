@@ -2,7 +2,7 @@
 
 | 항목        | 값              |
 | ----------- | --------------- |
-| 명세 릴리스 | `2.1.0`         |
+| 명세 릴리스 | `2.2.0`         |
 | 승인일      | 2026-08-04      |
 | 소유자      | PM/Admin Master |
 
@@ -106,13 +106,13 @@
 
 ## 알림·공통·외부 결제
 
-| 요구사항   | REST Operation                | 도메인·데이터                     | 연결 결정                                                 |
-| ---------- | ----------------------------- | --------------------------------- | --------------------------------------------------------- |
-| ALERT-001  | 결정 후 정의                  | 사용자 알림, 읽음 시각            | DEC-OPEN-NOTIFICATION-CONTRACT                            |
-| ALERT-002  | 결정 후 정의                  | 도메인 이벤트, 중복 식별자        | DEC-OPEN-NOTIFICATION-CONTRACT                            |
-| COMMON-001 | 모든 Operation                | 성공·목록·오류 Envelope           | DEC-API-ENVELOPE, DEC-AUTH-ERRORS, DEC-OPEN-ERROR-CATALOG |
-| COMMON-002 | 모든 보호·상태 변경 Operation | 역할, 소유권, 당사자 불변식       | DEC-AUTH-SESSION                                          |
-| COMMON-003 | HTTP 없음 — 보존 정책         | 금융·계약·근태·문서·감사 이력     | DEC-CONTRACT-RETENTION, DEC-OPEN-DOCUMENT-RETENTION-SCOPE |
-| COMMON-004 | 모든 금액·시간·목록 Operation | KRW, `Instant`, `LocalDate`, Page | DEC-TIME, DEC-PAGE                                        |
-| EXT-001    | 결정 후 정의                  | Provider 주문·승인·취소, 지갑     | DEC-OPEN-PAYMENT-PROVIDER                                 |
-| EXT-002    | 결정 후 정의                  | Webhook 원문·서명·처리 결과       | DEC-OPEN-PAYMENT-PROVIDER                                 |
+| 요구사항   | REST Operation                | 도메인·데이터                     | 연결 결정                                                                 |
+| ---------- | ----------------------------- | --------------------------------- | ------------------------------------------------------------------------- |
+| ALERT-001  | 결정 후 정의                  | 사용자 알림, 읽음 시각            | DEC-OPEN-NOTIFICATION-CONTRACT                                            |
+| ALERT-002  | 결정 후 정의                  | 도메인 이벤트, 중복 식별자        | DEC-OPEN-NOTIFICATION-CONTRACT                                            |
+| COMMON-001 | 모든 Operation                | 성공·목록·오류 Envelope           | DEC-API-ENVELOPE, DEC-AUTH-ERRORS, DEC-COMMON-5XX, DEC-OPEN-ERROR-CATALOG |
+| COMMON-002 | 모든 보호·상태 변경 Operation | 역할, 소유권, 당사자 불변식       | DEC-AUTH-SESSION                                                          |
+| COMMON-003 | HTTP 없음 — 보존 정책         | 금융·계약·근태·문서·감사 이력     | DEC-CONTRACT-RETENTION, DEC-OPEN-DOCUMENT-RETENTION-SCOPE                 |
+| COMMON-004 | 모든 금액·시간·목록 Operation | KRW, `Instant`, `LocalDate`, Page | DEC-TIME, DEC-PAGE                                                        |
+| EXT-001    | 결정 후 정의                  | Provider 주문·승인·취소, 지갑     | DEC-OPEN-PAYMENT-PROVIDER                                                 |
+| EXT-002    | 결정 후 정의                  | Webhook 원문·서명·처리 결과       | DEC-OPEN-PAYMENT-PROVIDER                                                 |
