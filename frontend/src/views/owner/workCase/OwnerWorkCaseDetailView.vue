@@ -138,11 +138,14 @@ async function onDelete() {
   }
 }
 
+/**
+ * 발급에 성공해도 canIssueInvitation 을 로컬에서 내리지 않는다 — 복사가 막혔거나 링크를
+ * 잘못 보낸 경우 다시 발급할 수 있어야 한다. 권위는 서버이고, 재조회 시 갱신된다.
+ */
 async function onCopyInvite() {
   copying.value = true
   try {
     const { inviteUrl } = await createInvite(workCase.value.workCaseId)
-    workCase.value.canIssueInvitation = false
 
     if (await copyText(inviteUrl)) {
       ui.toast('연결 링크를 복사했어요.', { type: 'success' })
