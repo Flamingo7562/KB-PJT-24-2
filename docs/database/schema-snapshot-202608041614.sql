@@ -1,6 +1,6 @@
 -- GigHub 참고용 최종 스키마 스냅샷
 -- NOT A FLYWAY MIGRATION
--- 기준: MySQL 8.4.10 / Flyway head 202608041138 / Migration 9개 / 도메인 테이블 23개 (2026-08-04 확인)
+-- 기준: MySQL 8.4.10 / Flyway head 202608041614 / Migration 10개 / 도메인 테이블 24개 (2026-08-04 확인)
 -- 단일 원본: backend/src/main/resources/db/migration/V*.sql
 -- 대상: 빈 데이터베이스. 기존 DB 업그레이드에는 사용하지 않는다.
 -- 제외: 데이터, flyway_schema_history, DROP 문, 실행 환경의 AUTO_INCREMENT 현재값
@@ -215,6 +215,30 @@ CREATE TABLE `funding_orders` (
   CONSTRAINT `ck_funding_orders_status` CHECK ((`status` in (_utf8mb4'READY',_utf8mb4'COMPLETED',_utf8mb4'FAILED',_utf8mb4'RECONCILIATION_REQUIRED'))),
   CONSTRAINT `ck_funding_orders_transferred_amount` CHECK (((`transferred_amount` is null) or (`transferred_amount` > 0)))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE `idempotency_requests` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `user_id` bigint unsigned NOT NULL COMMENT '요청 인증 사용자',
+  `operation_code` varchar(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL COMMENT '멱등성 적용 Operation',
+  `idempotency_key` varchar(100) CHARACTER SET ascii COLLATE ascii_bin NOT NULL COMMENT '클라이언트 원본 Key',
+  `request_fingerprint` binary(32) NOT NULL COMMENT '정규화 요청의 32바이트 Fingerprint',
+  `status` varchar(20) CHARACTER SET ascii COLLATE ascii_bin NOT NULL DEFAULT 'PROCESSING' COMMENT 'PROCESSING 또는 COMPLETED',
+  `response_http_status` smallint unsigned DEFAULT NULL COMMENT '최초 성공 응답 HTTP 상태',
+  `response_body` json DEFAULT NULL COMMENT '최초 성공 응답 JSON Snapshot',
+  `completed_at` datetime(6) DEFAULT NULL COMMENT '성공 처리 완료 시각',
+  `expires_at` datetime(6) NOT NULL COMMENT 'Claim 보존 만료 시각',
+  `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_idempotency_requests_scope` (`user_id`,`operation_code`,`idempotency_key`),
+  CONSTRAINT `fk_idempotency_requests_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE RESTRICT ON UPDATE RESTRICT,
+  CONSTRAINT `ck_idempotency_requests_expiry` CHECK (((`expires_at` > `created_at`) and ((`completed_at` is null) or ((`completed_at` >= `created_at`) and (`completed_at` <= `expires_at`))))),
+  CONSTRAINT `ck_idempotency_requests_http_status` CHECK (((`response_http_status` is null) or (`response_http_status` between 200 and 299))),
+  CONSTRAINT `ck_idempotency_requests_key` CHECK ((char_length(`idempotency_key`) > 0)),
+  CONSTRAINT `ck_idempotency_requests_lifecycle` CHECK ((((`status` = _utf8mb4'PROCESSING') and (`response_http_status` is null) and (`response_body` is null) and (`completed_at` is null)) or ((`status` = _utf8mb4'COMPLETED') and (`response_http_status` is not null) and (`response_body` is not null) and (`completed_at` is not null)))),
+  CONSTRAINT `ck_idempotency_requests_operation` CHECK ((char_length(`operation_code`) > 0)),
+  CONSTRAINT `ck_idempotency_requests_status` CHECK ((`status` in (_utf8mb4'PROCESSING',_utf8mb4'COMPLETED')))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='멱등 요청 Claim과 성공 응답 저장';
 
 CREATE TABLE `mock_bank_accounts` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,

@@ -10,16 +10,18 @@ This is the compact database context for repository agents. Read it before chang
 | Last verified          | 2026-08-04                                                                                                     |
 | Schema and DDL editor  | PM or Repository Administrator controlled; ordinary implementation agents have read-only access                |
 | Schema source of truth | Owner-authored or owner-adopted tracked `backend/src/main/resources/db/migration/V*.sql`                       |
-| Migration head         | `202608041138`                                                                                                 |
-| Versioned migrations   | 9                                                                                                              |
-| Domain tables          | 23, excluding Flyway's `flyway_schema_history`                                                                 |
+| Migration head         | `202608041614`                                                                                                 |
+| Versioned migrations   | 10                                                                                                             |
+| Domain tables          | 24, excluding Flyway's `flyway_schema_history`                                                                 |
 | Runtime                | MySQL 8.4.10, InnoDB                                                                                           |
-| Readable DDL snapshot  | [`schema-snapshot-202608041138.sql`](../database/schema-snapshot-202608041138.sql), owner-maintained reference |
+| Readable DDL snapshot  | [`schema-snapshot-202608041614.sql`](../database/schema-snapshot-202608041614.sql), owner-maintained reference |
 
 When this summary and executable configuration disagree, inspect the owner-authored or
 owner-adopted migrations, Git tracking, `compose.yaml`, `DatabaseConfig.java`, and
-`backend/build.gradle`. Versions `202607311427` through `202608041138` are approved parts of the
-current schema. Update this document when those authoritative sources prove the summary is stale.
+`backend/build.gradle`. Versions `202607311427` through `202608041614` are approved parts of the
+current schema. Version `202608041614` adds the independent idempotency Claim store without changing
+the existing finance tables. Update this document when those authoritative sources prove the summary
+is stale.
 If the executable schema itself needs correction, report the required change to the owner and do
 not edit or regenerate SQL.
 
@@ -47,6 +49,7 @@ not edit or regenerate SQL.
 | `202607311428` | `V202607311428__add_password_reset_tokens.sql`              | Add hashed, expiring, single-active password-reset token lifecycle storage                           |
 | `202607311429` | `V202607311429__add_check_out_missing_work_case_status.sql` | Allow the distinct `CHECK_OUT_MISSING` work-case state and require an assigned worker for that state |
 | `202608041138` | `V202608041138__remove_employer_profiles.sql`               | Drop the unused employer profile table without renaming or copying its legacy contact data           |
+| `202608041614` | `V202608041614__add_idempotency_request_claims.sql`         | Add a user-and-operation-scoped Claim store for request fingerprints and successful response replay  |
 
 Applied or shared versioned migrations are immutable. A newer `V*.sql` file or another DDL artifact may be created only in a scoped administrative release explicitly authorized by the human Project Manager or Repository Administrator.
 
@@ -57,6 +60,7 @@ Applied or shared versioned migrations are immutable. A newer `V*.sql` file or a
 | Identity and organization                | `users`, `password_reset_tokens`, `workplaces`, `user_badges`                                                                                       |
 | Work and contract                        | `work_cases`, `work_invitations`, `work_contracts`                                                                                                  |
 | Wallet, mock banking, escrow, settlement | `wallets`, `mock_bank_accounts`, `mock_bank_transactions`, `funding_orders`, `withdrawal_requests`, `wallet_transactions`, `escrows`, `settlements` |
+| Cross-domain request control             | `idempotency_requests`                                                                                                                              |
 | Attendance and dispute                   | `qr_tokens`, `attendance_records`, `disputes`                                                                                                       |
 | Documents and signatures                 | `documents`, `document_versions`, `document_signatures`, `document_shares`, `document_access_logs`                                                  |
 
@@ -90,6 +94,12 @@ Inspect the ordered migrations before relying on an exact column, key, index, ge
 - A user has at most one KRW `wallet`; balances are unsigned.
 - `mock_bank_accounts.available_amount` cannot exceed `balance`. Bank/account and fintech identifiers are unique.
 - Funding orders, withdrawal requests, and wallet transactions use globally unique idempotency keys in their respective tables.
+- `idempotency_requests` permits one Claim per `(user_id, operation_code, idempotency_key)`. It stores
+  a 32-byte request fingerprint and either an in-progress Claim or a completed 2xx response Snapshot.
+  The composite unique key is its only non-primary index and also supports the user foreign key.
+- The new Claim store does not replace or backfill the existing finance-table idempotency keys. Runtime
+  Claim acquisition, replay, expiry cleanup, immediate conflict responses, and interruption recovery
+  remain application responsibilities.
 - `wallet_transactions` records before/after snapshots, but the database does not validate ledger arithmetic or the polymorphic reference target.
 - `escrows.work_case_id` and `settlements.work_case_id` are each unique. Composite foreign keys require their amounts to equal the work case's agreed wage.
 - There is no direct foreign key between a settlement and an escrow.
@@ -125,6 +135,7 @@ Project Manager or Repository Administrator and must not edit Flyway or a DDL sn
 | Fixed workplace radius            | `workplaces.radius_meters` defaults to 100, while it and `work_cases.allowed_radius_meters` accept every positive value        | The application always writes and checks 100m in both current and snapshot data. The owner decides whether DB checks should also require exactly 100                       |
 | System-generated contracts        | `documents.work_case_id` may be null even for `EMPLOYMENT_CONTRACT`                                                            | The service permits only system-generated, work-case-linked contracts. The owner decides whether DB enforcement is needed                                                  |
 | Three-year contract auto-deletion | `documents.status=DELETED` exists, but there is no dedicated retention or deletion tracking/index                              | First decide start/end reference date and deletion scope across storage, metadata, checksum, and audit; then the owner decides the required schema                         |
+| Idempotency request handling      | User, operation, and key Claims are unique; fingerprints, completed 2xx snapshots, and expiry can be stored                     | The application owns Claim acquisition, fingerprint comparison, immediate conflict handling, replay, interruption recovery, and expiry cleanup                            |
 
 `CHECK_OUT_MISSING` is an approved persisted state distinct from `NO_SHOW`. The DDL only permits the
 state and requires an assigned worker. Detection time and actor, late checkout, correction
