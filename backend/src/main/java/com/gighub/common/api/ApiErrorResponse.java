@@ -1,11 +1,17 @@
 package com.gighub.common.api;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import lombok.Getter;
 
 import java.util.List;
 import java.util.Objects;
 
-/** 보호 명세의 {@code code/message/traceId/fieldErrors?} 오류 응답입니다. */
+/**
+ * 보호 명세의 {@code code/message/traceId/fieldErrors?} 오류 응답입니다.
+ *
+ * <p>{@code null}인 선택 필드는 {@link JsonInclude}로 JSON에서 생략합니다.
+ */
+@Getter
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public final class ApiErrorResponse {
 
@@ -25,19 +31,4 @@ public final class ApiErrorResponse {
         this.fieldErrors = fieldErrors == null ? null : List.copyOf(fieldErrors);
     }
 
-    public ApiErrorCode getCode() {
-        return code;
-    }
-
-    public String getMessage() {
-        return message;
-    }
-
-    public String getTraceId() {
-        return traceId;
-    }
-
-    public List<ApiFieldError> getFieldErrors() {
-        return fieldErrors;
-    }
 }
