@@ -8,7 +8,7 @@
 4. Use `docs/README.md` only when the relevant task-specific document is not already known or when the task moves to a different area.
 5. Load detailed domain, runbook, schema, API, and testing documents only when the current change touches that subject. Do not preload the documentation tree.
 6. Read `docs/DEPENDENCY_SPECIFICATION.md` before changing a language, runtime, build tool, container image, or direct dependency. Do not load it for unrelated work.
-7. Treat executable code, configuration, migrations, and current verification results as authoritative when documentation may be stale.
+7. For current-state facts, treat executable code, configuration, owner-controlled migrations, focused tests, and runtime Swagger as authoritative. Protected product specifications remain normative until an authorized human publishes a new administrative spec release.
 8. General questions, status checks, and narrow read-only inspection do not require the architecture overview or unrelated task documents.
 
 ## Task startup
@@ -29,6 +29,22 @@
 - Make scoped changes and follow the existing lint and formatting rules.
 - Ask for direction only when a missing decision would materially change behavior, data, security, or architecture.
 - Do not alter another contributor's unrelated work.
+
+## Documentation ownership and maintenance
+
+1. Treat every file under `docs/specs/` as a protected product contract. Ordinary implementation agents may read these files but must not create, modify, delete, rename, move, format, regenerate, stage, commit, restore, or revert them.
+2. A protected-spec exception exists only when a human Product Manager or Repository Administrator explicitly assigns the current personal agent an administrative spec-release task. The request must identify the approved decision and the exact file or bounded subject area. The exception applies only to that administrative release, includes the corresponding `docs/specs/SPEC_LOCK.json` refresh, and does not carry into later implementation work.
+3. Treat Flyway migrations under `backend/src/main/resources/db/migration/`, DDL artifacts under `docs/database/`, and schema-level DDL elsewhere as human Product Manager or Repository Administrator controlled. The current personal agent may change them only under an explicit, scoped administrative request that identifies the migration or DDL release. A feature request that merely implies a schema change is not such authorization.
+4. Outside a scoped administrative release, agents may inspect protected specifications, migrations, and DDL; identify exact contract or schema gaps; and report the required human decision, table, column, constraint, transition, or backfill. Do not hide a gap with an application workaround or present proposed protected content as an applied repository change.
+5. Treat an existing protected-file modification as human-owned unless the current task contains the scoped administrative authorization described above. Do not format, stage, amend, restore, or otherwise alter that modification.
+6. Agents may run existing owner-controlled migrations in a disposable verification database or an explicitly scoped local development database when the task requires it. Never apply schema changes to a shared, staging, production, or otherwise team-managed database on an agent's own initiative.
+7. Do not maintain current feature inventory, endpoint status, mock status, or implementation progress in `docs/specs/` or in another central status document. Determine current behavior from executable code, configuration, focused tests, verification results, and runtime Swagger. Use `IMPLEMENTATION_GUIDE.md` only for stable exploration order and entrypoints.
+8. Update unprotected derived documentation only when its stable architecture, operating procedure, or schema explanation changes. Do not create or treat a generated route or endpoint inventory as canonical current behavior; inspect `frontend/src/router/index.js` and the affected code.
+9. Remove a mock only after the corresponding endpoint or explicitly bounded feature unit is implemented and focused verification passes. Do not remove unrelated mocks in the same service merely because one endpoint is live. Production builds must not enable mock behavior.
+10. Edit `PROJECT_RULES.md`, `ARCHITECTURE_OVERVIEW.md`, `IMPLEMENTATION_GUIDE.md`, and dependency policy only when the task explicitly changes shared policy, a top-level architecture boundary, stable exploration guidance, or dependency governance. Do not add feature inventory or transient implementation status to these files.
+11. Treat `docs/archive/` as historical evidence, not a current document to rewrite. Do not edit other agents' local or personal files, including root `AGENTS.md`, `docs/memory/`, `docs/reports/`, and `NOTICE.md`.
+12. For shared Markdown-only changes, verify formatting, relative links, and Git tracking. Keep documents unchanged when a change does not alter their contract, stable entrypoint, architecture, ownership, operating procedure, or verified schema explanation.
+13. Never bypass protected-file ownership or the spec-lock guardrail with `--no-verify`, environment overrides, alternate Git plumbing, generated output, another tool, or a delegated sub-agent.
 
 ## Verification
 

@@ -1,6 +1,7 @@
 package com.gighub.wallet.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.gighub.common.exception.CommonExceptionHandler;
 import com.gighub.wallet.dto.WalletSummary;
@@ -52,6 +53,7 @@ class WalletControllerTest {
     void setUp() {
         ObjectMapper objectMapper = new ObjectMapper();
         objectMapper.registerModule(new JavaTimeModule());
+        objectMapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
         MappingJackson2HttpMessageConverter converter =
                 new MappingJackson2HttpMessageConverter(objectMapper);
         mockMvc = MockMvcBuilders
@@ -147,7 +149,7 @@ class WalletControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.content[0].type").value("ESCROW_HOLD"))
                 .andExpect(jsonPath("$.data.content[0].displayStatus").value("예치중"))
-                .andExpect(jsonPath("$.data.content[0].createdAt").value("2026-07-22T13:00+09:00"))
+                .andExpect(jsonPath("$.data.content[0].createdAt").value("2026-07-22T04:00:00Z"))
                 .andExpect(jsonPath("$.data.page.number").value(0))
                 .andExpect(jsonPath("$.data.page.size").value(20))
                 .andExpect(jsonPath("$.data.page.totalElements").value(1))

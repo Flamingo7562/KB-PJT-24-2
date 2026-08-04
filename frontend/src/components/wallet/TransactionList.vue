@@ -25,7 +25,7 @@ defineEmits(['open-filter'])
     <p v-if="loading" class="empty">불러오는 중…</p>
     <p v-else-if="transactions.length === 0" class="empty">거래 내역이 없습니다.</p>
     <ul v-else class="list">
-      <TransactionItem v-for="tx in transactions" :key="tx.txId" :tx="tx" />
+      <TransactionItem v-for="tx in transactions" :key="tx.transactionId" :tx="tx" />
     </ul>
   </section>
 </template>

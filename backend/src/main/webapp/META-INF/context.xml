@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Context>
+    <!-- Servlet 4 Cookie API에 없는 SameSite 속성은 Tomcat 9 CookieProcessor에서 통일한다. -->
+    <CookieProcessor
+            className="org.apache.tomcat.util.http.Rfc6265CookieProcessor"
+            sameSiteCookies="lax"/>
+</Context>

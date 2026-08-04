@@ -17,17 +17,21 @@ Read this short overview once before material implementation for an issue or bra
 - Backend code is grouped by domain under `com.gighub`. Keep web, business, and persistence responsibilities in their existing layers and use explicit DTOs at API boundaries.
 - `AppInitializer`, `RootConfig`, `WebMvcConfig`, and `DatabaseConfig` are the current backend wiring entrypoints.
 - The frontend HTTP client defaults to `/api` and can override its base URL with `VITE_API_BASE_URL`. During local Vite development, `DEV_PROXY_TARGET` changes only the target of the `/api` proxy.
-- A frontend service or domain package name does not prove end-to-end implementation. Check the affected service's `USE_MOCK` path and a matching backend controller before changing a flow.
-- Schema changes belong in a new Flyway migration; update the schema overview and affected mapper behavior in the same change.
+- Local development fixes Vite to `http://localhost:5173`. Tomcat permits credentialed `/api/**` CORS only from that exact origin, and `JSESSIONID` is host-only, HttpOnly, `SameSite=Lax`, `Secure=false`; deployed HTTPS settings must be separated.
+- API moment fields are UTC `Instant` strings. Database `DATETIME(6)` values remain `Asia/Seoul` wall-clock values and are converted at the server boundary; date-only values use `LocalDate`.
+- A frontend service or domain package name does not prove end-to-end implementation. Inspect the affected service's mock branch, matching backend mapping, focused tests, and runtime Swagger before changing a flow.
+- Protected specifications, Flyway migrations, and schema DDL follow the administrative-release boundary in `PROJECT_RULES.md`. Ordinary implementation work is read-only for those paths.
 
 ## Authoritative sources
 
 - Technology selection and allowed, conditional, or prohibited dependencies: `docs/DEPENDENCY_SPECIFICATION.md`.
 - Application dependency and runtime versions: `frontend/package.json` and `backend/build.gradle`.
 - Container image versions and local infrastructure: `compose.yaml`.
+- Stable task exploration order and code entrypoints: [`IMPLEMENTATION_GUIDE.md`](IMPLEMENTATION_GUIDE.md).
 - Frontend routes and request behavior: `frontend/src/router/index.js`, `frontend/src/services/http.js`, and the affected `frontend/src/services/*.js`.
 - Backend wiring and layer boundaries: `backend/src/main/java/com/gighub/config/` and current domain packages.
-- Database structure: Flyway migrations first, then `docs/agent/SCHEMA_OVERVIEW.md` for compact context.
+- Protected product requirements and target API contracts: `docs/specs/`. Read them for intent and acceptance criteria, but derive current implementation only from code, configuration, focused tests, verification results, and runtime Swagger.
+- Database structure: owner-controlled Flyway migrations first, then `docs/agent/SCHEMA_OVERVIEW.md` for compact context and `docs/DATABASE_SCHEMA_ERD.md` for the detailed relationship map. Migration and DDL ownership follows the scoped administrative-release rule.
 - Task-specific guides and runbooks: `docs/README.md`.
 
-Update this overview only when a top-level runtime, default language, directory responsibility, request path, persistence boundary, or authoritative source changes. Keep feature details in task-specific documents.
+Follow the documentation ownership and maintenance rules in [`PROJECT_RULES.md`](PROJECT_RULES.md). Update this overview only when a top-level runtime, default language, directory responsibility, request path, persistence boundary, or authoritative source changes. Keep feature details in task-specific documents.

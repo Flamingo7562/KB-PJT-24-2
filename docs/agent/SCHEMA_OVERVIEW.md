@@ -2,19 +2,26 @@
 
 ## Purpose and authority
 
-This is the compact database context for repository agents. Read it before changing migrations, MyBatis mappers, persisted domain behavior, or transaction boundaries. It is not a column catalog and does not replace the DDL.
+This is the compact database context for repository agents. Read it before changing MyBatis mappers, persisted domain behavior, or transaction boundaries. It is not a column catalog and does not replace the DDL. Flyway migrations and all schema DDL are controlled by the human Project Manager or Repository Administrator. Ordinary implementation agents have read-only access; the scoped administrative-release exception is defined only in `PROJECT_RULES.md`.
 
-| Item                   | Current baseline                                 |
-| ---------------------- | ------------------------------------------------ |
-| Status                 | Current                                          |
-| Last verified          | 2026-07-30                                       |
-| Schema source of truth | `backend/src/main/resources/db/migration/V*.sql` |
-| Migration head         | `202607301152`                                   |
-| Versioned migrations   | 5                                                |
-| Domain tables          | 23, excluding Flyway's `flyway_schema_history`   |
-| Runtime                | MySQL 8.4.10, InnoDB                             |
+| Item                   | Current baseline                                                                                               |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------- |
+| Status                 | Current                                                                                                        |
+| Last verified          | 2026-07-31                                                                                                     |
+| Schema and DDL editor  | PM or Repository Administrator controlled; ordinary implementation agents have read-only access                |
+| Schema source of truth | Owner-authored or owner-adopted tracked `backend/src/main/resources/db/migration/V*.sql`                       |
+| Migration head         | `202607311429`                                                                                                 |
+| Versioned migrations   | 8                                                                                                              |
+| Domain tables          | 24, excluding Flyway's `flyway_schema_history`                                                                 |
+| Runtime                | MySQL 8.4.10, InnoDB                                                                                           |
+| Readable DDL snapshot  | [`schema-snapshot-202607311429.sql`](../database/schema-snapshot-202607311429.sql), owner-maintained reference |
 
-When this summary and executable configuration disagree, inspect the migrations, `compose.yaml`, `DatabaseConfig.java`, and `backend/build.gradle`, then update this document in the same change.
+When this summary and executable configuration disagree, inspect the owner-authored or
+owner-adopted migrations, Git tracking, `compose.yaml`, `DatabaseConfig.java`, and
+`backend/build.gradle`. Versions `202607311427`, `202607311428`, and `202607311429` are approved
+parts of the current schema. Update this document when those authoritative sources prove the
+summary is stale. If the executable schema itself needs correction, report the required change to
+the owner and do not edit or regenerate SQL.
 
 ## Runtime semantics
 
@@ -22,27 +29,31 @@ When this summary and executable configuration disagree, inspect the migrations,
 - Domain primary keys are single-column `BIGINT UNSIGNED AUTO_INCREMENT` IDs.
 - Declared foreign keys use `ON DELETE RESTRICT ON UPDATE RESTRICT`; deletion does not cascade.
 - Money is stored as unsigned integer KRW with no fractional unit.
-- Most timestamps use `DATETIME(6)`. Compose and JDBC currently interpret them in `Asia/Seoul` / `+09:00`; `DATETIME` itself has no timezone.
-- Document issue and expiry values use `DATE`.
+- Most persisted moments use `DATETIME(6)`. The column has no timezone, so the application and JDBC must write and read it as an `Asia/Seoul` wall-clock value.
+- HTTP API moment fields use UTC `Instant` values such as `2026-07-31T09:00:00Z`. The server converts between that representation and the `Asia/Seoul` DB storage rule at the boundary.
+- Values whose meaning is a calendar date rather than a moment use `DATE` in MySQL and `LocalDate` in Java. Document issue and expiry dates are examples.
 - Identity-like tokens, idempotency keys, bank identifiers, and storage keys use exact binary or `ascii_bin` comparison where declared. Hashes and checksums use `BINARY(32)`.
 
 ## Migration history
 
-| Version        | File                                                      | Main effect                                                                                          |
-| -------------- | --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| `202607200001` | `V202607200001__create_gig_hub_baseline.sql`              | Baseline identity, work, wallet, banking, escrow, attendance, dispute, and document schema           |
-| `202607211440` | `V202607211440__add_signup_and_workplace_schema.sql`      | Signup identity fields, user withdrawal lifecycle, workplaces, and work-case ownership linkage       |
-| `202607221300` | `V202607221300__support_contract_escrow_test_flow.sql`    | Contract/escrow fixture support and final withdrawal naming/relationship adjustments                 |
-| `202607301027` | `V202607301027__remove_invited_from_work_case_status.sql` | Map legacy `INVITED` work cases to `DRAFT` and remove `INVITED` from the work-case status constraint |
-| `202607301152` | `V202607301152__split_workplace_address.sql`              | Preserve legacy workplace addresses as road addresses and add an optional nonblank detail address    |
+| Version        | File                                                        | Main effect                                                                                          |
+| -------------- | ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `202607200001` | `V202607200001__create_gig_hub_baseline.sql`                | Baseline identity, work, wallet, banking, escrow, attendance, dispute, and document schema           |
+| `202607211440` | `V202607211440__add_signup_and_workplace_schema.sql`        | Signup identity fields, user withdrawal lifecycle, workplaces, and work-case ownership linkage       |
+| `202607221300` | `V202607221300__support_contract_escrow_test_flow.sql`      | Contract/escrow fixture support and final withdrawal naming/relationship adjustments                 |
+| `202607301027` | `V202607301027__remove_invited_from_work_case_status.sql`   | Map legacy `INVITED` work cases to `DRAFT` and remove `INVITED` from the work-case status constraint |
+| `202607301152` | `V202607301152__split_workplace_address.sql`                | Preserve legacy workplace addresses as road addresses and add an optional nonblank detail address    |
+| `202607311427` | `V202607311427__move_qr_tokens_to_workplace_scope.sql`      | Replace work/action QR issuance with one active fixed QR per workplace while preserving legacy rows  |
+| `202607311428` | `V202607311428__add_password_reset_tokens.sql`              | Add hashed, expiring, single-active password-reset token lifecycle storage                           |
+| `202607311429` | `V202607311429__add_check_out_missing_work_case_status.sql` | Allow the distinct `CHECK_OUT_MISSING` work-case state and require an assigned worker for that state |
 
-Applied or shared versioned migrations are immutable. Add a newer `V*.sql` file for every schema correction.
+Applied or shared versioned migrations are immutable. A newer `V*.sql` file or another DDL artifact may be created only in a scoped administrative release explicitly authorized by the human Project Manager or Repository Administrator.
 
 ## Domain inventory
 
 | Domain                                   | Tables                                                                                                                                              |
 | ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Identity and organization                | `users`, `employer_profiles`, `workplaces`, `user_badges`                                                                                           |
+| Identity and organization                | `users`, `password_reset_tokens`, `employer_profiles`, `workplaces`, `user_badges`                                                                  |
 | Work and contract                        | `work_cases`, `work_invitations`, `work_contracts`                                                                                                  |
 | Wallet, mock banking, escrow, settlement | `wallets`, `mock_bank_accounts`, `mock_bank_transactions`, `funding_orders`, `withdrawal_requests`, `wallet_transactions`, `escrows`, `settlements` |
 | Attendance and dispute                   | `qr_tokens`, `attendance_records`, `disputes`                                                                                                       |
@@ -59,12 +70,15 @@ Inspect the ordered migrations before relying on an exact column, key, index, ge
 - `employer_profiles.user_id` is unique, but the database does not prove that the referenced user has the `OWNER` role.
 - A user can own multiple `workplaces`. Business registration numbers are unique, `workplaces.road_address` is required, `workplaces.detail_address` is null or nonblank, coordinates must be both null or both non-null and in range, radius is positive, and `DELETED` status must agree with `deleted_at`.
 - The composite relationship from `work_cases` to `(workplaces.owner_user_id, workplaces.id)` proves that a selected workplace belongs to the recorded employer.
+- `password_reset_tokens` stores only a unique `BINARY(32)` token hash. Generated active-slot uniqueness permits one `ACTIVE` token per user while retaining `USED`, `EXPIRED`, and `REVOKED` history.
+- Password-reset status determines audit timestamps: only `USED` requires `used_at`, only `REVOKED` requires `revoked_at`, and neither is populated for `ACTIVE` or `EXPIRED`.
 
 ### Work and contract
 
-- A `work_case` has one employer, an optional worker until assignment, one workplace, positive agreed wage, valid start/end times, and a lifecycle status constrained to `DRAFT`, `ACCEPTED`, `READY`, `IN_PROGRESS`, `COMPLETED`, `NO_SHOW`, or `CANCELED`.
+- A `work_case` has one employer, an optional worker until assignment, one workplace, positive agreed wage, valid start/end times, and a lifecycle status constrained to `DRAFT`, `ACCEPTED`, `READY`, `IN_PROGRESS`, `CHECK_OUT_MISSING`, `COMPLETED`, `NO_SHOW`, or `CANCELED`.
 - Invitation delivery and response states belong to `work_invitations`; an unaccepted work case remains `DRAFT`.
-- `ACCEPTED`, `READY`, `IN_PROGRESS`, `COMPLETED`, and `NO_SHOW` work-case states require a worker.
+- `ACCEPTED`, `READY`, `IN_PROGRESS`, `CHECK_OUT_MISSING`, `COMPLETED`, and `NO_SHOW` work-case states require a worker.
+- The database permits `CHECK_OUT_MISSING` and requires its worker, but it does not prove that the work case has a successful check-in and no successful check-out or decide when that state transition occurs.
 - Generated active-slot uniqueness permits at most one pending `work_invitation` per work case while preserving terminal invitation history.
 - `work_contracts.work_case_id` is unique. A composite foreign key proves that contract parties and agreed wage match the work case.
 - The database validates allowed status values and selected state-dependent null rules, not the complete transition graph.
@@ -81,7 +95,12 @@ Inspect the ordered migrations before relying on an exact column, key, index, ge
 
 ### Attendance and dispute
 
+- Current-schema QR rows are workplace-scoped. `(issued_by_user_id, workplace_id)` references the workplace owner, and generated active-slot uniqueness permits one nonce-backed `ACTIVE` QR per workplace.
+- `token_nonce` is a public random identifier, not a secret. New static QR rows use `token_nonce` and only `ACTIVE` or `REVOKED`; the application must sign the nonce and workplace ID with an externally configured HMAC key before exposing a QR token.
+- Columns prefixed with `legacy_` preserve pre-migration work-case/action/expiry QR history. Legacy rows cannot become `ACTIVE`, and all previously active legacy rows were revoked during migration.
+- A revoked QR requires `revoked_at`. Reissue therefore means revoking the current active row and inserting the replacement in one transaction; the schema exists, but the QR API and scan service are not implemented merely by this migration.
 - Generated success-slot uniqueness permits one successful check-in and one successful check-out per work case while retaining rejected attempts.
+- `attendance_records.early_checkout_confirmed_at` is allowed only on a successful `CHECK_OUT`, preserving an explicit early-checkout confirmation audit moment.
 - Separate attendance foreign keys do not prove that the recorded worker is the worker assigned to the work case.
 - Generated open-slot uniqueness permits at most one `OPEN` or `UNDER_REVIEW` dispute per work case.
 
@@ -92,14 +111,43 @@ Inspect the ordered migrations before relying on an exact column, key, index, ge
 - Composite signature foreign keys prove that the source and signed versions belong to the stated document, and the two versions must differ.
 - Generated active-slot uniqueness permits one equivalent active document share while retaining expired or revoked history.
 
+## Approved workflow and enforcement gaps
+
+The table separates current DDL facts from product behavior or stronger enforcement that remains
+unresolved. Outside a scoped administrative release, agents must route schema changes to the human
+Project Manager or Repository Administrator and must not edit Flyway or a DDL snapshot themselves.
+
+| Requirement area                  | Current schema fact                                                                                                            | Approved target and owner handoff                                                                                                                                          |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Missing checkout (`ATT-006`)      | `CHECK_OUT_MISSING` is allowed and requires a worker; no attendance fact, transition, timestamp, or scheduler index is encoded | Keep detection timing and actor, late checkout, correction evidence, settlement behavior, old-row handling, and any scheduler index on hold until the workflow is approved |
+| Fixed workplace radius            | `workplaces.radius_meters` defaults to 100, while it and `work_cases.allowed_radius_meters` accept every positive value        | The application always writes and checks 100m in both current and snapshot data. The owner decides whether DB checks should also require exactly 100                       |
+| System-generated contracts        | `documents.work_case_id` may be null even for `EMPLOYMENT_CONTRACT`                                                            | The service permits only system-generated, work-case-linked contracts. The owner decides whether DB enforcement is needed                                                  |
+| Three-year contract auto-deletion | `documents.status=DELETED` exists, but there is no dedicated retention or deletion tracking/index                              | First decide start/end reference date and deletion scope across storage, metadata, checksum, and audit; then the owner decides the required schema                         |
+
+`CHECK_OUT_MISSING` is an approved persisted state distinct from `NO_SHOW`. The DDL only permits the
+state and requires an assigned worker. Detection time and actor, late checkout, correction
+authority/evidence, escrow/settlement behavior, unresolved wage policy, scheduler indexing, and
+old-row handling are still unresolved product decisions and must not be inferred from the DDL.
+
+The team approved no user deletion and backend automatic deletion after three years, but not yet
+the overnight-work reference date or whether deletion covers only storage content or also
+metadata, checksums, and audit rows. Storage-object purge plus `documents.status=DELETED` while
+retaining audit metadata is a safe schema-compatible proposal, not yet an approved contract.
+
 ## Application-enforced responsibilities
 
 Database constraints do not replace application authorization or transaction rules. Services must still enforce:
 
 - actor roles and ownership where no composite relationship proves them;
+- immutable profile identity fields (`login_id`, `email`, and `name`) and phone-only profile updates;
+- a fixed 100m workplace radius and the workplace update allowlist that excludes representative, coordinates, and radius; address changes on coordinate-bearing workplaces wait for an approved geocoding/reverification or restriction policy;
 - complete state-transition graphs;
 - ownership alignment across funding or withdrawal actors, wallets, linked accounts, and bank transactions;
 - attendance worker assignment;
+- fixed-QR HMAC verification, revoked-token rejection, first/second scan selection, one applicable work case per worker/workplace, location checks, and transactional QR reissue;
+- idempotent no-show handling and, after product approval, missing-checkout detection, race handling, resolution, and settlement behavior;
+- system-only employment-contract generation, work-case linkage, contract access control, and the eventually approved three-year automatic-deletion policy;
+- password-reset token generation, hashing, delivery, expiry transition, single-use handling, and revocation of the prior active token;
 - wallet ledger arithmetic and balance conservation;
 - idempotent replay behavior under concurrency;
 - lock ordering, rollback behavior, and external mock-bank coordination.
@@ -120,9 +168,9 @@ Do not infer an application guarantee merely because related columns each have f
 
 ## Required update triggers
 
-Update this file in the same PR when any of the following changes:
+Update this file in the same PR when an authorized schema release or editable application configuration establishes any of the following changes:
 
-1. A `V*.sql` migration is added.
+1. An authorized administrator adds a `V*.sql` migration.
 2. A table, column, primary key, foreign key, unique key, check constraint, generated column, or important index changes.
 3. A status/type allowlist or state-dependent null rule changes.
 4. Money representation, currency, time precision, collation, or timezone changes.
@@ -134,6 +182,6 @@ For each update:
 
 1. Read all migrations in version order.
 2. Record the new migration head and affected domain summary.
-3. Verify `flyway migrate`, `validate`, and `info` using the DB Runbook.
+3. When verification is in scope, run the existing owner-authored migrations only in a disposable database and verify `flyway migrate`, `validate`, and `info` using the DB Runbook.
 4. Run the narrowest mapper, service, transaction, and database tests that cover the change.
-5. Keep detailed SQL in migrations rather than duplicating a full schema dump here.
+5. Keep detailed SQL in administrator-approved migrations rather than duplicating a full schema dump here. Ordinary implementation agents must not regenerate or edit `docs/database/` DDL snapshots; any administrative exception follows `PROJECT_RULES.md`.

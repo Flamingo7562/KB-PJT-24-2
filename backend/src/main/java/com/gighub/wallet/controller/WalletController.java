@@ -1,5 +1,6 @@
 package com.gighub.wallet.controller;
 
+import com.gighub.common.api.ApiTimes;
 import com.gighub.common.exception.AuthRequiredException;
 import com.gighub.wallet.dto.WalletSummary;
 import com.gighub.wallet.dto.WalletTransactionSearch;
@@ -14,8 +15,6 @@ import org.springframework.web.bind.annotation.RestController;
 
 import javax.servlet.http.HttpSession;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.ZoneId;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -56,7 +55,6 @@ public class WalletController {
     }
 
     private static final int MAX_PAGE_SIZE = 100;
-    private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
     private static final Set<String> ALLOWED_SORTS =
             Set.of("LATEST", "OLDEST", "AMOUNT_ASC", "AMOUNT_DESC");
     private static final Set<String> ALLOWED_TYPES = Set.of(
@@ -135,7 +133,7 @@ public class WalletController {
             item.put("workTitle", row.getWorkTitle());
             item.put("workplaceName", row.getWorkplaceName());
             item.put("displayStatus", resolveDisplayStatus(row.getType()));
-            item.put("createdAt", toIsoOffset(row.getCreatedAt()));
+            item.put("createdAt", ApiTimes.toInstant(row.getCreatedAt()));
             content.add(item);
         }
 
@@ -170,11 +168,6 @@ public class WalletController {
             default:
                 return "조정";
         }
-    }
-
-    // DB의 datetime을 Asia/Seoul 기준 ISO-8601 offset 문자열로 변환한다 (API-004).
-    private String toIsoOffset(LocalDateTime createdAt) {
-        return createdAt == null ? null : createdAt.atZone(SEOUL).toOffsetDateTime().toString();
     }
 
     private ResponseEntity<Map<String, Object>> invalidFilter(String message) {

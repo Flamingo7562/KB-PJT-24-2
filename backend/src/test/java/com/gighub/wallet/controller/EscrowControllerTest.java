@@ -83,7 +83,7 @@ class EscrowControllerTest {
                 .andExpect(jsonPath("$.data.settlementId").value(12))
                 .andExpect(jsonPath("$.data.status").value("COMPLETED"))
                 .andExpect(jsonPath("$.data.completedAt")
-                        .value("2026-07-24T17:12:34.123456"))
+                        .value("2026-07-24T08:12:34.123456Z"))
                 .andExpect(jsonPath("$.data.replayed").doesNotExist());
 
         ArgumentCaptor<SettlementApproveCommand> captor =

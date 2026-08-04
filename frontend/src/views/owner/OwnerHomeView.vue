@@ -3,7 +3,6 @@
  * [B] 사장 홈(지갑)  ·  /owner/home  ·  OWNER  (탭 화면 — chrome 은 OwnerTabLayout)
  * 지갑 잔액·예치중(전 지점 합산, 지점 select 무관) + 충전·출금 + 송금상세 리스트.
  * 연계 API: GET /wallet · GET /wallet/transactions  →  @/services/wallet
- * TODO(담당 B): 송금상세 필터 바텀시트(BaseBottomSheet) 연결.
  */
 import { Info, Lock } from 'lucide-vue-next'
 import { storeToRefs } from 'pinia'

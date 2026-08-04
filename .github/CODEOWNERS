@@ -1,0 +1,12 @@
+# Human-managed product contracts
+/docs/specs/ @Flamingo7562
+
+# Owner-managed database contracts
+/backend/src/main/resources/db/migration/ @Flamingo7562
+/docs/database/ @Flamingo7562
+
+# Governance controls
+/.github/CODEOWNERS @Flamingo7562
+/docs/agent/PROJECT_RULES.md @Flamingo7562
+/scripts/check-project-guardrails.js @Flamingo7562
+/docs/specs/SPEC_LOCK.json @Flamingo7562

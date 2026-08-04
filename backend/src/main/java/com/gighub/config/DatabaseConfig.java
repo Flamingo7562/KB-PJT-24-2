@@ -23,10 +23,11 @@ import org.springframework.transaction.annotation.EnableTransactionManagement;
  */
 @Configuration
 @EnableTransactionManagement
-@PropertySource(value = "file:${gighub.database.config}", encoding = "UTF-8")
-@MapperScan(basePackages = {
+@PropertySource(value = "file:${gighub.database.config}", encoding = "UTF-8")@MapperScan(basePackages = {
         "com.gighub.wallet.mapper",
         "com.gighub.work.mapper",
+        "com.gighub.document.mapper",
+        "com.gighub.badge.mapper",
         "com.gighub.bank.mapper",
         "com.gighub.settlement.mapper"
 })

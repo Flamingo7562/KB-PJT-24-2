@@ -85,10 +85,18 @@ replay_pid*.log
 !/CLAUDE.md
 !/docs/README.md
 !/docs/DEPENDENCY_SPECIFICATION.md
+!/docs/DATABASE_SCHEMA_ERD.md
 !/docs/agent/
 !/docs/agent/PROJECT_RULES.md
 !/docs/agent/ARCHITECTURE_OVERVIEW.md
+!/docs/agent/IMPLEMENTATION_GUIDE.md
 !/docs/agent/SCHEMA_OVERVIEW.md
+!/docs/specs/
+!/docs/specs/SPEC_LOCK.json
+!/docs/specs/*.md
+!/docs/specs/**/*.md
+!/docs/specs/*.yaml
+!/docs/specs/**/*.yaml
 !/docs/runbooks/
 !/docs/runbooks/DATABASE_RUNBOOK.md
 

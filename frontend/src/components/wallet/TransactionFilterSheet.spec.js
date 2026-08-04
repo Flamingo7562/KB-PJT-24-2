@@ -7,9 +7,9 @@ describe('buildTransactionFilterParams', () => {
     expect(buildTransactionFilterParams()).toEqual({ sort: 'LATEST' })
   })
 
-  it("txType 이 'ALL' 이면 제외하고, 그 외에는 전달한다", () => {
-    expect(buildTransactionFilterParams({ txType: 'ALL' })).not.toHaveProperty('txType')
-    expect(buildTransactionFilterParams({ txType: 'HOLD' }).txType).toBe('HOLD')
+  it("type 이 'ALL' 이면 제외하고, 그 외에는 전달한다", () => {
+    expect(buildTransactionFilterParams({ type: 'ALL' })).not.toHaveProperty('type')
+    expect(buildTransactionFilterParams({ type: 'ESCROW_HOLD' }).type).toBe('ESCROW_HOLD')
   })
 
   it('검색어는 trim 하고, 빈 문자열은 제외한다', () => {
@@ -19,16 +19,16 @@ describe('buildTransactionFilterParams', () => {
 
   it('기간·금액 범위를 채우면 파라미터로 넣고, 금액은 숫자로 변환한다', () => {
     const params = buildTransactionFilterParams({
-      startDate: '2026-07-01',
-      endDate: '2026-07-22',
+      from: '2026-07-01',
+      to: '2026-07-22',
       minAmount: '10000',
       maxAmount: '500000',
-      sort: 'AMOUNT'
+      sort: 'AMOUNT_DESC'
     })
     expect(params).toEqual({
-      sort: 'AMOUNT',
-      startDate: '2026-07-01',
-      endDate: '2026-07-22',
+      sort: 'AMOUNT_DESC',
+      from: '2026-07-01',
+      to: '2026-07-22',
       minAmount: 10000,
       maxAmount: 500000
     })
