@@ -129,7 +129,8 @@ class WalletControllerTest {
 
         mockMvc.perform(get("/api/wallet").session(session))
                 .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.code").value("WALLET_NOT_FOUND"));
+                .andExpect(jsonPath("$.code").value("RESOURCE_NOT_FOUND"))
+                .andExpect(jsonPath("$.traceId").isString());
     }
 
     // ===================== GET /api/wallet/transactions =====================
@@ -254,7 +255,8 @@ class WalletControllerTest {
                         .param("sort", "id;DROP")
                         .session(session))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("INVALID_FILTER"));
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.traceId").isString());
 
         verify(walletQueryMapper, never()).countTransactions(any());
     }
@@ -270,7 +272,7 @@ class WalletControllerTest {
                         .param("type", "UNKNOWN_TYPE")
                         .session(session))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("INVALID_FILTER"));
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
 
         verify(walletQueryMapper, never()).countTransactions(any());
     }
@@ -286,7 +288,7 @@ class WalletControllerTest {
                         .param("size", "1000")
                         .session(session))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("INVALID_FILTER"));
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
 
         verify(walletQueryMapper, never()).countTransactions(any());
     }
@@ -302,7 +304,7 @@ class WalletControllerTest {
                         .param("page", "-1")
                         .session(session))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("INVALID_FILTER"));
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
     }
 
     /**
@@ -317,7 +319,7 @@ class WalletControllerTest {
                         .param("to", "2026-07-22")
                         .session(session))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("INVALID_FILTER"));
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
     }
 
     /**
@@ -332,7 +334,7 @@ class WalletControllerTest {
                         .param("maxAmount", "100000")
                         .session(session))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("INVALID_FILTER"));
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
     }
 
     /**

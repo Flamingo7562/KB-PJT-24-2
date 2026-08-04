@@ -2,6 +2,8 @@ package com.gighub.wallet.controller;
 
 import com.gighub.common.api.ApiTimes;
 import com.gighub.common.exception.AuthRequiredException;
+import com.gighub.common.exception.ResourceNotFoundException;
+import com.gighub.common.exception.ValidationException;
 import com.gighub.wallet.dto.WalletSummary;
 import com.gighub.wallet.dto.WalletTransactionSearch;
 import com.gighub.wallet.dto.WalletTransactionView;
@@ -42,8 +44,7 @@ public class WalletController {
 
         WalletSummary summary = walletQueryMapper.findWalletSummaryByUserId(loginUserId);
         if (summary == null) {
-            return ResponseEntity.status(404)
-                    .body(Map.of("code", "WALLET_NOT_FOUND", "message", "지갑을 찾을 수 없습니다."));
+            throw new ResourceNotFoundException("지갑을 찾을 수 없습니다.");
         }
 
         Map<String, Object> data = new LinkedHashMap<>();
@@ -80,23 +81,22 @@ public class WalletController {
 
         Long loginUserId = (Long) session.getAttribute(LOGIN_USER);
         if (loginUserId == null) {
-            return ResponseEntity.status(401)
-                    .body(Map.of("code", "AUTH_REQUIRED", "message", "로그인이 필요합니다."));
+            throw new AuthRequiredException("로그인이 필요합니다.");
         }
         if (page < 0 || size < 1 || size > MAX_PAGE_SIZE) {
-            return invalidFilter("page는 0 이상, size는 1~100 사이여야 합니다.");
+            throw new ValidationException("page는 0 이상, size는 1~100 사이여야 합니다.");
         }
         if (!ALLOWED_SORTS.contains(sort)) {
-            return invalidFilter("지원하지 않는 sort 값입니다.");
+            throw new ValidationException("지원하지 않는 sort 값입니다.");
         }
         if (type != null && !ALLOWED_TYPES.contains(type)) {
-            return invalidFilter("지원하지 않는 type 값입니다.");
+            throw new ValidationException("지원하지 않는 type 값입니다.");
         }
         if (from != null && to != null && from.isAfter(to)) {
-            return invalidFilter("from은 to보다 이후일 수 없습니다.");
+            throw new ValidationException("from은 to보다 이후일 수 없습니다.");
         }
         if (minAmount != null && maxAmount != null && minAmount > maxAmount) {
-            return invalidFilter("minAmount는 maxAmount보다 클 수 없습니다.");
+            throw new ValidationException("minAmount는 maxAmount보다 클 수 없습니다.");
         }
 
         String trimmedKeyword = (keyword == null || keyword.trim().isEmpty())
@@ -168,10 +168,5 @@ public class WalletController {
             default:
                 return "조정";
         }
-    }
-
-    private ResponseEntity<Map<String, Object>> invalidFilter(String message) {
-        return ResponseEntity.status(400)
-                .body(Map.of("code", "INVALID_FILTER", "message", message));
     }
 }

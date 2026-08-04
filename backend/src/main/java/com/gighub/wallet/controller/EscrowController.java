@@ -1,6 +1,7 @@
 package com.gighub.wallet.controller;
 
 import com.gighub.common.exception.AuthRequiredException;
+import com.gighub.common.exception.ForbiddenException;
 import com.gighub.settlement.dto.SettlementApproveResponse;
 import com.gighub.settlement.service.SettlementService;
 import com.gighub.settlement.service.command.SettlementApproveCommand;
@@ -44,8 +45,7 @@ public class EscrowController {
         }
         // 예치는 근로자가 수락하는 시점이므로 workerId와 대조한다.
         if (!loginUserId.equals(request.getWorkerId())) {
-            return ResponseEntity.status(403)
-                    .body(Map.of("code", "FORBIDDEN", "message", "알바생 본인 계정으로만 수락할 수 있습니다."));
+            throw new ForbiddenException("알바생 본인 계정으로만 수락할 수 있습니다.");
         }
 
         escrowService.hold(EscrowHoldCommand.builder()

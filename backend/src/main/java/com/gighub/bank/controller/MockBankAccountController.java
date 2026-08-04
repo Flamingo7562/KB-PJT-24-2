@@ -3,6 +3,7 @@ package com.gighub.bank.controller;
 import com.gighub.bank.dto.BankAccountSummary;
 import com.gighub.bank.mapper.MockBankQueryMapper;
 import com.gighub.common.exception.AuthRequiredException;
+import com.gighub.common.exception.ValidationException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -34,8 +35,7 @@ public class MockBankAccountController {
         }
 
         if (status != null && !STATUS_ACTIVE.equals(status)) {
-            return ResponseEntity.status(400)
-                    .body(Map.of("code", "INVALID_FILTER", "message", "지원하지 않는 status 값입니다."));
+            throw new ValidationException("지원하지 않는 status 값입니다.");
         }
 
         List<BankAccountSummary> accounts =
