@@ -1,7 +1,10 @@
 package com.gighub.document.exception;
 
-public class DocumentNotFoundException extends RuntimeException{
-    public DocumentNotFoundException(String message){
+import com.gighub.common.exception.ResourceNotFoundException;
+
+public class DocumentNotFoundException extends ResourceNotFoundException {
+
+    public DocumentNotFoundException(String message) {
         super(message);
     }
 }
