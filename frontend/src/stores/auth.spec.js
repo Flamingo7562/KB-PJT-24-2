@@ -57,6 +57,44 @@ describe('auth store', () => {
     await auth.logout()
 
     expect(fetchCsrf).toHaveBeenCalledTimes(1)
+    expect(fetchCsrf.mock.invocationCallOrder[0]).toBeGreaterThan(
+      logoutApi.mock.invocationCallOrder[0]
+    )
+  })
+
+  it('로그아웃이 실패하면 CSRF 를 다시 준비하지 않지만 클라이언트 상태는 비운다', async () => {
+    logoutApi.mockRejectedValue(new Error('SESSION_ERROR'))
+    const auth = useAuthStore()
+    const workplace = useWorkplaceStore()
+    auth.setUser({ name: '김사장', role: 'OWNER', needsWorkplaceSetup: false })
+    workplace.workplaces = [{ workplaceId: 1, name: '강남점', status: 'ACTIVE' }]
+    workplace.selectedId = 1
+    workplace.loaded = true
+
+    await expect(auth.logout()).rejects.toThrow()
+
+    expect(fetchCsrf).not.toHaveBeenCalled()
+    expect(auth.user).toBeNull()
+    expect(workplace.workplaces).toEqual([])
+    expect(workplace.selectedId).toBeNull()
+    expect(workplace.loaded).toBe(false)
+  })
+
+  it('로그아웃 후 CSRF 재준비가 실패해도 로그아웃 자체는 실패하지 않는다', async () => {
+    fetchCsrf.mockRejectedValue(new Error('NETWORK_ERROR'))
+    const auth = useAuthStore()
+    const workplace = useWorkplaceStore()
+    auth.setUser({ name: '김사장', role: 'OWNER', needsWorkplaceSetup: false })
+    workplace.workplaces = [{ workplaceId: 1, name: '강남점', status: 'ACTIVE' }]
+    workplace.selectedId = 1
+    workplace.loaded = true
+
+    await expect(auth.logout()).resolves.toBeUndefined()
+
+    expect(auth.user).toBeNull()
+    expect(workplace.workplaces).toEqual([])
+    expect(workplace.selectedId).toBeNull()
+    expect(workplace.loaded).toBe(false)
   })
 
   it('로그아웃은 사업장 Context 까지 비운다', async () => {
