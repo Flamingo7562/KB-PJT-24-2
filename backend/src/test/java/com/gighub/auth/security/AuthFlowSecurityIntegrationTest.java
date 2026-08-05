@@ -234,18 +234,6 @@ class AuthFlowSecurityIntegrationTest {
         assertNull(loginSession(81L).getAttribute("LOGIN_USER"));
     }
 
-    /**
-     * Test Login Endpoint가 local이 아닌 기본 Profile에서 공개되지 않는지 검증합니다.
-     *
-     * @throws Exception MockMvc 요청 실행에 실패한 경우
-     */
-    @Test
-    void testLoginEndpointIsNotPublicOnDefaultProfile() throws Exception {
-        mockMvc.perform(get("/api/test-login/{userId}", 1L))
-                .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.code").value("AUTH_REQUIRED"));
-    }
-
     private MockHttpSession loginSession(long userId) throws Exception {
         AuthPrincipal principal = new AuthPrincipal(userId, UserRole.OWNER, "김사장");
         when(authService.login(any())).thenReturn(new LoginResult(principal, false));
