@@ -89,5 +89,10 @@ describe('OwnerWorkplaceManageView', () => {
     expect(Object.keys(body).sort()).toEqual(
       ['detailAddress', 'name', 'phone', 'roadAddress'].sort()
     )
+    // 키 집합만으로는 도로명·세부주소가 뒤바뀌어 전송돼도 잡히지 않는다 — 값도 각자 자리에 있는지 확인한다.
+    expect(body.name).toBe(WORKPLACE.name)
+    expect(body.roadAddress).toBe(WORKPLACE.roadAddress)
+    expect(body.detailAddress).toBe(WORKPLACE.detailAddress)
+    expect(body.phone).toBe('02-1234-5678') // WORKPLACE.phone('0212345678')이 화면 표시 형식으로 하이픈이 붙는다.
   })
 })
