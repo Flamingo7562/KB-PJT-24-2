@@ -1,6 +1,6 @@
 -- GigHub 참고용 최종 스키마 스냅샷
 -- NOT A FLYWAY MIGRATION
--- 기준: MySQL 8.4.10 / Flyway head 202608041614 / Migration 10개 / 도메인 테이블 24개 (2026-08-04 확인)
+-- 기준: MySQL 8.4.10 / Flyway head 202608051337 / Migration 11개 / 도메인 테이블 24개 (2026-08-05 확인)
 -- 단일 원본: backend/src/main/resources/db/migration/V*.sql
 -- 대상: 빈 데이터베이스. 기존 DB 업그레이드에는 사용하지 않는다.
 -- 제외: 데이터, flyway_schema_history, DROP 문, 실행 환경의 AUTO_INCREMENT 현재값
@@ -242,9 +242,9 @@ CREATE TABLE `idempotency_requests` (
 
 CREATE TABLE `mock_bank_accounts` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
-  `user_id` bigint unsigned NOT NULL,
   `bank_code` char(3) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
   `mock_account_number` varchar(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  `pin` char(4) CHARACTER SET ascii COLLATE ascii_bin NOT NULL DEFAULT '0000',
   `mock_fintech_use_num` varchar(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
   `currency` char(3) NOT NULL DEFAULT 'KRW',
   `balance` bigint unsigned NOT NULL DEFAULT '0',
@@ -255,12 +255,11 @@ CREATE TABLE `mock_bank_accounts` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_mock_bank_accounts_fintech_use_num` (`mock_fintech_use_num`),
   UNIQUE KEY `uk_mock_bank_accounts_bank_account` (`bank_code`,`mock_account_number`),
-  KEY `idx_mock_bank_accounts_user_status` (`user_id`,`status`),
-  CONSTRAINT `fk_mock_bank_accounts_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE RESTRICT ON UPDATE RESTRICT,
   CONSTRAINT `ck_mock_bank_accounts_account_number` CHECK ((char_length(trim(`mock_account_number`)) > 0)),
   CONSTRAINT `ck_mock_bank_accounts_amounts` CHECK ((`available_amount` <= `balance`)),
-  CONSTRAINT `ck_mock_bank_accounts_bank_code` CHECK (regexp_like(`bank_code`,_utf8mb4'^[0-9]{3}$')),
+  CONSTRAINT `ck_mock_bank_accounts_bank_code` CHECK (regexp_like(`bank_code`,_ascii'^[0-9]{3}$')),
   CONSTRAINT `ck_mock_bank_accounts_currency` CHECK ((`currency` = _utf8mb4'KRW')),
+  CONSTRAINT `ck_mock_bank_accounts_pin` CHECK (regexp_like(`pin`,_utf8mb4'^[0-9]{4}$')),
   CONSTRAINT `ck_mock_bank_accounts_status` CHECK ((`status` in (_utf8mb4'ACTIVE',_utf8mb4'BLOCKED',_utf8mb4'CLOSED')))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
