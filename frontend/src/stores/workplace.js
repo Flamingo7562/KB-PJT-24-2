@@ -29,17 +29,20 @@ export const useWorkplaceStore = defineStore('workplace', () => {
   const hasActiveWorkplace = computed(() => activeWorkplaces.value.length > 0)
 
   /**
-   * 사업장 목록 로드(최초 1회). 승인 Page Envelope 의 content 를 목록으로 쓴다.
-   * 선택값이 없으면 첫 ACTIVE 사업장을 고른다 — INACTIVE 를 자동선택하면 이후 지점
-   * 기준 조회가 전부 잘못된 사업장으로 나간다.
+   * 사업장 목록 로드(최초 1회, force 시 재조회). 승인 Page Envelope 의 content 를 목록으로 쓴다.
+   * 선택값이 없거나 더 이상 ACTIVE 를 가리키지 않으면 첫 ACTIVE 사업장으로 다시 고른다 —
+   * INACTIVE 를 선택 상태로 두면 이후 지점 기준 조회(QR·근태·문서함)가 전부 잘못된
+   * 사업장으로 나간다. 이미 ACTIVE 를 가리키는 선택값은 그대로 둔다 — 매 refresh 마다
+   * 사용자의 명시적 선택을 되돌리면 안 된다.
    */
   async function load({ force = false } = {}) {
     if (loaded.value && !force) return
     const { content } = await listWorkplaces()
     workplaces.value = content
     loaded.value = true
-    if (selectedId.value == null && activeWorkplaces.value.length > 0) {
-      selectedId.value = activeWorkplaces.value[0].workplaceId
+    const selectionIsActive = activeWorkplaces.value.some((w) => w.workplaceId === selectedId.value)
+    if (!selectionIsActive) {
+      selectedId.value = activeWorkplaces.value[0]?.workplaceId ?? null
     }
   }
 

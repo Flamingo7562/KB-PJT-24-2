@@ -46,4 +46,21 @@ describe('AppTopBar 지점 select', () => {
     const optionLabels = wrapper.findAll('option').map((o) => o.text())
     expect(optionLabels).toEqual(['홍대점'])
   })
+
+  it('ACTIVE 사업장이 하나도 없으면 select 자체를 그리지 않는다', async () => {
+    // 픽스처가 항상 ACTIVE 를 하나 이상 포함하면 v-else-if 를 workplaces.length 로
+    // 되돌려도 참이 되어 이 회귀를 못 잡는다. ACTIVE 를 0개로 둬 v-else-if 자체를 고정한다.
+    useAuthStore().setUser({ name: '김사장', role: 'OWNER', needsWorkplaceSetup: false })
+    const workplace = useWorkplaceStore()
+    workplace.workplaces = [{ workplaceId: 1, name: '폐점한 강남점', status: 'INACTIVE' }]
+    workplace.selectedId = null
+    workplace.loaded = true
+
+    const wrapper = mount(AppTopBar, {
+      props: { role: 'OWNER' },
+      global: { stubs: { LogoSymbol: true } }
+    })
+
+    expect(wrapper.find('select').exists()).toBe(false)
+  })
 })

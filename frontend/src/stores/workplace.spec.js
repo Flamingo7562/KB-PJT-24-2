@@ -24,6 +24,11 @@ const INACTIVE_FIRST = [
   { workplaceId: 2, name: '홍대점', status: 'ACTIVE' }
 ]
 
+const TWO_ACTIVE = [
+  { workplaceId: 1, name: '홍대점', status: 'ACTIVE' },
+  { workplaceId: 2, name: '신촌점', status: 'ACTIVE' }
+]
+
 describe('workplace store', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
@@ -68,6 +73,30 @@ describe('workplace store', () => {
     await store.load()
 
     expect(store.activeWorkplaces.map((w) => w.workplaceId)).toEqual([2])
+  })
+
+  it('선택값이 더 이상 ACTIVE 를 가리키지 않으면 첫 ACTIVE 로 교체한다', async () => {
+    // 이전 세션 등에서 남은 stale 선택값(INACTIVE 가 된 사업장)을 흉내낸다.
+    listWorkplaces.mockResolvedValue(envelope(INACTIVE_FIRST))
+    const store = useWorkplaceStore()
+    store.selectedId = 1 // INACTIVE 인 1번을 가리키고 있던 상태
+
+    await store.load()
+
+    expect(store.selectedId).toBe(2)
+  })
+
+  it('ACTIVE 를 가리키는 선택값은 force 재조회에도 그대로 유지된다', async () => {
+    listWorkplaces.mockResolvedValue(envelope(TWO_ACTIVE))
+    const store = useWorkplaceStore()
+    await store.load()
+    // 자동선택은 첫 ACTIVE(1번)를 고른다 — 사용자가 두 번째 지점을 명시적으로 선택한다.
+    store.select(2)
+
+    await store.load({ force: true })
+
+    // 매 load 마다 첫 ACTIVE 로 되돌리는 구현이었다면 여기서 1로 밀려나 실패한다.
+    expect(store.selectedId).toBe(2)
   })
 
   it('reset 은 목록·선택·로드 상태를 모두 비운다', async () => {
