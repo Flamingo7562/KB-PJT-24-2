@@ -6,9 +6,8 @@
  *   POST /api/users/me/withdrawal   GET /api/users/me/badge
  */
 import http from '@/services/http'
+import { USE_MOCK } from '@/services/mockFlag'
 import { normalizePhone } from '@/utils/validators'
-
-const USE_MOCK = true
 
 // 승인 응답 필드만 담는다. 전화번호는 구분 문자 없는 정규화 형식으로 주고받고 화면에서 포맷한다.
 const mockMe = {
@@ -53,18 +52,21 @@ export async function updateMe({ phone }) {
 /** 비밀번호 변경 (명세 8). 현재 비밀번호 불일치 시 400 */
 export async function changePassword({ currentPassword, newPassword }) {
   if (USE_MOCK) return
+  // TODO(#187): AUTH-009 구현 전까지 실 경로는 404 다.
   await http.patch('/users/me/password', { currentPassword, newPassword })
 }
 
 /** 회원 탈퇴 (USER-004). 잔액·예치금·진행 근무 존재 시 409 */
 export async function deleteMe({ password }) {
   if (USE_MOCK) return
+  // TODO(#188): USER-004 구현 전까지 실 경로는 404 다.
   await http.post('/users/me/withdrawal', { password })
 }
 
 /** 내 뱃지 조회 (명세 10) */
 export async function getBadge() {
   if (USE_MOCK) return { ...mockBadge }
+  // TODO(#182): 명세 10 구현 전까지 실 경로는 404 다.
   const { data } = await http.get('/users/me/badge')
   return data
 }
