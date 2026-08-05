@@ -36,9 +36,7 @@ const workingCounts = reactive({})
 const editOpen = ref(false)
 const editTarget = ref(null)
 const editName = ref('')
-const editAddress = ref('')
-// 저장된 주소는 도로명+세부가 합쳐진 한 문자열이라 되쪼갤 수 없다.
-// 그래서 세부주소 입력란은 검색으로 도로명을 새로 고른 뒤에만 연다.
+const editRoadAddress = ref('')
 const editDetailAddress = ref('')
 const editDetailOpen = ref(false)
 const editPhone = ref('')
@@ -69,9 +67,9 @@ function goCreate() {
 function openEdit(workplace) {
   editTarget.value = workplace
   editName.value = workplace.name
-  editAddress.value = workplace.address
-  editDetailAddress.value = ''
-  editDetailOpen.value = false
+  editRoadAddress.value = workplace.roadAddress
+  editDetailAddress.value = workplace.detailAddress ?? ''
+  editDetailOpen.value = Boolean(workplace.detailAddress)
   editPhone.value = workplace.phone ? formatPhoneInput(workplace.phone) : ''
   editNameError.value = ''
   editAddressError.value = ''
@@ -93,7 +91,7 @@ async function searchEditAddress() {
     addressSearchContainer.value,
     (result) => {
       // 도로명이 통째로 바뀌므로 이전 세부주소는 버리고 입력란을 연다.
-      editAddress.value = result.address
+      editRoadAddress.value = result.address
       editDetailAddress.value = ''
       editDetailOpen.value = true
       editAddressError.value = ''
@@ -106,14 +104,9 @@ async function searchEditAddress() {
   )
 }
 
-/** 서버 address 는 단일 필드 — 도로명과 세부주소를 공백으로 이어 보낸다(검색 전이면 기존 주소 그대로). */
-function fullEditAddress() {
-  return [editAddress.value.trim(), editDetailAddress.value.trim()].filter(Boolean).join(' ')
-}
-
 async function confirmEdit() {
   const nameCheck = isRequired(editName.value, '상호명')
-  const addressCheck = isRequired(editAddress.value, '사업장 주소')
+  const addressCheck = isRequired(editRoadAddress.value, '사업장 주소')
   const phoneCheck = isPhone(editPhone.value, { required: true })
   editNameError.value = nameCheck.valid ? '' : nameCheck.message
   editAddressError.value = addressCheck.valid ? '' : addressCheck.message
@@ -122,9 +115,11 @@ async function confirmEdit() {
 
   saving.value = true
   try {
+    // 승인 수정 허용 필드는 name, roadAddress, detailAddress, phone 뿐이다.
     await updateWorkplace(editTarget.value.workplaceId, {
       name: editName.value,
-      address: fullEditAddress(),
+      roadAddress: editRoadAddress.value,
+      detailAddress: editDetailAddress.value,
       phone: editPhone.value
     })
     await workplaceStore.load({ force: true })
@@ -181,7 +176,9 @@ async function confirmDelete() {
         <li v-for="w in workplaces" :key="w.workplaceId" class="workplace-card">
           <div class="wp-info">
             <p class="wp-name">{{ w.name }}</p>
-            <p class="wp-address">{{ w.address }}</p>
+            <p class="wp-address">
+              {{ [w.roadAddress, w.detailAddress].filter(Boolean).join(' ') }}
+            </p>
             <p class="wp-sub">
               진행 중 근무 {{ workingCounts[w.workplaceId] ?? 0 }}건 · 인증 반경
               {{ w.radiusMeters ?? '-' }}m
@@ -208,7 +205,7 @@ async function confirmDelete() {
       <div class="edit-form">
         <AppField v-model="editName" label="상호명" required :error="editNameError" />
         <AppField
-          v-model="editAddress"
+          v-model="editRoadAddress"
           :label="editDetailOpen ? '사업장 주소 (도로명)' : '사업장 주소'"
           required
           :error="editAddressError"
