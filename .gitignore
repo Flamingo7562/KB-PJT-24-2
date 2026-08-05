@@ -97,6 +97,9 @@ replay_pid*.log
 !/docs/specs/**/*.md
 !/docs/specs/*.yaml
 !/docs/specs/**/*.yaml
+!/docs/spec-patches/
+!/docs/spec-patches/*.md
+!/docs/spec-patches/**/*.md
 !/docs/runbooks/
 !/docs/runbooks/DATABASE_RUNBOOK.md
 
