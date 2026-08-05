@@ -70,6 +70,21 @@ describe('createWorkplace', () => {
     expect(http.post.mock.calls[0][1].phone).toBe('0212345678')
   })
 
+  it('사업자등록번호를 구분 문자 없는 숫자로 정규화한다', async () => {
+    // 화면(OwnerWorkplaceNewView)은 표시용으로 "123-45-67890" 형태를 만들어 넘긴다.
+    // DB 컬럼은 CHAR(10) 이고 CHECK 제약이 숫자 10자리만 허용하므로, 하이픈이 섞인
+    // 채로 나가면 등록이 항상 실패한다 — 값 자체를 고정해 키 존재만 보는 얕은 검증을 막는다.
+    await createWorkplace({
+      businessRegistrationNumber: '123-45-67890',
+      name: '강남점',
+      representativeName: '김사장',
+      roadAddress: '서울 강남구 테헤란로 1',
+      phone: '0212345678'
+    })
+
+    expect(http.post.mock.calls[0][1].businessRegistrationNumber).toBe('1234567890')
+  })
+
   it('세부주소가 비면 키를 만들지 않는다', async () => {
     await createWorkplace({
       businessRegistrationNumber: '1234567890',

@@ -9,6 +9,7 @@
  */
 import http from '@/services/http'
 import { USE_MOCK } from '@/services/mockFlag'
+import { onlyDigits } from '@/utils/format'
 import { normalizePhone } from '@/utils/validators'
 
 /** 승인 Page Query 경계 — size 는 1~100 이다(API_SPEC.md '페이지네이션'). */
@@ -89,7 +90,9 @@ export async function createWorkplace({
   phone
 }) {
   const body = {
-    businessRegistrationNumber,
+    // 화면은 하이픈이 들어간 표시 형식("123-45-67890")을 유지한다. DB 컬럼은
+    // CHAR(10) 이고 CHECK 제약이 숫자 10자리만 허용하므로 전송 직전에 벗겨낸다(phone 과 동일 처리).
+    businessRegistrationNumber: onlyDigits(businessRegistrationNumber),
     name,
     representativeName,
     roadAddress,

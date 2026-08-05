@@ -152,4 +152,26 @@ describe('OwnerWorkplaceNewView', () => {
     expect(payload).not.toHaveProperty('radiusM')
     expect(payload).not.toHaveProperty('address')
   })
+
+  it('사업자등록번호는 화면 표시 형식(하이픈 포함) 그대로 서비스에 넘긴다', async () => {
+    // 화면은 입력 중 자동으로 하이픈을 채운다(formatBusinessNumberInput). 숫자만 남기는
+    // 정규화는 서비스 계층(createWorkplace)의 책임이다 — 화면은 하이픈이 섞인 값을
+    // 그대로 넘겨야 정상이고, 여기서 값을 미리 정규화해 보내면 서비스의 정규화 여부를
+    // 이 테스트가 가려낼 수 없다.
+    const auth = useAuthStore()
+    auth.setUser({ name: '김사장', role: 'OWNER', needsWorkplaceSetup: true })
+    vi.spyOn(auth, 'refreshSession').mockResolvedValue({
+      authenticated: true,
+      role: 'OWNER',
+      needsWorkplaceSetup: false
+    })
+
+    const wrapper = mount(OwnerWorkplaceNewView)
+    await fillValidForm(wrapper)
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+
+    const [payload] = createWorkplace.mock.calls[0]
+    expect(payload.businessRegistrationNumber).toBe('123-45-67890')
+  })
 })
