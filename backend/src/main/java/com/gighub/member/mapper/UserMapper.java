@@ -15,5 +15,7 @@ public interface UserMapper {
 
     User findById(@Param("userId") Long userId);
 
+    User findProfileById(@Param("userId") Long userId);
+
     int insert(User user);
 }
