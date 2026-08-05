@@ -1,0 +1,189 @@
+package com.gighub.workplace.dto;
+
+import java.math.BigDecimal;
+import java.util.Set;
+
+import javax.validation.ConstraintViolation;
+import javax.validation.Validation;
+import javax.validation.Validator;
+
+import org.junit.jupiter.api.Test;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+class WorkplaceCreateRequestValidationTest {
+
+    private final Validator validator = Validation.buildDefaultValidatorFactory().getValidator();
+
+    @Test
+    void normalizesApprovedFieldsBeforeValidation() {
+        WorkplaceCreateRequest request = validBuilder()
+                .businessRegistrationNumber("  1234567890  ")
+                .name("  강남점  ")
+                .representativeName("  김사장  ")
+                .roadAddress("  서울 강남구 테헤란로 1  ")
+                .phone("02-1234 5678")
+                .build();
+
+        assertTrue(validator.validate(request).isEmpty());
+        assertEquals("1234567890", request.getBusinessRegistrationNumber());
+        assertEquals("강남점", request.getName());
+        assertEquals("김사장", request.getRepresentativeName());
+        assertEquals("서울 강남구 테헤란로 1", request.getRoadAddress());
+        assertEquals("0212345678", request.getPhone());
+    }
+
+    @Test
+    void acceptsRequestWithoutOptionalFields() {
+        WorkplaceCreateRequest request = validBuilder()
+                .detailAddress(null)
+                .latitude(null)
+                .longitude(null)
+                .build();
+
+        assertTrue(validator.validate(request).isEmpty());
+    }
+
+    @Test
+    void treatsBlankDetailAddressAsAbsent() {
+        WorkplaceCreateRequest request = validBuilder().detailAddress("   ").build();
+
+        assertTrue(validator.validate(request).isEmpty());
+        assertNull(request.getDetailAddress());
+    }
+
+    @Test
+    void rejectsBusinessRegistrationNumberThatIsNotTenDigits() {
+        assertTrue(hasViolation(
+                validate(validBuilder().businessRegistrationNumber("123456789")),
+                "businessRegistrationNumber"));
+        assertTrue(hasViolation(
+                validate(validBuilder().businessRegistrationNumber("12345678901")),
+                "businessRegistrationNumber"));
+
+        // 구분 문자를 벗겨도 숫자가 아닌 값이 남으면 거절합니다.
+        assertTrue(hasViolation(
+                validate(validBuilder().businessRegistrationNumber("123-45-6789A")),
+                "businessRegistrationNumber"));
+
+        WorkplaceCreateRequest blank = validBuilder().businessRegistrationNumber(" - ").build();
+        assertTrue(hasViolation(validator.validate(blank), "businessRegistrationNumber"));
+        assertNull(blank.getBusinessRegistrationNumber());
+    }
+
+    @Test
+    void acceptsBusinessRegistrationNumberInDisplayFormat() {
+        WorkplaceCreateRequest request = validBuilder()
+                .businessRegistrationNumber("123-45-67890")
+                .build();
+
+        assertTrue(validator.validate(request).isEmpty());
+        assertEquals("1234567890", request.getBusinessRegistrationNumber());
+    }
+
+    @Test
+    void acceptsTextValuesAtDatabaseMaximumLengths() {
+        WorkplaceCreateRequest request = validBuilder()
+                .name("가".repeat(120))
+                .representativeName("나".repeat(100))
+                .roadAddress("다".repeat(255))
+                .detailAddress("라".repeat(100))
+                .build();
+
+        assertTrue(validator.validate(request).isEmpty());
+    }
+
+    @Test
+    void rejectsTextValuesPastDatabaseLengths() {
+        Set<ConstraintViolation<WorkplaceCreateRequest>> violations = validate(validBuilder()
+                .name("가".repeat(121))
+                .representativeName("나".repeat(101))
+                .roadAddress("다".repeat(256))
+                .detailAddress("라".repeat(101)));
+
+        assertTrue(hasViolation(violations, "name"));
+        assertTrue(hasViolation(violations, "representativeName"));
+        assertTrue(hasViolation(violations, "roadAddress"));
+        assertTrue(hasViolation(violations, "detailAddress"));
+    }
+
+    @Test
+    void requiresApprovedPhoneFormat() {
+        assertTrue(hasViolation(validate(validBuilder().phone("123-456-789")), "phone"));
+
+        // 사업장 전화번호는 선택 입력이 아니므로 공백만 보내면 누락으로 처리합니다.
+        WorkplaceCreateRequest blank = validBuilder().phone(" - ").build();
+        assertTrue(hasViolation(validator.validate(blank), "phone"));
+        assertNull(blank.getPhone());
+    }
+
+    @Test
+    void reportsMissingCoordinateOnTheAbsentField() {
+        Set<ConstraintViolation<WorkplaceCreateRequest>> violations =
+                validate(validBuilder().longitude(null));
+        assertTrue(hasViolation(violations, "longitude"));
+        assertFalse(hasViolation(violations, "latitude"));
+
+        violations = validate(validBuilder().latitude(null));
+        assertTrue(hasViolation(violations, "latitude"));
+        assertFalse(hasViolation(violations, "longitude"));
+    }
+
+    @Test
+    void rejectsCoordinatesOutsideApprovedRange() {
+        Set<ConstraintViolation<WorkplaceCreateRequest>> violations = validate(validBuilder()
+                .latitude(new BigDecimal("90.0000001"))
+                .longitude(new BigDecimal("180.0000001")));
+
+        assertTrue(hasViolation(violations, "latitude"));
+        assertTrue(hasViolation(violations, "longitude"));
+    }
+
+    @Test
+    void rejectsCoordinatePrecisionPastColumnScale() {
+        Set<ConstraintViolation<WorkplaceCreateRequest>> violations = validate(validBuilder()
+                .latitude(new BigDecimal("37.12345678"))
+                .longitude(new BigDecimal("127.12345678")));
+
+        assertTrue(hasViolation(violations, "latitude"));
+        assertTrue(hasViolation(violations, "longitude"));
+    }
+
+    @Test
+    void rejectsFieldsOutsideApprovedContract() {
+        WorkplaceCreateRequest.Builder builder = validBuilder();
+
+        // 인증 반경과 소유자는 사용자가 정할 수 없는 값이라 필드 자체를 거절합니다.
+        assertThrows(IllegalArgumentException.class, () -> builder.rejectUnknownField("radiusM", 500));
+        assertThrows(IllegalArgumentException.class, () -> builder.rejectUnknownField("radiusMeters", 500));
+        assertThrows(IllegalArgumentException.class, () -> builder.rejectUnknownField("ownerUserId", 999));
+    }
+
+    private WorkplaceCreateRequest.Builder validBuilder() {
+        return WorkplaceCreateRequest.builder()
+                .businessRegistrationNumber("1234567890")
+                .name("강남점")
+                .representativeName("김사장")
+                .roadAddress("서울 강남구 테헤란로 1")
+                .detailAddress("2층")
+                .phone("0212345678")
+                .latitude(new BigDecimal("37.1234567"))
+                .longitude(new BigDecimal("127.1234567"));
+    }
+
+    private Set<ConstraintViolation<WorkplaceCreateRequest>> validate(
+            WorkplaceCreateRequest.Builder builder) {
+        return validator.validate(builder.build());
+    }
+
+    private boolean hasViolation(
+            Set<ConstraintViolation<WorkplaceCreateRequest>> violations,
+            String field) {
+        return violations.stream()
+                .anyMatch(violation -> violation.getPropertyPath().toString().equals(field));
+    }
+}
