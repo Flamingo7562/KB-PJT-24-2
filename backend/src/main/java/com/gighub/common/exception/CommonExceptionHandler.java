@@ -9,7 +9,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
-import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.validation.BindException;
 import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -59,9 +59,9 @@ public class CommonExceptionHandler {
     }
 
     /** Bean Validation 필드 오류만 선택 필드로 포함하고 Spring 내부 객체는 노출하지 않습니다. */
-    @ExceptionHandler(MethodArgumentNotValidException.class)
+    @ExceptionHandler(BindException.class)
     public ResponseEntity<ApiErrorResponse> handleValidation(
-            MethodArgumentNotValidException exception,
+            BindException exception,
             HttpServletRequest request) {
         List<ApiFieldError> fieldErrors = exception.getBindingResult()
                 .getFieldErrors()

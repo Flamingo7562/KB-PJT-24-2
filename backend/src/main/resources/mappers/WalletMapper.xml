@@ -6,6 +6,11 @@
 
     <!-- ================= 1. 기본 지갑(Wallet) ================= -->
 
+    <insert id="insertKrwWallet">
+        INSERT INTO wallets (user_id, currency)
+        VALUES (#{userId}, 'KRW')
+    </insert>
+
     <select id="getAvailableBalance" resultType="java.lang.Long">
         SELECT available_balance
         FROM wallets

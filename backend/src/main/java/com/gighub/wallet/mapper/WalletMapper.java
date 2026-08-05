@@ -9,6 +9,8 @@ import org.apache.ibatis.annotations.Param;
 @Mapper
 public interface WalletMapper {
     // 기본 지갑
+    int insertKrwWallet(@Param("userId") Long userId);
+
     Long getAvailableBalance(@Param("userId") Long userId);
 
     Long getLockedBalance(@Param("userId") Long userId);

@@ -1,15 +1,25 @@
 package com.gighub.auth.controller;
 
+import javax.validation.Valid;
 import javax.servlet.http.HttpServletRequest;
 
+import com.gighub.auth.dto.AvailabilityResponse;
+import com.gighub.auth.dto.EmailAvailabilityQuery;
+import com.gighub.auth.dto.LoginIdAvailabilityQuery;
 import com.gighub.auth.dto.SessionResponse;
+import com.gighub.auth.dto.SignupRequest;
+import com.gighub.auth.dto.SignupResponse;
 import com.gighub.auth.security.AuthPrincipal;
 import com.gighub.auth.service.AuthService;
 import com.gighub.common.api.ApiResponse;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.web.csrf.CsrfToken;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.ModelAttribute;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -49,5 +59,30 @@ public class AuthController {
                 authService.needsWorkplaceSetup(principal)
         );
         return ResponseEntity.ok(ApiResponse.of(response));
+    }
+
+    @GetMapping("/login-id-availability")
+    public ResponseEntity<ApiResponse<AvailabilityResponse>> loginIdAvailability(
+            @Valid @ModelAttribute LoginIdAvailabilityQuery query) {
+        AvailabilityResponse response = new AvailabilityResponse(
+                authService.isLoginIdAvailable(query.getLoginId())
+        );
+        return ResponseEntity.ok(ApiResponse.of(response));
+    }
+
+    @GetMapping("/email-availability")
+    public ResponseEntity<ApiResponse<AvailabilityResponse>> emailAvailability(
+            @Valid @ModelAttribute EmailAvailabilityQuery query) {
+        AvailabilityResponse response = new AvailabilityResponse(
+                authService.isEmailAvailable(query.getEmail())
+        );
+        return ResponseEntity.ok(ApiResponse.of(response));
+    }
+
+    @PostMapping("/signup")
+    public ResponseEntity<ApiResponse<SignupResponse>> signup(
+            @Valid @RequestBody SignupRequest request) {
+        SignupResponse response = new SignupResponse(authService.signup(request));
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of(response));
     }
 }
