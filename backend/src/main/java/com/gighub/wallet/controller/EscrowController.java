@@ -1,7 +1,7 @@
 package com.gighub.wallet.controller;
 
+import com.gighub.auth.security.AuthPrincipals;
 import com.gighub.common.api.ApiResponse;
-import com.gighub.common.exception.AuthRequiredException;
 import com.gighub.common.exception.ForbiddenException;
 import com.gighub.settlement.dto.SettlementApproveResponse;
 import com.gighub.settlement.service.SettlementService;
@@ -13,20 +13,18 @@ import com.gighub.wallet.service.EscrowService;
 import com.gighub.wallet.service.command.EscrowHoldCommand;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RestController;
 
-import javax.servlet.http.HttpSession;
 import javax.validation.Valid;
 
 @RestController
 @RequiredArgsConstructor
 public class EscrowController {
-
-    private static final String LOGIN_USER = "LOGIN_USER";
 
     private final EscrowService escrowService;
     private final SettlementService settlementService;
@@ -38,12 +36,9 @@ public class EscrowController {
             @PathVariable String token,
             @RequestHeader("Idempotency-Key") String idempotencyKey,
             @Valid @RequestBody EscrowHoldRequest request,
-            HttpSession session) {
+            Authentication authentication) {
 
-        Long loginUserId = (Long) session.getAttribute(LOGIN_USER);
-        if (loginUserId == null) {
-            throw new AuthRequiredException("로그인이 필요합니다.");
-        }
+        Long loginUserId = AuthPrincipals.resolve(authentication).getUserId();
         // 예치는 근로자가 수락하는 시점이므로 workerId와 대조한다.
         if (!loginUserId.equals(request.getWorkerId())) {
             throw new ForbiddenException("알바생 본인 계정으로만 수락할 수 있습니다.");
@@ -65,12 +60,9 @@ public class EscrowController {
     public ResponseEntity<ApiResponse<SettlementApproveResponse>> approveSettlement(
             @PathVariable Long workCaseId,
             @RequestHeader("Idempotency-Key") String idempotencyKey,
-            HttpSession session) {
+            Authentication authentication) {
 
-        Long loginUserId = (Long) session.getAttribute(LOGIN_USER);
-        if (loginUserId == null) {
-            throw new AuthRequiredException("로그인이 필요합니다.");
-        }
+        Long loginUserId = AuthPrincipals.resolve(authentication).getUserId();
 
         SettlementResult result =
                 settlementService.approve(SettlementApproveCommand.builder()

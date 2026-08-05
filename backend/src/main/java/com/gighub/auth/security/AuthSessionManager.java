@@ -5,7 +5,6 @@ import java.util.List;
 import javax.servlet.http.Cookie;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
-import javax.servlet.http.HttpSession;
 
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -21,8 +20,6 @@ import org.springframework.stereotype.Component;
 @Component
 public class AuthSessionManager {
 
-    public static final String LEGACY_LOGIN_USER = "LOGIN_USER";
-
     private final CsrfTokenRepository csrfTokenRepository;
     private final HttpSessionSecurityContextRepository securityContextRepository =
             new HttpSessionSecurityContextRepository();
@@ -35,9 +32,8 @@ public class AuthSessionManager {
             HttpServletRequest request,
             HttpServletResponse response,
             AuthPrincipal principal) {
-        HttpSession session = request.getSession(false);
-        if (session == null) {
-            session = request.getSession(true);
+        if (request.getSession(false) == null) {
+            request.getSession(true);
         } else {
             // 기존 익명 Session이 있을 때만 Servlet API로 ID를 회전합니다.
             request.changeSessionId();
@@ -56,8 +52,6 @@ public class AuthSessionManager {
         SecurityContextHolder.setContext(context);
         securityContextRepository.saveContext(context, request, response);
 
-        // TODO(#143): 기존 보호 Controller가 Principal로 전환되면 legacy 키를 제거합니다.
-        session.setAttribute(LEGACY_LOGIN_USER, principal.getUserId());
         // 인증 경계가 바뀌었으므로 기존 Token을 폐기하고 클라이언트가 새 Token을 준비하게 합니다.
         csrfTokenRepository.saveToken(null, request, response);
     }

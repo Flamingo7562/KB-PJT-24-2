@@ -2,16 +2,19 @@ package com.gighub.bank.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import com.gighub.auth.security.AuthPrincipal;
 import com.gighub.bank.dto.BankAccountSummary;
 import com.gighub.bank.mapper.MockBankQueryMapper;
 import com.gighub.common.exception.CommonExceptionHandler;
+import com.gighub.member.domain.UserRole;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
-import org.springframework.mock.web.MockHttpSession;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
@@ -33,14 +36,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @ExtendWith(MockitoExtension.class)
 class MockBankAccountControllerTest {
 
-    private static final String LOGIN_USER = "LOGIN_USER";
     private static final Long USER_ID = 3L;
 
     @Mock
     private MockBankQueryMapper mockBankQueryMapper;
 
     private MockMvc mockMvc;
-    private MockHttpSession session;
+    private Authentication authentication;
 
     /**
      * Java Time 직렬화를 포함한 독립형 Spring MVC 테스트 환경을 준비합니다.
@@ -57,8 +59,8 @@ class MockBankAccountControllerTest {
                 .setMessageConverters(converter)
                 .build();
 
-        session = new MockHttpSession();
-        session.setAttribute(LOGIN_USER, USER_ID);
+        AuthPrincipal principal = new AuthPrincipal(USER_ID, UserRole.OWNER, "김사장");
+        authentication = new UsernamePasswordAuthenticationToken(principal, null, List.of());
     }
 
     private BankAccountSummary account(long id, String maskedNumber, long balance) {
@@ -83,7 +85,7 @@ class MockBankAccountControllerTest {
         when(mockBankQueryMapper.findAccountsByUserId(eq(USER_ID), isNull()))
                 .thenReturn(List.of(account(1L, "********0001", 300_000L)));
 
-        mockMvc.perform(get("/api/mock-bank-accounts").session(session))
+        mockMvc.perform(get("/api/mock-bank-accounts").principal(authentication))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.items[0].bankAccountId").value(1))
                 .andExpect(jsonPath("$.data.items[0].bankCode").value("004"))
@@ -104,7 +106,7 @@ class MockBankAccountControllerTest {
         when(mockBankQueryMapper.findAccountsByUserId(eq(USER_ID), isNull()))
                 .thenReturn(List.of(account(1L, "********0001", 300_000L)));
 
-        mockMvc.perform(get("/api/mock-bank-accounts").session(session))
+        mockMvc.perform(get("/api/mock-bank-accounts").principal(authentication))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.items[0].mockAccountNumber").doesNotExist())
                 .andExpect(jsonPath("$.data.items[0].accountNumber").doesNotExist());
@@ -120,7 +122,7 @@ class MockBankAccountControllerTest {
         when(mockBankQueryMapper.findAccountsByUserId(eq(USER_ID), isNull()))
                 .thenReturn(List.of());
 
-        mockMvc.perform(get("/api/mock-bank-accounts").session(session))
+        mockMvc.perform(get("/api/mock-bank-accounts").principal(authentication))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.items").isEmpty());
 
@@ -139,7 +141,7 @@ class MockBankAccountControllerTest {
 
         mockMvc.perform(get("/api/mock-bank-accounts")
                         .param("status", "ACTIVE")
-                        .session(session))
+                        .principal(authentication))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.items[0].status").value("ACTIVE"));
 
@@ -155,7 +157,7 @@ class MockBankAccountControllerTest {
     void rejectsUnsupportedStatusFilter() throws Exception {
         mockMvc.perform(get("/api/mock-bank-accounts")
                         .param("status", "CLOSED")
-                        .session(session))
+                        .principal(authentication))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
                 .andExpect(jsonPath("$.traceId").isString());

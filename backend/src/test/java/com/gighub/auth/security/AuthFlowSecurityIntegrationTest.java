@@ -1,5 +1,7 @@
 package com.gighub.auth.security;
 
+import java.util.Map;
+
 import javax.servlet.Filter;
 import javax.servlet.http.Cookie;
 
@@ -18,11 +20,14 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.mock.web.MockServletContext;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.csrf.CsrfTokenRepository;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.context.support.AnnotationConfigWebApplicationContext;
 import org.springframework.web.servlet.config.annotation.EnableWebMvc;
 
@@ -175,6 +180,75 @@ class AuthFlowSecurityIntegrationTest {
                 .andExpect(jsonPath("$.code").value("ROLE_MISMATCH"));
     }
 
+    /**
+     * 보호 API가 Session 없이는 승인 Envelope의 401로 거절되는지 실제 Filter Chain으로 검증합니다.
+     *
+     * @throws Exception MockMvc 요청 실행에 실패한 경우
+     */
+    @Test
+    void protectedApiWithoutSessionUsesApprovedUnauthorizedEnvelope() throws Exception {
+        mockMvc.perform(get("/api/test-protected"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("AUTH_REQUIRED"))
+                .andExpect(jsonPath("$.traceId").isString());
+    }
+
+    /**
+     * 위조한 legacy {@code LOGIN_USER} Attribute만으로는 보호 API에 접근할 수 없음을 검증합니다.
+     *
+     * @throws Exception MockMvc 요청 실행에 실패한 경우
+     */
+    @Test
+    void forgedLegacyLoginUserAttributeGrantsNoAccess() throws Exception {
+        MockHttpSession forgedSession = new MockHttpSession();
+        forgedSession.setAttribute("LOGIN_USER", 999L);
+
+        mockMvc.perform(get("/api/test-protected").session(forgedSession))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("AUTH_REQUIRED"));
+    }
+
+    /**
+     * 인증 Session에 불일치하는 legacy Attribute가 섞여도 접근 주체가 바뀌지 않는지 검증합니다.
+     *
+     * @throws Exception MockMvc 요청 실행에 실패한 경우
+     */
+    @Test
+    void mismatchedLegacyLoginUserAttributeDoesNotChangeSubject() throws Exception {
+        MockHttpSession authenticatedSession = loginSession(81L);
+        // 정상 로그인 뒤 다른 사용자 ID를 legacy 키로 덮어써도 Principal이 우선해야 합니다.
+        authenticatedSession.setAttribute("LOGIN_USER", 999L);
+
+        mockMvc.perform(get("/api/test-protected").session(authenticatedSession))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.userId").value(81));
+    }
+
+    /**
+     * 로그인 성공 Session이 legacy Attribute를 남기지 않는지 검증합니다.
+     *
+     * @throws Exception MockMvc 요청 실행에 실패한 경우
+     */
+    @Test
+    void loginDoesNotWriteLegacyLoginUserAttribute() throws Exception {
+        assertNull(loginSession(81L).getAttribute("LOGIN_USER"));
+    }
+
+    private MockHttpSession loginSession(long userId) throws Exception {
+        AuthPrincipal principal = new AuthPrincipal(userId, UserRole.OWNER, "김사장");
+        when(authService.login(any())).thenReturn(new LoginResult(principal, false));
+
+        Cookie csrfCookie = prepareCsrfCookie();
+        MvcResult loginResult = mockMvc.perform(post("/api/auth/login")
+                        .cookie(csrfCookie)
+                        .header("X-XSRF-TOKEN", csrfCookie.getValue())
+                        .contentType(APPLICATION_JSON)
+                        .content(loginBody("OWNER")))
+                .andExpect(status().isOk())
+                .andReturn();
+        return (MockHttpSession) loginResult.getRequest().getSession(false);
+    }
+
     private Cookie prepareCsrfCookie() throws Exception {
         MvcResult result = mockMvc.perform(get("/api/auth/csrf"))
                 .andExpect(status().isNoContent())
@@ -228,6 +302,23 @@ class AuthFlowSecurityIntegrationTest {
         @Bean
         CommonExceptionHandler commonExceptionHandler() {
             return new CommonExceptionHandler();
+        }
+
+        @Bean
+        ProtectedProbeController protectedProbeController() {
+            return new ProtectedProbeController();
+        }
+    }
+
+    /**
+     * 보호 API가 인증 Principal만으로 사용자를 식별하는지 확인하는 테스트 전용 Endpoint입니다.
+     */
+    @RestController
+    static class ProtectedProbeController {
+
+        @GetMapping("/api/test-protected")
+        Map<String, Long> whoAmI(Authentication authentication) {
+            return Map.of("userId", AuthPrincipals.resolve(authentication).getUserId());
         }
     }
 }

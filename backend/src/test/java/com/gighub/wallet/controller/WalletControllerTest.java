@@ -3,7 +3,9 @@ package com.gighub.wallet.controller;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import com.gighub.auth.security.AuthPrincipal;
 import com.gighub.common.exception.CommonExceptionHandler;
+import com.gighub.member.domain.UserRole;
 import com.gighub.wallet.dto.WalletSummary;
 import com.gighub.wallet.dto.WalletTransactionSearch;
 import com.gighub.wallet.dto.WalletTransactionView;
@@ -15,7 +17,8 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
-import org.springframework.mock.web.MockHttpSession;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
@@ -37,14 +40,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @ExtendWith(MockitoExtension.class)
 class WalletControllerTest {
 
-    private static final String LOGIN_USER = "LOGIN_USER";
     private static final Long USER_ID = 3L;
 
     @Mock
     private WalletQueryMapper walletQueryMapper;
 
     private MockMvc mockMvc;
-    private MockHttpSession session;
+    private Authentication authentication;
 
     /**
      * Java Time 직렬화를 포함한 독립형 Spring MVC 테스트 환경을 준비합니다.
@@ -62,8 +64,8 @@ class WalletControllerTest {
                 .setMessageConverters(converter)
                 .build();
 
-        session = new MockHttpSession();
-        session.setAttribute(LOGIN_USER, USER_ID);
+        AuthPrincipal principal = new AuthPrincipal(USER_ID, UserRole.OWNER, "김사장");
+        authentication = new UsernamePasswordAuthenticationToken(principal, null, List.of());
     }
 
     private WalletSummary summary(long available, long locked) {
@@ -97,7 +99,7 @@ class WalletControllerTest {
         when(walletQueryMapper.findWalletSummaryByUserId(USER_ID))
                 .thenReturn(summary(400_000L, 300_000L));
 
-        mockMvc.perform(get("/api/wallet").session(session))
+        mockMvc.perform(get("/api/wallet").principal(authentication))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.currency").value("KRW"))
                 .andExpect(jsonPath("$.data.availableBalance").value(400_000L))
@@ -127,7 +129,7 @@ class WalletControllerTest {
     void returnsNotFoundWhenWalletMissing() throws Exception {
         when(walletQueryMapper.findWalletSummaryByUserId(USER_ID)).thenReturn(null);
 
-        mockMvc.perform(get("/api/wallet").session(session))
+        mockMvc.perform(get("/api/wallet").principal(authentication))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("RESOURCE_NOT_FOUND"))
                 .andExpect(jsonPath("$.traceId").isString());
@@ -146,7 +148,7 @@ class WalletControllerTest {
         when(walletQueryMapper.findTransactions(any()))
                 .thenReturn(List.of(view("ESCROW_HOLD", 300_000L)));
 
-        mockMvc.perform(get("/api/wallet/transactions").session(session))
+        mockMvc.perform(get("/api/wallet/transactions").principal(authentication))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.content[0].type").value("ESCROW_HOLD"))
                 .andExpect(jsonPath("$.data.content[0].displayStatus").value("예치중"))
@@ -166,7 +168,7 @@ class WalletControllerTest {
     void skipsListQueryWhenCountIsZero() throws Exception {
         when(walletQueryMapper.countTransactions(any())).thenReturn(0L);
 
-        mockMvc.perform(get("/api/wallet/transactions").session(session))
+        mockMvc.perform(get("/api/wallet/transactions").principal(authentication))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.content").isEmpty())
                 .andExpect(jsonPath("$.data.page.totalPages").value(0));
@@ -186,7 +188,7 @@ class WalletControllerTest {
         mockMvc.perform(get("/api/wallet/transactions")
                         .param("from", "2026-07-22")
                         .param("to", "2026-07-22")
-                        .session(session))
+                        .principal(authentication))
                 .andExpect(status().isOk());
 
         ArgumentCaptor<WalletTransactionSearch> captor =
@@ -210,7 +212,7 @@ class WalletControllerTest {
         mockMvc.perform(get("/api/wallet/transactions")
                         .param("page", "2")
                         .param("size", "10")
-                        .session(session))
+                        .principal(authentication))
                 .andExpect(status().isOk());
 
         ArgumentCaptor<WalletTransactionSearch> captor =
@@ -232,7 +234,7 @@ class WalletControllerTest {
 
         mockMvc.perform(get("/api/wallet/transactions")
                         .param("keyword", "   ")
-                        .session(session))
+                        .principal(authentication))
                 .andExpect(status().isOk());
 
         ArgumentCaptor<WalletTransactionSearch> captor =
@@ -253,7 +255,7 @@ class WalletControllerTest {
     void rejectsUnknownSortKey() throws Exception {
         mockMvc.perform(get("/api/wallet/transactions")
                         .param("sort", "id;DROP")
-                        .session(session))
+                        .principal(authentication))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
                 .andExpect(jsonPath("$.traceId").isString());
@@ -270,7 +272,7 @@ class WalletControllerTest {
     void rejectsUnknownTransactionType() throws Exception {
         mockMvc.perform(get("/api/wallet/transactions")
                         .param("type", "UNKNOWN_TYPE")
-                        .session(session))
+                        .principal(authentication))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
 
@@ -286,7 +288,7 @@ class WalletControllerTest {
     void rejectsPageSizeAboveLimit() throws Exception {
         mockMvc.perform(get("/api/wallet/transactions")
                         .param("size", "1000")
-                        .session(session))
+                        .principal(authentication))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
 
@@ -302,7 +304,7 @@ class WalletControllerTest {
     void rejectsNegativePage() throws Exception {
         mockMvc.perform(get("/api/wallet/transactions")
                         .param("page", "-1")
-                        .session(session))
+                        .principal(authentication))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
     }
@@ -317,7 +319,7 @@ class WalletControllerTest {
         mockMvc.perform(get("/api/wallet/transactions")
                         .param("from", "2026-07-24")
                         .param("to", "2026-07-22")
-                        .session(session))
+                        .principal(authentication))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
     }
@@ -332,7 +334,7 @@ class WalletControllerTest {
         mockMvc.perform(get("/api/wallet/transactions")
                         .param("minAmount", "500000")
                         .param("maxAmount", "100000")
-                        .session(session))
+                        .principal(authentication))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
     }
