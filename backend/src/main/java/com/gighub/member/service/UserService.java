@@ -6,4 +6,6 @@ import com.gighub.member.dto.UserProfileResponse;
 public interface UserService {
 
     UserProfileResponse getProfile(Long userId);
+
+    UserProfileResponse updatePhone(Long userId, String phone);
 }

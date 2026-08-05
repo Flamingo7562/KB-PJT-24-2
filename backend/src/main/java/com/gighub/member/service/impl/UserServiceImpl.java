@@ -27,4 +27,14 @@ public class UserServiceImpl implements UserService {
         }
         return UserProfileResponse.from(user);
     }
+
+    @Override
+    @Transactional
+    public UserProfileResponse updatePhone(Long userId, String phone) {
+        int updated = userMapper.updatePhone(userId, phone);
+        if (updated == 0) {
+            throw new ResourceNotFoundException("사용자를 찾을 수 없습니다.");
+        }
+        return UserProfileResponse.from(userMapper.findProfileById(userId));
+    }
 }

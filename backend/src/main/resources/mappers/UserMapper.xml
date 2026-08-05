@@ -56,6 +56,13 @@
           AND role IN ('OWNER', 'WORKER')
     </select>
 
+    <update id="updatePhone">
+        UPDATE users
+        SET phone = #{phone}
+        WHERE id = #{userId}
+          AND role IN ('OWNER', 'WORKER')
+    </update>
+
     <insert id="insert"
             parameterType="com.gighub.member.domain.User"
             useGeneratedKeys="true"

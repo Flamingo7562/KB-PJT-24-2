@@ -63,6 +63,28 @@ class UserServiceImplTest {
         assertThrows(ResourceNotFoundException.class, () -> service.getProfile(99L));
     }
 
+    @Test
+    void returnsRefreshedProfileAfterPhoneUpdate() {
+        User updated = owner();
+        updated.setPhone("01099998888");
+        when(userMapper.updatePhone(42L, "01099998888")).thenReturn(1);
+        when(userMapper.findProfileById(42L)).thenReturn(updated);
+
+        UserProfileResponse response = service.updatePhone(42L, "01099998888");
+
+        assertEquals("01099998888", response.getPhone());
+        assertEquals("owner01", response.getLoginId());
+    }
+
+    @Test
+    void rejectsPhoneUpdateForMissingUser() {
+        when(userMapper.updatePhone(99L, "01099998888")).thenReturn(0);
+
+        assertThrows(
+                ResourceNotFoundException.class,
+                () -> service.updatePhone(99L, "01099998888"));
+    }
+
     private User owner() {
         User user = new User();
         user.setId(42L);
