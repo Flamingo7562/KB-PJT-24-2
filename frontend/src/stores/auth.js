@@ -55,7 +55,9 @@ export const useAuthStore = defineStore('auth', () => {
   /**
    * 로그인. 서버가 Session ID 를 교체하면서 CSRF Token 도 회전하므로, 성공 직후
    * CSRF 를 다시 준비하지 않으면 첫 상태변경 요청이 403 이 된다(API_SPEC.md:91).
-   * 실패 경로에서는 Session 이 바뀌지 않았으므로 재준비하지 않는다.
+   * loginApi() 자체가 실패하는 경로에서는 Session 이 바뀌지 않았으므로 재준비하지 않는다.
+   * loginApi() 는 성공했는데 이 재준비만 실패하는 경우는 로그인 실패로 취급하지 않는다 —
+   * user 상태는 이미 세팅됐으므로 호출자에게는 로그인이 끝난 것으로 보여야 한다(logout()과 동일).
    */
   async function login(credentials) {
     const res = await loginApi(credentials)
@@ -64,7 +66,11 @@ export const useAuthStore = defineStore('auth', () => {
       role: res.role,
       needsWorkplaceSetup: res.needsWorkplaceSetup ?? false
     }
-    await fetchCsrf()
+    try {
+      await fetchCsrf()
+    } catch {
+      // 재준비 실패는 로그인 실패가 아니다 — 삼키되, 실패한 요청을 자동으로 재시도하지 않는다.
+    }
     return res
   }
 
@@ -91,7 +97,7 @@ export const useAuthStore = defineStore('auth', () => {
     try {
       await fetchCsrf()
     } catch {
-      // 재준비 실패는 로그아웃 실패가 아니다 — 삼키고 다음 요청에서 403 이면 그때 재시도된다.
+      // 재준비 실패는 로그아웃 실패가 아니다 — 삼키되, 실패한 요청을 자동으로 재시도하지 않는다.
     }
   }
 

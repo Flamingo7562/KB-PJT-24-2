@@ -50,6 +50,21 @@ describe('auth store', () => {
     expect(fetchCsrf).not.toHaveBeenCalled()
   })
 
+  it('로그인 후 CSRF 재준비가 실패해도 로그인 자체는 실패하지 않는다', async () => {
+    // loginApi() 는 성공했으므로 user 상태는 이미 세팅됐다. 뒤따르는 CSRF 재준비만
+    // 실패했다고 로그인을 실패로 보고하면, 사용자는 실제로 로그인된 채로 "로그인에
+    // 실패했어요" 를 보고 재시도해 회전 전 토큰으로 403 을 받는다(logout()과 동일 처리).
+    loginApi.mockResolvedValue({ role: 'OWNER', name: '김사장', needsWorkplaceSetup: false })
+    fetchCsrf.mockRejectedValue(new Error('NETWORK_ERROR'))
+    const auth = useAuthStore()
+
+    await expect(
+      auth.login({ loginId: 'owner01', password: 'secret123', role: 'OWNER' })
+    ).resolves.toEqual({ role: 'OWNER', name: '김사장', needsWorkplaceSetup: false })
+
+    expect(auth.user).toEqual({ name: '김사장', role: 'OWNER', needsWorkplaceSetup: false })
+  })
+
   it('로그아웃 성공 후 CSRF 를 다시 준비한다', async () => {
     const auth = useAuthStore()
     auth.setUser({ name: '김사장', role: 'OWNER', needsWorkplaceSetup: false })
