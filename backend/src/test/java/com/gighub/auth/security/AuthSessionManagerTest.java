@@ -39,7 +39,7 @@ class AuthSessionManagerTest {
     }
 
     @Test
-    void establishCreatesSecurityContextAndLegacyBridgeWithoutExistingSession() {
+    void establishCreatesSecurityContextWithoutExistingSession() {
         MockHttpServletRequest request = new MockHttpServletRequest();
         MockHttpServletResponse response = new MockHttpServletResponse();
         AuthPrincipal principal = new AuthPrincipal(61L, UserRole.WORKER, "김근로");
@@ -54,7 +54,8 @@ class AuthSessionManagerTest {
         assertEquals(principal, context.getAuthentication().getPrincipal());
         assertEquals("ROLE_WORKER", context.getAuthentication().getAuthorities()
                 .iterator().next().getAuthority());
-        assertEquals(61L, session.getAttribute(AuthSessionManager.LEGACY_LOGIN_USER));
+        // 인증 주체는 SecurityContext 하나로만 표현하며 legacy Session Attribute를 남기지 않습니다.
+        assertNull(session.getAttribute("LOGIN_USER"));
         verify(csrfTokenRepository).saveToken(isNull(), eq(request), eq(response));
     }
 

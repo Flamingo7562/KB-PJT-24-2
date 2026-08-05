@@ -1,9 +1,9 @@
 package com.gighub.wallet.controller;
 
+import com.gighub.auth.security.AuthPrincipals;
 import com.gighub.common.api.ApiResponse;
 import com.gighub.common.api.PageRequests;
 import com.gighub.common.api.PageResponse;
-import com.gighub.common.exception.AuthRequiredException;
 import com.gighub.common.exception.ResourceNotFoundException;
 import com.gighub.common.exception.ValidationException;
 import com.gighub.wallet.dto.WalletBalanceResponse;
@@ -15,11 +15,11 @@ import com.gighub.wallet.mapper.WalletQueryMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import javax.servlet.http.HttpSession;
 import java.time.LocalDate;
 
 import java.util.ArrayList;
@@ -31,18 +31,14 @@ import java.util.Set;
 @RequiredArgsConstructor
 public class WalletController {
 
-    private static final String LOGIN_USER = "LOGIN_USER";
     private static final String CURRENCY_KRW = "KRW";
 
     private final WalletQueryMapper walletQueryMapper;
 
     // 내 지갑 요약, availableBalance만 대표 잔액이며 lockedBalance와 합산해 제공하지 않는다.
     @GetMapping("/api/wallet")
-    public ResponseEntity<ApiResponse<WalletBalanceResponse>> getWallet(HttpSession session){
-        Long loginUserId = (Long) session.getAttribute(LOGIN_USER);
-        if (loginUserId == null) {
-            throw new AuthRequiredException("로그인이 필요합니다.");
-        }
+    public ResponseEntity<ApiResponse<WalletBalanceResponse>> getWallet(Authentication authentication) {
+        Long loginUserId = AuthPrincipals.resolve(authentication).getUserId();
 
         WalletSummary summary = walletQueryMapper.findWalletSummaryByUserId(loginUserId);
         if (summary == null) {
@@ -74,12 +70,9 @@ public class WalletController {
             @RequestParam(value = "sort", defaultValue = "LATEST") String sort,
             @RequestParam(value = "page", defaultValue = PageRequests.DEFAULT_PAGE_TEXT) int page,
             @RequestParam(value = "size", defaultValue = PageRequests.DEFAULT_SIZE_TEXT) int size,
-            HttpSession session) {
+            Authentication authentication) {
 
-        Long loginUserId = (Long) session.getAttribute(LOGIN_USER);
-        if (loginUserId == null) {
-            throw new AuthRequiredException("로그인이 필요합니다.");
-        }
+        Long loginUserId = AuthPrincipals.resolve(authentication).getUserId();
         PageRequests.validate(page, size);
         if (!ALLOWED_SORTS.contains(sort)) {
             throw new ValidationException("지원하지 않는 sort 값입니다.");

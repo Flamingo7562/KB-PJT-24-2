@@ -1,16 +1,16 @@
 package com.gighub.bank.controller;
 
+import com.gighub.auth.security.AuthPrincipals;
 import com.gighub.bank.dto.BankAccountSummary;
 import com.gighub.bank.mapper.MockBankQueryMapper;
-import com.gighub.common.exception.AuthRequiredException;
 import com.gighub.common.exception.ValidationException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import javax.servlet.http.HttpSession;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -19,7 +19,6 @@ import java.util.Map;
 @RestController
 @RequiredArgsConstructor
 public class MockBankAccountController {
-    private static final String LOGIN_USER = "LOGIN_USER";
     private static final String STATUS_ACTIVE = "ACTIVE";
 
     private final MockBankQueryMapper mockBankQueryMapper;
@@ -28,11 +27,8 @@ public class MockBankAccountController {
     @GetMapping("/api/mock-bank-accounts")
     public ResponseEntity<Map<String, Object>> getAccounts(
             @RequestParam(value = "status", required = false) String status,
-            HttpSession session) {
-        Long loginUserId = (Long) session.getAttribute(LOGIN_USER);
-        if (loginUserId == null) {
-            throw new AuthRequiredException("로그인이 필요합니다.");
-        }
+            Authentication authentication) {
+        Long loginUserId = AuthPrincipals.resolve(authentication).getUserId();
 
         if (status != null && !STATUS_ACTIVE.equals(status)) {
             throw new ValidationException("지원하지 않는 status 값입니다.");

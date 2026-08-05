@@ -3,7 +3,9 @@ package com.gighub.wallet.controller;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import com.gighub.auth.security.AuthPrincipal;
 import com.gighub.common.exception.CommonExceptionHandler;
+import com.gighub.member.domain.UserRole;
 import com.gighub.settlement.service.SettlementService;
 import com.gighub.settlement.service.command.SettlementApproveCommand;
 import com.gighub.settlement.service.result.SettlementResult;
@@ -13,11 +15,13 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.http.MediaType;
 import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
-import org.springframework.mock.web.MockHttpSession;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
@@ -71,14 +75,13 @@ class EscrowControllerTest {
                         .replayed(false)
                         .build()
         );
-        MockHttpSession session = new MockHttpSession();
-        session.setAttribute("LOGIN_USER", EMPLOYER_ID);
+        Authentication authentication = employerAuthentication();
 
         mockMvc.perform(post(
                         "/api/work-cases/{workCaseId}/settlement/approve",
                         WORK_CASE_ID
                 )
-                        .session(session)
+                        .principal(authentication)
                         .header("Idempotency-Key", "SETTLEMENT-KEY-001"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.settlementId").value(12))
@@ -113,11 +116,10 @@ class EscrowControllerTest {
 
     @Test
     void holdRejectsDifferentWorkerThroughCommonErrorFlow() throws Exception {
-        MockHttpSession session = new MockHttpSession();
-        session.setAttribute("LOGIN_USER", EMPLOYER_ID);
+        Authentication authentication = employerAuthentication();
 
         mockMvc.perform(post("/api/invites/{token}/accept", "test-token")
-                        .session(session)
+                        .principal(authentication)
                         .header("Idempotency-Key", "ESCROW-HOLD-001")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -133,5 +135,10 @@ class EscrowControllerTest {
                 .andExpect(jsonPath("$.traceId").isString());
 
         verify(escrowService, never()).hold(any());
+    }
+
+    private static Authentication employerAuthentication() {
+        AuthPrincipal principal = new AuthPrincipal(EMPLOYER_ID, UserRole.OWNER, "김사장");
+        return new UsernamePasswordAuthenticationToken(principal, null, List.of());
     }
 }

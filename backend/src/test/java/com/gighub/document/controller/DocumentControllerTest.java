@@ -4,16 +4,19 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import com.gighub.auth.security.AuthPrincipal;
 import com.gighub.common.exception.CommonExceptionHandler;
 import com.gighub.document.dto.DocumentListItem;
 import com.gighub.document.mapper.DocumentQueryMapper;
+import com.gighub.member.domain.UserRole;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
-import org.springframework.mock.web.MockHttpSession;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -44,7 +47,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @ExtendWith(MockitoExtension.class)
 class DocumentControllerTest {
 
-    private static final String LOGIN_USER = "LOGIN_USER";
     private static final Long USER_ID = 7L;
 
     @Mock
@@ -52,7 +54,7 @@ class DocumentControllerTest {
 
     private MockMvc mockMvc;
     private ObjectMapper objectMapper;
-    private MockHttpSession session;
+    private Authentication authentication;
 
     @BeforeEach
     void setUp() {
@@ -65,8 +67,8 @@ class DocumentControllerTest {
                 .setMessageConverters(new MappingJackson2HttpMessageConverter(objectMapper))
                 .build();
 
-        session = new MockHttpSession();
-        session.setAttribute(LOGIN_USER, USER_ID);
+        AuthPrincipal principal = new AuthPrincipal(USER_ID, UserRole.WORKER, "김근로");
+        authentication = new UsernamePasswordAuthenticationToken(principal, null, List.of());
     }
 
     private DocumentListItem item(long documentId) {
@@ -92,7 +94,7 @@ class DocumentControllerTest {
                 .thenReturn(List.of(item(11L), item(12L)));
         when(documentQueryMapper.countDocuments(USER_ID, null)).thenReturn(41);
 
-        MvcResult result = mockMvc.perform(get("/api/documents").session(session))
+        MvcResult result = mockMvc.perform(get("/api/documents").principal(authentication))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.content.length()").value(2))
                 .andExpect(jsonPath("$.data.content[0].documentId").value(11))
@@ -121,7 +123,7 @@ class DocumentControllerTest {
                 .thenReturn(List.of());
         when(documentQueryMapper.countDocuments(any(), any())).thenReturn(0);
 
-        mockMvc.perform(get("/api/documents").param("documentType", "CONTRACT").session(session))
+        mockMvc.perform(get("/api/documents").param("documentType", "CONTRACT").principal(authentication))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.content").isArray())
                 .andExpect(jsonPath("$.data.content.length()").value(0))
@@ -147,7 +149,7 @@ class DocumentControllerTest {
         mockMvc.perform(get("/api/documents")
                         .param("page", "2")
                         .param("size", "10")
-                        .session(session))
+                        .principal(authentication))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.page.number").value(2))
                 .andExpect(jsonPath("$.data.page.size").value(10));
@@ -166,7 +168,7 @@ class DocumentControllerTest {
                 .thenReturn(List.of());
         when(documentQueryMapper.countDocuments(any(), any())).thenReturn(0);
 
-        mockMvc.perform(get("/api/documents").param("size", "100").session(session))
+        mockMvc.perform(get("/api/documents").param("size", "100").principal(authentication))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.page.size").value(100));
     }
@@ -178,7 +180,7 @@ class DocumentControllerTest {
      */
     @Test
     void rejectsPageSizeAboveLimit() throws Exception {
-        mockMvc.perform(get("/api/documents").param("size", "101").session(session))
+        mockMvc.perform(get("/api/documents").param("size", "101").principal(authentication))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
                 .andExpect(jsonPath("$.traceId").isString());
@@ -194,7 +196,7 @@ class DocumentControllerTest {
      */
     @Test
     void rejectsPageSizeBelowOne() throws Exception {
-        mockMvc.perform(get("/api/documents").param("size", "0").session(session))
+        mockMvc.perform(get("/api/documents").param("size", "0").principal(authentication))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
 
@@ -209,7 +211,7 @@ class DocumentControllerTest {
      */
     @Test
     void rejectsNegativePage() throws Exception {
-        mockMvc.perform(get("/api/documents").param("page", "-1").session(session))
+        mockMvc.perform(get("/api/documents").param("page", "-1").principal(authentication))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
 

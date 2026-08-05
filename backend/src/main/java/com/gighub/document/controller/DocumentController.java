@@ -1,9 +1,9 @@
 package com.gighub.document.controller;
 
+import com.gighub.auth.security.AuthPrincipals;
 import com.gighub.common.api.ApiResponse;
 import com.gighub.common.api.PageRequests;
 import com.gighub.common.api.PageResponse;
-import com.gighub.common.exception.AuthRequiredException;
 import com.gighub.document.dto.Document;
 import com.gighub.document.dto.DocumentDetailResponse;
 import com.gighub.document.dto.DocumentListItem;
@@ -14,18 +14,17 @@ import com.gighub.document.exception.DocumentNotFoundException;
 import com.gighub.document.mapper.DocumentQueryMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import javax.servlet.http.HttpSession;
 import java.util.List;
 
 @RestController
 @RequiredArgsConstructor
 public class DocumentController {
-    private static final String LOGIN_USER = "LOGIN_USER";
 
     private final DocumentQueryMapper documentQueryMapper;
 
@@ -36,8 +35,8 @@ public class DocumentController {
             @RequestParam(required = false) String source,
             @RequestParam(defaultValue = PageRequests.DEFAULT_PAGE_TEXT) int page,
             @RequestParam(defaultValue = PageRequests.DEFAULT_SIZE_TEXT) int size,
-            HttpSession session){
-        Long loginUserId = requireLogin(session);
+            Authentication authentication) {
+        Long loginUserId = AuthPrincipals.resolve(authentication).getUserId();
         PageRequests.validate(page, size);
 
         List<DocumentListItem> content = documentQueryMapper.findDocuments(
@@ -52,8 +51,8 @@ public class DocumentController {
     @GetMapping("/api/documents/{documentId}")
     public ResponseEntity<ApiResponse<DocumentDetailResponse>> getDocument(
             @PathVariable Long documentId,
-            HttpSession session) {
-        requireLogin(session);
+            Authentication authentication) {
+        AuthPrincipals.resolve(authentication);
 
         Document document = documentQueryMapper.findDocumentById(documentId);
         if (document == null) {
@@ -72,21 +71,13 @@ public class DocumentController {
     @GetMapping("/api/documents/{documentId}/shares")
     public ResponseEntity<ApiResponse<DocumentShareListResponse>> getDocumentShares(
             @PathVariable Long documentId,
-            HttpSession session){
-        requireLogin(session);
+            Authentication authentication) {
+        AuthPrincipals.resolve(authentication);
 
         // TODO: 문서 소유자 검증 (DOCUMENT_ACCESS_DENIED)
         List<DocumentShare> shares =
                 documentQueryMapper.findSharesByDocumentId(documentId);
 
         return ResponseEntity.ok(ApiResponse.of(DocumentShareListResponse.of(shares)));
-    }
-
-    private Long requireLogin(HttpSession session){
-        Long loginUserId = (Long) session.getAttribute(LOGIN_USER);
-        if(loginUserId == null){
-            throw new AuthRequiredException("로그인이 필요합니다.");
-        }
-        return loginUserId;
     }
 }

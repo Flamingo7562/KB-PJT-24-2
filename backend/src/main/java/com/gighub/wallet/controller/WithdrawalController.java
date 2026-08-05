@@ -1,7 +1,7 @@
 package com.gighub.wallet.controller;
 
+import com.gighub.auth.security.AuthPrincipals;
 import com.gighub.common.api.ApiResponse;
-import com.gighub.common.exception.AuthRequiredException;
 import com.gighub.wallet.dto.WithdrawalRequest;
 import com.gighub.wallet.dto.WithdrawalRequestResponse;
 import com.gighub.wallet.service.WithdrawalService;
@@ -9,18 +9,17 @@ import com.gighub.wallet.service.command.WithdrawalCommand;
 import com.gighub.wallet.service.result.WithdrawalResult;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RestController;
 
-import javax.servlet.http.HttpSession;
 import javax.validation.Valid;
 
 @RestController
 @RequiredArgsConstructor
 public class WithdrawalController {
-    private static final String LOGIN_USER = "LOGIN_USER";
 
     private final WithdrawalService withdrawalService;
 
@@ -29,12 +28,9 @@ public class WithdrawalController {
     public ResponseEntity<ApiResponse<WithdrawalRequestResponse>> withdraw(
             @RequestHeader("Idempotency-Key") String idempotencyKey,
             @Valid @RequestBody WithdrawalRequest request,
-            HttpSession session) {
+            Authentication authentication) {
 
-        Long loginUserId = (Long) session.getAttribute(LOGIN_USER);
-        if (loginUserId == null) {
-            throw new AuthRequiredException("로그인이 필요합니다.");
-        }
+        Long loginUserId = AuthPrincipals.resolve(authentication).getUserId();
 
         WithdrawalResult result = withdrawalService.withdraw(WithdrawalCommand.builder()
                 .userId(loginUserId)
