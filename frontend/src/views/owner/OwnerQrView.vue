@@ -86,7 +86,7 @@ watch(() => qr.value?.qrToken, draw)
 <template>
   <div class="qr-screen">
     <EmptyState
-      v-if="!workplaceStore.hasWorkplace && workplaceStore.loaded"
+      v-if="!workplaceStore.hasActiveWorkplace && workplaceStore.loaded"
       message="등록된 사업장이 없습니다."
     >
       사업장을 먼저 등록하면 출퇴근 QR을 발급할 수 있어요.
