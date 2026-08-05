@@ -1,0 +1,26 @@
+package com.gighub.workplace.service.command;
+
+import java.math.BigDecimal;
+
+import lombok.Builder;
+import lombok.Getter;
+
+/**
+ * 검증을 통과한 사업장 등록 입력을 Service로 전달하는 불변 Command입니다.
+ *
+ * <p>소유자와 인증 반경, 최초 상태는 입력이 아니므로 필드로 두지 않습니다. 소유자는
+ * Service가 인증 Principal에서 채우고 반경·상태는 Mapper XML이 계약값으로 기록합니다.</p>
+ */
+@Getter
+@Builder
+public final class WorkplaceCreateCommand {
+
+    private final String businessRegistrationNumber;
+    private final String name;
+    private final String representativeName;
+    private final String roadAddress;
+    private final String detailAddress;
+    private final String phone;
+    private final BigDecimal latitude;
+    private final BigDecimal longitude;
+}
