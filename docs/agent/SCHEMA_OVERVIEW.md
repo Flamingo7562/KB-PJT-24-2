@@ -7,21 +7,22 @@ This is the compact database context for repository agents. Read it before chang
 | Item                   | Current baseline                                                                                               |
 | ---------------------- | -------------------------------------------------------------------------------------------------------------- |
 | Status                 | Current                                                                                                        |
-| Last verified          | 2026-08-04                                                                                                     |
+| Last verified          | 2026-08-05                                                                                                     |
 | Schema and DDL editor  | PM or Repository Administrator controlled; ordinary implementation agents have read-only access                |
 | Schema source of truth | Owner-authored or owner-adopted tracked `backend/src/main/resources/db/migration/V*.sql`                       |
-| Migration head         | `202608041614`                                                                                                 |
-| Versioned migrations   | 10                                                                                                             |
+| Migration head         | `202608051337`                                                                                                 |
+| Versioned migrations   | 11                                                                                                             |
 | Domain tables          | 24, excluding Flyway's `flyway_schema_history`                                                                 |
 | Runtime                | MySQL 8.4.10, InnoDB                                                                                           |
-| Readable DDL snapshot  | [`schema-snapshot-202608041614.sql`](../database/schema-snapshot-202608041614.sql), owner-maintained reference |
+| Readable DDL snapshot  | [`schema-snapshot-202608051337.sql`](../database/schema-snapshot-202608051337.sql), owner-maintained reference |
 
 When this summary and executable configuration disagree, inspect the owner-authored or
 owner-adopted migrations, Git tracking, `compose.yaml`, `DatabaseConfig.java`, and
-`backend/build.gradle`. Versions `202607311427` through `202608041614` are approved parts of the
-current schema. Version `202608041614` adds the independent idempotency Claim store without changing
-the existing finance tables. Update this document when those authoritative sources prove the summary
-is stale.
+`backend/build.gradle`. Versions `202607311427` through `202608051337` are approved parts of the
+current schema. Version `202608041614` adds the independent idempotency Claim store, and version
+`202608051337` replaces Mock bank-account user ownership with a four-digit Demo PIN while preserving
+account IDs and finance references. Update this document when those authoritative sources prove the
+summary is stale.
 If the executable schema itself needs correction, report the required change to the owner and do
 not edit or regenerate SQL.
 
@@ -38,18 +39,19 @@ not edit or regenerate SQL.
 
 ## Migration history
 
-| Version        | File                                                        | Main effect                                                                                          |
-| -------------- | ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| `202607200001` | `V202607200001__create_gig_hub_baseline.sql`                | Baseline identity, work, wallet, banking, escrow, attendance, dispute, and document schema           |
-| `202607211440` | `V202607211440__add_signup_and_workplace_schema.sql`        | Signup identity fields, user withdrawal lifecycle, workplaces, and work-case ownership linkage       |
-| `202607221300` | `V202607221300__support_contract_escrow_test_flow.sql`      | Contract/escrow fixture support and final withdrawal naming/relationship adjustments                 |
-| `202607301027` | `V202607301027__remove_invited_from_work_case_status.sql`   | Map legacy `INVITED` work cases to `DRAFT` and remove `INVITED` from the work-case status constraint |
-| `202607301152` | `V202607301152__split_workplace_address.sql`                | Preserve legacy workplace addresses as road addresses and add an optional nonblank detail address    |
-| `202607311427` | `V202607311427__move_qr_tokens_to_workplace_scope.sql`      | Replace work/action QR issuance with one active fixed QR per workplace while preserving legacy rows  |
-| `202607311428` | `V202607311428__add_password_reset_tokens.sql`              | Add hashed, expiring, single-active password-reset token lifecycle storage                           |
-| `202607311429` | `V202607311429__add_check_out_missing_work_case_status.sql` | Allow the distinct `CHECK_OUT_MISSING` work-case state and require an assigned worker for that state |
-| `202608041138` | `V202608041138__remove_employer_profiles.sql`               | Drop the unused employer profile table without renaming or copying its legacy contact data           |
-| `202608041614` | `V202608041614__add_idempotency_request_claims.sql`         | Add a user-and-operation-scoped Claim store for request fingerprints and successful response replay  |
+| Version        | File                                                         | Main effect                                                                                           |
+| -------------- | ------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------- |
+| `202607200001` | `V202607200001__create_gig_hub_baseline.sql`                 | Baseline identity, work, wallet, banking, escrow, attendance, dispute, and document schema            |
+| `202607211440` | `V202607211440__add_signup_and_workplace_schema.sql`         | Signup identity fields, user withdrawal lifecycle, workplaces, and work-case ownership linkage        |
+| `202607221300` | `V202607221300__support_contract_escrow_test_flow.sql`       | Contract/escrow fixture support and final withdrawal naming/relationship adjustments                  |
+| `202607301027` | `V202607301027__remove_invited_from_work_case_status.sql`    | Map legacy `INVITED` work cases to `DRAFT` and remove `INVITED` from the work-case status constraint  |
+| `202607301152` | `V202607301152__split_workplace_address.sql`                 | Preserve legacy workplace addresses as road addresses and add an optional nonblank detail address     |
+| `202607311427` | `V202607311427__move_qr_tokens_to_workplace_scope.sql`       | Replace work/action QR issuance with one active fixed QR per workplace while preserving legacy rows   |
+| `202607311428` | `V202607311428__add_password_reset_tokens.sql`               | Add hashed, expiring, single-active password-reset token lifecycle storage                            |
+| `202607311429` | `V202607311429__add_check_out_missing_work_case_status.sql`  | Allow the distinct `CHECK_OUT_MISSING` work-case state and require an assigned worker for that state  |
+| `202608041138` | `V202608041138__remove_employer_profiles.sql`                | Drop the unused employer profile table without renaming or copying its legacy contact data            |
+| `202608041614` | `V202608041614__add_idempotency_request_claims.sql`          | Add a user-and-operation-scoped Claim store for request fingerprints and successful response replay   |
+| `202608051337` | `V202608051337__replace_mock_bank_account_user_with_pin.sql` | Remove Mock account user ownership and add the four-digit ASCII Demo PIN without changing account IDs |
 
 Applied or shared versioned migrations are immutable. A newer `V*.sql` file or another DDL artifact may be created only in a scoped administrative release explicitly authorized by the human Project Manager or Repository Administrator.
 
@@ -92,7 +94,7 @@ Inspect the ordered migrations before relying on an exact column, key, index, ge
 ### Wallet, banking, escrow, and settlement
 
 - A user has at most one KRW `wallet`; balances are unsigned.
-- `mock_bank_accounts.available_amount` cannot exceed `balance`. Bank/account and fintech identifiers are unique.
+- `mock_bank_accounts` rows are not owned by users. Their four-digit ASCII `pin` defaults to `0000`, `available_amount` cannot exceed `balance`, and bank/account and fintech identifiers are unique.
 - Funding orders, withdrawal requests, and wallet transactions use globally unique idempotency keys in their respective tables.
 - `idempotency_requests` permits one Claim per `(user_id, operation_code, idempotency_key)`. It stores
   a 32-byte request fingerprint and either an in-progress Claim or a completed 2xx response Snapshot.
@@ -103,7 +105,7 @@ Inspect the ordered migrations before relying on an exact column, key, index, ge
 - `wallet_transactions` records before/after snapshots, but the database does not validate ledger arithmetic or the polymorphic reference target.
 - `escrows.work_case_id` and `settlements.work_case_id` are each unique. Composite foreign keys require their amounts to equal the work case's agreed wage.
 - There is no direct foreign key between a settlement and an escrow.
-- Separate funding and withdrawal foreign keys do not align the actor, linked mock account, and mock bank transaction. Withdrawal foreign keys also do not prove that the request user and wallet have the same owner.
+- Funding and withdrawal foreign keys preserve the selected Mock account and bank-transaction references, but they do not enforce ACTIVE status, funding PIN approval, or that a withdrawal request user owns its wallet.
 
 ### Attendance and dispute
 
@@ -135,7 +137,8 @@ Project Manager or Repository Administrator and must not edit Flyway or a DDL sn
 | Fixed workplace radius            | `workplaces.radius_meters` defaults to 100, while it and `work_cases.allowed_radius_meters` accept every positive value        | The application always writes and checks 100m in both current and snapshot data. The owner decides whether DB checks should also require exactly 100                       |
 | System-generated contracts        | `documents.work_case_id` may be null even for `EMPLOYMENT_CONTRACT`                                                            | The service permits only system-generated, work-case-linked contracts. The owner decides whether DB enforcement is needed                                                  |
 | Three-year contract auto-deletion | `documents.status=DELETED` exists, but there is no dedicated retention or deletion tracking/index                              | First decide start/end reference date and deletion scope across storage, metadata, checksum, and audit; then the owner decides the required schema                         |
-| Idempotency request handling      | User, operation, and key Claims are unique; fingerprints, completed 2xx snapshots, and expiry can be stored                     | The application owns Claim acquisition, fingerprint comparison, immediate conflict handling, replay, interruption recovery, and expiry cleanup                            |
+| Idempotency request handling      | User, operation, and key Claims are unique; fingerprints, completed 2xx snapshots, and expiry can be stored                    | The application owns Claim acquisition, fingerprint comparison, immediate conflict handling, replay, interruption recovery, and expiry cleanup                             |
+| Non-owned Mock account execution  | Account rows have a four-digit PIN and no user FK; existing order, withdrawal, and bank-ledger references remain               | A compatible backend must resolve ACTIVE accounts by bank/account, verify PIN only for new funding, and treat withdrawal accounts as PIN-free destinations                 |
 
 `CHECK_OUT_MISSING` is an approved persisted state distinct from `NO_SHOW`. The DDL only permits the
 state and requires an assigned worker. Detection time and actor, late checkout, correction
@@ -156,7 +159,7 @@ Database constraints do not replace application authorization or transaction rul
 - normalize `users.phone` and `workplaces.phone` to approved digit-only values and keep phone values out of request, response, and SQL binding logs;
 - a fixed 100m workplace radius and the workplace update allowlist that excludes representative, coordinates, and radius; address changes on coordinate-bearing workplaces wait for an approved geocoding/reverification or restriction policy;
 - complete state-transition graphs;
-- ownership alignment across funding or withdrawal actors, wallets, linked accounts, and bank transactions;
+- wallet actor alignment, ACTIVE non-owned account resolution by bank/account, funding PIN verification without persistence or logging, PIN-free withdrawal destination checks, and consistent account/ledger locking;
 - attendance worker assignment;
 - fixed-QR HMAC verification, revoked-token rejection, first/second scan selection, one applicable work case per worker/workplace, location checks, and transactional QR reissue;
 - idempotent no-show handling and, after product approval, missing-checkout detection, race handling, resolution, and settlement behavior;

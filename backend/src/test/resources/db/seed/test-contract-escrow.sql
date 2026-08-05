@@ -90,27 +90,27 @@ SET @worker_wallet_id = (
 );
 
 INSERT INTO mock_bank_accounts (
-    user_id, bank_code, mock_account_number, mock_fintech_use_num,
+    bank_code, mock_account_number, pin, mock_fintech_use_num,
     currency, balance, available_amount, status
 ) VALUES (
-    @owner_id, '004', '170000000001', 'TEST-FINTECH-OWNER-17',
+    '004', '170000000001', '0000', 'TEST-FINTECH-OWNER-17',
     'KRW', 1000000, 1000000, 'ACTIVE'
 )
 ON DUPLICATE KEY UPDATE
-    user_id = @owner_id,
+    pin = '0000',
     balance = 1000000,
     available_amount = 1000000,
     status = 'ACTIVE';
 
 INSERT INTO mock_bank_accounts (
-    user_id, bank_code, mock_account_number, mock_fintech_use_num,
+    bank_code, mock_account_number, pin, mock_fintech_use_num,
     currency, balance, available_amount, status
 ) VALUES (
-    @worker_id, '004', '170000000002', 'TEST-FINTECH-WORKER-17',
+    '004', '170000000002', '0000', 'TEST-FINTECH-WORKER-17',
     'KRW', 0, 0, 'ACTIVE'
 )
 ON DUPLICATE KEY UPDATE
-    user_id = @worker_id,
+    pin = '0000',
     balance = 0,
     available_amount = 0,
     status = 'ACTIVE';

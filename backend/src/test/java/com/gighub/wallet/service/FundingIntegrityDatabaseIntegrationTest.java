@@ -280,7 +280,7 @@ class FundingIntegrityDatabaseIntegrationTest {
                     context.getBean(PlatformTransactionManager.class);
             JdbcTemplate jdbcTemplate =
                     new JdbcTemplate(context.getBean(DataSource.class));
-            AccountOwner accountOwner = findAccountOwner(jdbcTemplate);
+            FundingFixture fixture = createFundingFixture(jdbcTemplate);
             String key = "IT-" + UUID.randomUUID();
             CountDownLatch ownerInserted = new CountDownLatch(1);
             CountDownLatch duplicateStarted = new CountDownLatch(1);
@@ -291,7 +291,7 @@ class FundingIntegrityDatabaseIntegrationTest {
                 Future<Long> owner = executor.submit(() ->
                         new TransactionTemplate(transactionManager).execute(status -> {
                             FundingOrderParam param =
-                                    orderParam(accountOwner, key);
+                                    orderParam(fixture.userId(), fixture.accountId(), key);
                             assertEquals(1, fundingMapper.insertFundingOrder(param));
                             assertNotNull(param.getId());
                             ownerInserted.countDown();
@@ -305,7 +305,8 @@ class FundingIntegrityDatabaseIntegrationTest {
                     return new TransactionTemplate(transactionManager).execute(status -> {
                         duplicateStarted.countDown();
                         try {
-                            fundingMapper.insertFundingOrder(orderParam(accountOwner, key));
+                            fundingMapper.insertFundingOrder(orderParam(
+                                    fixture.userId(), fixture.accountId(), key));
                             throw new AssertionError("중복 멱등 키 INSERT가 성공했습니다.");
                         } catch (DuplicateKeyException expected) {
                             return fundingMapper.findByIdempotencyKeyForShare(key);
@@ -324,8 +325,8 @@ class FundingIntegrityDatabaseIntegrationTest {
                 FundingOrder replayed = duplicate.get(5, TimeUnit.SECONDS);
                 assertNotNull(replayed);
                 assertEquals(ownerId, replayed.getId());
-                assertEquals(accountOwner.userId(), replayed.getEmployerId());
-                assertEquals(accountOwner.accountId(), replayed.getLinkedAccountId());
+                assertEquals(fixture.userId(), replayed.getEmployerId());
+                assertEquals(fixture.accountId(), replayed.getLinkedAccountId());
                 assertEquals(1L, replayed.getExpectedAmount());
             } finally {
                 releaseOwner.countDown();
@@ -335,6 +336,7 @@ class FundingIntegrityDatabaseIntegrationTest {
                         "DELETE FROM funding_orders WHERE idempotency_key = ?",
                         key
                 );
+                deleteFundingFixture(jdbcTemplate, fixture);
             }
         }
     }
@@ -491,58 +493,48 @@ class FundingIntegrityDatabaseIntegrationTest {
                      new AnnotationConfigApplicationContext(RootConfig.class)) {
             DataSource dataSource = context.getBean(DataSource.class);
             JdbcTemplate jdbcTemplate = new JdbcTemplate(dataSource);
-            Long userId = jdbcTemplate.queryForObject(
-                    "SELECT user_id FROM wallets ORDER BY id LIMIT 1",
-                    Long.class
-            );
-            AccountOwner accountOwner = findAccountOwner(jdbcTemplate);
+            FundingFixture fixture = createFundingFixture(jdbcTemplate);
             WalletMapper walletMapper = context.getBean(WalletMapper.class);
             BankTransferGateway gateway = context.getBean(BankTransferGateway.class);
             PlatformTransactionManager transactionManager =
                     context.getBean(PlatformTransactionManager.class);
             TransactionTemplate transaction = new TransactionTemplate(transactionManager);
 
-            assertThrows(
-                    IllegalTransactionStateException.class,
-                    () -> gateway.preflight(BankAccountPreflightCommand.builder()
-                            .accountId(accountOwner.accountId())
-                            .userId(accountOwner.userId())
-                            .build())
-            );
+            try {
+                assertThrows(
+                        IllegalTransactionStateException.class,
+                        () -> gateway.preflight(BankAccountPreflightCommand.builder()
+                                .accountId(fixture.accountId())
+                                .userId(fixture.userId())
+                                .build())
+                );
 
-            WalletBalanceSnapshot snapshot = transaction.execute(status -> {
-                WalletBalanceSnapshot locked =
-                        walletMapper.getWalletSnapshotForUpdate(userId);
-                gateway.preflight(BankAccountPreflightCommand.builder()
-                        .accountId(accountOwner.accountId())
-                        .userId(accountOwner.userId())
-                        .build());
-                status.setRollbackOnly();
-                return locked;
-            });
+                WalletBalanceSnapshot snapshot = transaction.execute(status -> {
+                    WalletBalanceSnapshot locked =
+                            walletMapper.getWalletSnapshotForUpdate(fixture.userId());
+                    gateway.preflight(BankAccountPreflightCommand.builder()
+                            .accountId(fixture.accountId())
+                            .userId(fixture.userId())
+                            .build());
+                    status.setRollbackOnly();
+                    return locked;
+                });
 
-            assertNotNull(snapshot);
-            assertNotNull(snapshot.getWalletId());
-            assertEquals(userId, snapshot.getUserId());
-            assertNotNull(snapshot.getAvailableBalance());
-            assertNotNull(snapshot.getLockedBalance());
+                assertNotNull(snapshot);
+                assertNotNull(snapshot.getWalletId());
+                assertEquals(fixture.userId(), snapshot.getUserId());
+                assertNotNull(snapshot.getAvailableBalance());
+                assertNotNull(snapshot.getLockedBalance());
+            } finally {
+                deleteFundingFixture(jdbcTemplate, fixture);
+            }
         }
     }
 
-    private AccountOwner findAccountOwner(JdbcTemplate jdbcTemplate) {
-        return jdbcTemplate.queryForObject(
-                "SELECT id, user_id FROM mock_bank_accounts ORDER BY id LIMIT 1",
-                (resultSet, rowNum) -> new AccountOwner(
-                        resultSet.getLong("id"),
-                        resultSet.getLong("user_id")
-                )
-        );
-    }
-
-    private FundingOrderParam orderParam(AccountOwner accountOwner, String key) {
+    private FundingOrderParam orderParam(Long employerId, Long accountId, String key) {
         return FundingOrderParam.builder()
-                .employerId(accountOwner.userId())
-                .linkedAccountId(accountOwner.accountId())
+                .employerId(employerId)
+                .linkedAccountId(accountId)
                 .expectedAmount(1L)
                 .idempotencyKey(key)
                 .build();
@@ -581,11 +573,11 @@ class FundingIntegrityDatabaseIntegrationTest {
         );
         jdbcTemplate.update(
                 "INSERT INTO mock_bank_accounts"
-                        + " (user_id, bank_code, mock_account_number,"
+                        + " (bank_code, mock_account_number, pin,"
                         + " mock_fintech_use_num, currency, balance,"
                         + " available_amount, status)"
-                        + " VALUES (?, '999', ?, ?, 'KRW', 1000000, 1000000, 'ACTIVE')",
-                userId,
+                        + " VALUES ('999', ?, '0000', ?, 'KRW',"
+                        + " 1000000, 1000000, 'ACTIVE')",
                 accountNumber,
                 fintechUseNumber
         );
@@ -653,9 +645,6 @@ class FundingIntegrityDatabaseIntegrationTest {
             Thread.currentThread().interrupt();
             throw new IllegalStateException("동시성 테스트가 중단되었습니다.", e);
         }
-    }
-
-    private record AccountOwner(Long accountId, Long userId) {
     }
 
     private record FundingFixture(

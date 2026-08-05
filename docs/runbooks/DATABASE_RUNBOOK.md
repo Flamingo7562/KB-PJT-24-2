@@ -7,8 +7,8 @@
 | 항목                | 현재 기준                           |
 | ------------------- | ----------------------------------- |
 | 문서 상태           | 현재 기준                           |
-| Migration Head      | `202608041614`                      |
-| Versioned Migration | 10개                                |
+| Migration Head      | `202608051337`                      |
+| Versioned Migration | 11개                                |
 | 도메인 테이블       | 24개 (`flyway_schema_history` 제외) |
 | MySQL               | `mysql:8.4.10`                      |
 | Flyway CLI          | `flyway/flyway:12.9.0`              |
@@ -23,9 +23,9 @@
 | JDBC·MyBatis·트랜잭션 설정          | `backend/src/main/java/com/gighub/config/DatabaseConfig.java`                                          |
 | DB 라이브러리 버전과 검증 작업      | `backend/build.gradle`                                                                                 |
 | 스키마의 작업용 요약                | [`../agent/SCHEMA_OVERVIEW.md`](../agent/SCHEMA_OVERVIEW.md)                                           |
-| 사람이 읽는 통합 DDL                | [`../database/schema-snapshot-202608041614.sql`](../database/schema-snapshot-202608041614.sql), 참고용 |
+| 사람이 읽는 통합 DDL                | [`../database/schema-snapshot-202608051337.sql`](../database/schema-snapshot-202608051337.sql), 참고용 |
 
-`V202607311427`부터 `V202608041614`까지는 PM·관리자 승인을 거친 현재 정식
+`V202607311427`부터 `V202608051337`까지는 PM·관리자 승인을 거친 현재 정식
 Migration입니다. 통합 DDL은 같은 Head를 빈 DB에서 검토하기 위한 읽기용 Snapshot이며 기존
 DB 업그레이드에는 반드시 Flyway Migration을 사용합니다.
 
@@ -119,20 +119,21 @@ docker compose --profile tools run --rm flyway info
 npm.cmd run db:migrate
 ```
 
-현재 다음 열 개 Migration이 순서대로 적용되어야 합니다.
+현재 다음 열한 개 Migration이 순서대로 적용되어야 합니다.
 
-| Version        | 파일                                                        |
-| -------------- | ----------------------------------------------------------- |
-| `202607200001` | `V202607200001__create_gig_hub_baseline.sql`                |
-| `202607211440` | `V202607211440__add_signup_and_workplace_schema.sql`        |
-| `202607221300` | `V202607221300__support_contract_escrow_test_flow.sql`      |
-| `202607301027` | `V202607301027__remove_invited_from_work_case_status.sql`   |
-| `202607301152` | `V202607301152__split_workplace_address.sql`                |
-| `202607311427` | `V202607311427__move_qr_tokens_to_workplace_scope.sql`      |
-| `202607311428` | `V202607311428__add_password_reset_tokens.sql`              |
-| `202607311429` | `V202607311429__add_check_out_missing_work_case_status.sql` |
-| `202608041138` | `V202608041138__remove_employer_profiles.sql`               |
-| `202608041614` | `V202608041614__add_idempotency_request_claims.sql`         |
+| Version        | 파일                                                         |
+| -------------- | ------------------------------------------------------------ |
+| `202607200001` | `V202607200001__create_gig_hub_baseline.sql`                 |
+| `202607211440` | `V202607211440__add_signup_and_workplace_schema.sql`         |
+| `202607221300` | `V202607221300__support_contract_escrow_test_flow.sql`       |
+| `202607301027` | `V202607301027__remove_invited_from_work_case_status.sql`    |
+| `202607301152` | `V202607301152__split_workplace_address.sql`                 |
+| `202607311427` | `V202607311427__move_qr_tokens_to_workplace_scope.sql`       |
+| `202607311428` | `V202607311428__add_password_reset_tokens.sql`               |
+| `202607311429` | `V202607311429__add_check_out_missing_work_case_status.sql`  |
+| `202608041138` | `V202608041138__remove_employer_profiles.sql`                |
+| `202608041614` | `V202608041614__add_idempotency_request_claims.sql`          |
+| `202608051337` | `V202608051337__replace_mock_bank_account_user_with_pin.sql` |
 
 같은 명령을 다시 실행했을 때 `Schema ... is up to date. No migration necessary.`가 나오면 반복 실행도 정상입니다.
 
@@ -174,19 +175,62 @@ QR Migration은 기존 근무·동작별 QR을 사업장 고정 QR 구조로 전
 - Claim 선점, 성공 결과 저장·재응답, 동시 요청 409와 중단 복구는 후속 애플리케이션 구현
   범위입니다.
 
+#### `202608051337` 적용 전·후 확인
+
+이 Migration은 기존 Mock 계좌의 사용자 귀속만 제거하고 Demo PIN을 추가합니다.
+
+- `fk_mock_bank_accounts_user`, `idx_mock_bank_accounts_user_status`,
+  `mock_bank_accounts.user_id`를 제거합니다.
+- `pin CHAR(4) CHARACTER SET ascii COLLATE ascii_bin NOT NULL DEFAULT '0000'`과
+  숫자 네 자리 `ck_mock_bank_accounts_pin`을 추가합니다. 상수 기본값이 기존 행도
+  `0000`으로 채우므로 감사 시각을 바꾸는 별도 `UPDATE`는 실행하지 않습니다.
+- 계좌 ID·식별자·통화·잔액·가용액·상태·시각과 기존 Unique·금액/통화/상태 CHECK를
+  유지합니다.
+- `funding_orders.linked_account_id`, `withdrawal_requests.linked_account_id`,
+  `mock_bank_transactions.account_id`의 계좌 참조와 기존 데이터는 유지합니다.
+- `(bank_code, mock_account_number)` Unique가 은행 코드 선두 조회를 지원하므로 별도
+  중복 Index를 추가하지 않습니다.
+
+기존 Head 업그레이드 검증에서는 적용 전에 계좌와 세 참조의 ID·금액·상태·시각을 기록하고,
+적용 뒤 같은 값을 비교합니다. 다음 조회 결과는 `0`이어야 합니다.
+
+```sql
+SELECT COUNT(*) AS invalid_pin_rows
+FROM mock_bank_accounts
+WHERE pin IS NULL OR pin <> '0000';
+```
+
+세 참조 FK는 다음 조회에서 그대로 나타나야 합니다.
+
+```sql
+SELECT table_name, constraint_name, column_name,
+       referenced_table_name, referenced_column_name
+FROM information_schema.key_column_usage
+WHERE constraint_schema = DATABASE()
+  AND referenced_table_name = 'mock_bank_accounts'
+ORDER BY table_name, constraint_name;
+```
+
+이 Migration은 사용자 비귀속 계좌를 사용하는 FE·BE 흐름을 구현하지 않습니다. 기존
+사용자 소유 계좌 Mapper와 Gateway를 새 조회·PIN 계약으로 바꾸는 작업은 호환 Backend
+릴리스와 함께 적용해야 합니다. 이 저장소 작업에서는 격리된 Disposable DB만 업그레이드하며
+공유·Staging·Production DB에는 적용하지 않습니다.
+
 #### 현재 DDL과 미결정 제품 Workflow
 
-Head `202608041614`는 독립된 멱등 요청 Claim 저장소를 추가하며, 직전 Head까지의
-`employer_profiles` 제거와 `CHECK_OUT_MISSING` 상태·근로자 필수 제약도 유지합니다. 이는
-상태를 저장할 수 있다는 DDL 사실이며 각 Workflow의 Runtime 구현 완료를 뜻하지 않습니다.
+Head `202608051337`은 사용자 귀속 없는 Mock 계좌와 Demo PIN 구조를 추가하며, 독립된 멱등
+요청 Claim 저장소, `employer_profiles` 제거와 `CHECK_OUT_MISSING` 상태·근로자 필수 제약도
+유지합니다. 이는 구조를 저장할 수 있다는 DDL 사실이며 각 Workflow의 Runtime 구현 완료를
+뜻하지 않습니다.
 
-| 기능                 | 현재 DDL                                                                                      | 미결정 사항                                                                                            |
+| 기능                 | 현재 DDL                                                                                      | 미결정·후속 사항                                                                                       |
 | -------------------- | --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
 | 퇴근 누락 상태       | `CHECK_OUT_MISSING` 허용, 해당 상태의 `worker_id` 필수. `attendance_records.result` 변경 없음 | 판정 시점·실행 주체·늦은 QR·보정·정산·장기 미해결 임금·기존 행 처리와 실제 조회에 맞춘 Scheduler Index |
 | 100m 고정 반경       | 반경 기본값은 100이지만 두 반경 CHECK는 모든 양수를 허용                                      | 애플리케이션 강제로 충분한지, DB CHECK도 정확히 100으로 바꿀지 결정                                    |
 | 시스템 생성 계약서   | `EMPLOYMENT_CONTRACT`도 `work_case_id=NULL` 허용                                              | 근무 건 필수 연결을 DB에서도 강제할지 결정                                                             |
 | 계약서 3년 자동 삭제 | `documents.status=DELETED`는 있으나 전용 보존 시각·Index 없음                                 | 기준일과 파일·Metadata·Checksum·감사 삭제 범위를 확정한 뒤 추적 컬럼과 Scheduler Index 필요 여부 결정  |
-| 멱등 요청 Claim       | 사용자·Operation·Key 복합 UNIQUE, Fingerprint와 성공 응답 Snapshot 저장                        | Claim 선점·Replay·즉시 409·중단 복구·만료 정리는 후속 애플리케이션 구현                                |
+| 멱등 요청 Claim      | 사용자·Operation·Key 복합 UNIQUE, Fingerprint와 성공 응답 Snapshot 저장                       | Claim 선점·Replay·즉시 409·중단 복구·만료 정리는 후속 애플리케이션 구현                                |
+| 비귀속 Mock 계좌     | 사용자 FK 없이 숫자 네 자리 PIN 저장, 기존 주문·출금·은행 원장 계좌 참조 유지                 | 호환 Backend가 은행·계좌번호로 ACTIVE 계좌를 찾고 충전에만 PIN을 검증하도록 전환                       |
 
 퇴근 누락 상태의 판정 시점·실행 주체, 늦은 퇴근·보정·정산 정책과 기존 `IN_PROGRESS`
 데이터 처리는 여전히 미정입니다. 이 Workflow가 확정되기 전에는 Scheduler, 해소 API,
@@ -204,12 +248,21 @@ docker compose --profile tools run --rm flyway validate
 docker compose --profile tools run --rm flyway info
 ```
 
-현재 기준의 정상 결과는 열 개 Migration의 검증 성공, Schema version `202608041614`, 모든
+현재 기준의 정상 결과는 열한 개 Migration의 검증 성공, Schema version `202608051337`, 모든
 항목의 `Success`입니다.
 
 ## Spring·MyBatis 연결 검증
 
 절대경로를 자신의 저장소 위치로 바꾸고 `/` 구분자를 사용합니다. 경로에 공백이 있으므로 JVM 인수 전체를 큰따옴표로 감쌉니다.
+
+스키마 릴리스가 호환 애플리케이션보다 먼저 적용되는 경계에서는 먼저 스키마 전용 테스트를
+실행합니다.
+
+```powershell
+.\backend\gradlew.bat -p backend "-Dgighub.database.config=C:/absolute/path/to/KB PJT/backend/config/database-local.properties" databaseTest --tests "com.gighub.bank.MockBankAccountPinSchemaDatabaseIntegrationTest"
+```
+
+호환 Mapper와 Service까지 같은 브랜치에 있으면 전체 DB 통합 테스트를 실행합니다.
 
 ```powershell
 .\backend\gradlew.bat -p backend "-Dgighub.database.config=C:/absolute/path/to/KB PJT/backend/config/database-local.properties" databaseTest
@@ -251,6 +304,7 @@ npm.cmd run db:seed:contract
 | 근무·일급      | 2026-08-01 09:00~18:00, 무급 휴게 60분·300,000원 |
 | 사장님 지갑    | 가용 700,000원, 잠금 300,000원                   |
 | 근로자 지갑    | 가용 0원, 에스크로 확보액 300,000원              |
+| Mock 계좌      | 사용자 비귀속 합성 계좌, Demo PIN `0000`         |
 | 업무 처리 상태 | 근무 `ACCEPTED`, 에스크로 `HELD`, 정산 `WAITING` |
 
 같은 명령을 다시 실행하면 전용 테스트 계정과 `[TEST-17]` 근무 건만 위 상태로 되돌립니다. 다른 사용자의 데이터는 삭제하지 않습니다. 전체 DB를 초기화하는 `docker compose down -v`나 Flyway `clean`을 이 Seed의 재실행 방법으로 사용하지 않습니다.
@@ -307,5 +361,5 @@ Checksum 불일치가 발생해도 `repair`를 먼저 실행하지 않습니다.
 - `db:migrate`를 두 번 실행해도 안전하며 두 번째 실행은 최신 상태를 보고합니다.
 - `flyway validate`가 모든 Migration을 검증합니다.
 - `flyway info`의 Head가 이 문서 및 Schema Overview와 일치합니다.
-- `databaseTest`가 실제 로컬 MySQL 연결과 `users` 조회를 통과합니다.
+- 스키마 전용 DB 테스트가 새 Head의 제약을 통과하고, 호환 애플리케이션을 함께 검증할 때는 전체 `databaseTest`도 통과합니다.
 - 비밀정보, 실제 개인정보와 실제 계좌정보가 Git, Seed와 로그에 포함되지 않습니다.
