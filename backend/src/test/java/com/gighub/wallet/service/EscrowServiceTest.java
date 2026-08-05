@@ -174,8 +174,9 @@ class EscrowServiceTest {
     @Test
     void holdRejectsInvalidReplayBalanceSnapshot() {
         String ledgerKey = WalletIdempotencyKeys.escrowHold(KEY);
-        WalletTransactionSnapshot replay = holdTransaction(WORK_CASE_ID);
-        replay.setLockedAfter(AGREED_WAGE - 1);
+        WalletTransactionSnapshot replay = holdTransaction(WORK_CASE_ID).toBuilder()
+                .lockedAfter(AGREED_WAGE - 1)
+                .build();
         when(workMapper.getEscrowContextForUpdate(WORK_CASE_ID))
                 .thenReturn(context("ACCEPTED"));
         when(walletMapper.findTransactionByIdempotencyKey(ledgerKey))
@@ -193,8 +194,9 @@ class EscrowServiceTest {
     @Test
     void holdRejectsReplayWithDifferentEscrowReference() {
         String ledgerKey = WalletIdempotencyKeys.escrowHold(KEY);
-        WalletTransactionSnapshot replay = holdTransaction(WORK_CASE_ID);
-        replay.setReferenceId(99L);
+        WalletTransactionSnapshot replay = holdTransaction(WORK_CASE_ID).toBuilder()
+                .referenceId(99L)
+                .build();
         when(workMapper.getEscrowContextForUpdate(WORK_CASE_ID))
                 .thenReturn(context("ACCEPTED"));
         when(walletMapper.findTransactionByIdempotencyKey(ledgerKey))
@@ -246,28 +248,28 @@ class EscrowServiceTest {
             Long userId,
             Long availableBalance,
             Long lockedBalance) {
-        WalletBalanceSnapshot wallet = new WalletBalanceSnapshot();
-        wallet.setWalletId(walletId);
-        wallet.setUserId(userId);
-        wallet.setAvailableBalance(availableBalance);
-        wallet.setLockedBalance(lockedBalance);
-        return wallet;
+        return WalletBalanceSnapshot.builder()
+                .walletId(walletId)
+                .userId(userId)
+                .availableBalance(availableBalance)
+                .lockedBalance(lockedBalance)
+                .build();
     }
 
     private WalletTransactionSnapshot holdTransaction(Long workCaseId) {
-        WalletTransactionSnapshot transaction = new WalletTransactionSnapshot();
-        transaction.setId(1L);
-        transaction.setWalletId(30L);
-        transaction.setWalletUserId(EMPLOYER_ID);
-        transaction.setWorkCaseId(workCaseId);
-        transaction.setTransactionType("ESCROW_HOLD");
-        transaction.setAmount(AGREED_WAGE);
-        transaction.setAvailableBefore(700_000L);
-        transaction.setAvailableAfter(400_000L);
-        transaction.setLockedBefore(0L);
-        transaction.setLockedAfter(300_000L);
-        transaction.setReferenceType("ESCROW");
-        transaction.setReferenceId(11L);
-        return transaction;
+        return WalletTransactionSnapshot.builder()
+                .id(1L)
+                .walletId(30L)
+                .walletUserId(EMPLOYER_ID)
+                .workCaseId(workCaseId)
+                .transactionType("ESCROW_HOLD")
+                .amount(AGREED_WAGE)
+                .availableBefore(700_000L)
+                .availableAfter(400_000L)
+                .lockedBefore(0L)
+                .lockedAfter(300_000L)
+                .referenceType("ESCROW")
+                .referenceId(11L)
+                .build();
     }
 }

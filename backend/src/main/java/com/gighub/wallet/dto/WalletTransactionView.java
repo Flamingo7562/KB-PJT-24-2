@@ -1,13 +1,17 @@
 package com.gighub.wallet.dto;
 
+import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Getter;
-import lombok.Setter;
+import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
 
 // 지갑 거래 내역 조회 결과
 @Getter
-@Setter
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class WalletTransactionView {
     private Long transactionId;
     private String type;

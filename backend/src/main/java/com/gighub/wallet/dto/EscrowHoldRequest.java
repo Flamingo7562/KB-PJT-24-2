@@ -1,15 +1,15 @@
 package com.gighub.wallet.dto;
 
+import lombok.Builder;
 import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import lombok.extern.jackson.Jacksonized;
 
 import javax.validation.constraints.NotNull;
 import javax.validation.constraints.Positive;
 
 @Getter
-@Setter
-@NoArgsConstructor
+@Builder
+@Jacksonized
 public class EscrowHoldRequest {
     @NotNull
     private Long employerId;  // 스파이크 입력값 (향후 토큰으로 대체)

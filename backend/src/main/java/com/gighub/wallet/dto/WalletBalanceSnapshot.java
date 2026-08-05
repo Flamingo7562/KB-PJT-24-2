@@ -1,10 +1,14 @@
 package com.gighub.wallet.dto;
 
+import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Getter;
-import lombok.Setter;
+import lombok.NoArgsConstructor;
 
 @Getter
-@Setter
+@Builder(toBuilder = true)
+@NoArgsConstructor
+@AllArgsConstructor
 public class WalletBalanceSnapshot {
     private Long walletId;
     private Long userId;
