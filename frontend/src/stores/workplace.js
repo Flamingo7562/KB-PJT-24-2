@@ -11,7 +11,7 @@ import { listWorkplaces } from '@/services/workplaces'
  * 사업장은 사장 전 기능의 전제 컨텍스트다(라우팅 G7).
  */
 export const useWorkplaceStore = defineStore('workplace', () => {
-  const workplaces = ref([]) // [{ workplaceId, name, address }]
+  const workplaces = ref([]) // [{ workplaceId, name, status }] — selection 로직은 status 를 본다
   const selectedId = ref(null)
   const loaded = ref(false)
 
