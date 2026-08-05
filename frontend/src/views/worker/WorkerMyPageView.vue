@@ -48,10 +48,19 @@ const withdrawPassword = ref('')
 const withdrawError = ref('')
 const withdrawing = ref(false)
 
+// getMe·getBadge 는 서로 독립된 요청이다. 뱃지 Endpoint(#182) 하나가 404 를 내도
+// 프로필 카드 자체는 보여줘야 하므로 Promise.all 로 묶어 함께 실패시키지 않는다.
 onMounted(async () => {
-  const [meRes, badgeRes] = await Promise.all([getMe(), getBadge()])
-  me.value = meRes
-  badge.value = badgeRes
+  try {
+    me.value = await getMe()
+  } catch {
+    // me 가 비어 있으면 프로필 카드 전체가 v-if 로 자연히 숨는다.
+  }
+  try {
+    badge.value = await getBadge()
+  } catch {
+    // 뱃지 없이도 나머지 프로필 정보는 그대로 보여준다.
+  }
 })
 
 function openWithdraw() {
@@ -88,7 +97,9 @@ async function confirmWithdraw() {
     <AppBackHeader title="마이페이지" />
 
     <main class="screen-body">
-      <section v-if="me && badge" class="profile-card">
+      <!-- badge 는 별도 Endpoint(#182) 라 me 조회는 성공했는데 badge 만 실패할 수 있다.
+           그 경우에도 프로필 카드 자체는 보여줘야 하므로 badge 관련 조각만 따로 게이팅한다. -->
+      <section v-if="me" class="profile-card">
         <div class="profile-top">
           <!-- 승인 프로필 응답에 사진 필드가 없어 기본 아이콘만 노출한다. -->
           <span class="avatar">
@@ -100,27 +111,29 @@ async function confirmWithdraw() {
             <p class="profile-sub">{{ me.loginId }} | {{ me.email }}</p>
           </div>
 
-          <div class="badge-slot">
+          <div v-if="badge" class="badge-slot">
             <TrustBadge role="worker" :level="badge.level" :size="40" />
           </div>
         </div>
 
-        <div
-          class="bar"
-          role="progressbar"
-          :aria-valuenow="progressPercent"
-          aria-valuemin="0"
-          aria-valuemax="100"
-        >
-          <div class="bar__fill" :style="{ width: progressPercent + '%' }"></div>
-        </div>
+        <template v-if="badge">
+          <div
+            class="bar"
+            role="progressbar"
+            :aria-valuenow="progressPercent"
+            aria-valuemin="0"
+            aria-valuemax="100"
+          >
+            <div class="bar__fill" :style="{ width: progressPercent + '%' }"></div>
+          </div>
 
-        <p class="level-remaining">
-          다음 레벨 {{ nextLevelLabel }}까지 {{ badge.criterionLabel }}
-          {{ badge.remainingToNextLevel }}건 남음 (최근 15건 기준)
-        </p>
+          <p class="level-remaining">
+            다음 레벨 {{ nextLevelLabel }}까지 {{ badge.criterionLabel }}
+            {{ badge.remainingToNextLevel }}건 남음 (최근 15건 기준)
+          </p>
 
-        <p class="badge-desc">{{ badge.criterionDesc }}</p>
+          <p class="badge-desc">{{ badge.criterionDesc }}</p>
+        </template>
       </section>
 
       <nav class="menu-list">
