@@ -18,7 +18,8 @@ vi.mock('@/services/workCases', () => ({
 }))
 vi.mock('@/utils/daumPostcode', () => ({ embedAddressSearch: vi.fn() }))
 
-import { listWorkplaces, updateWorkplace } from '@/services/workplaces'
+import { deleteWorkplace, listWorkplaces, updateWorkplace } from '@/services/workplaces'
+import { useUiStore } from '@/stores/ui'
 import OwnerWorkplaceManageView from '@/views/owner/workplace/OwnerWorkplaceManageView.vue'
 
 const WORKPLACE = {
@@ -61,6 +62,7 @@ describe('OwnerWorkplaceManageView', () => {
       page: { number: 0, size: 100, totalElements: 1, totalPages: 1 }
     })
     updateWorkplace.mockReset().mockResolvedValue({ workplaceId: 1 })
+    deleteWorkplace.mockReset().mockResolvedValue(undefined)
   })
 
   it('목록에 도로명과 세부주소를 함께 보여준다', async () => {
@@ -94,5 +96,44 @@ describe('OwnerWorkplaceManageView', () => {
     expect(body.roadAddress).toBe(WORKPLACE.roadAddress)
     expect(body.detailAddress).toBe(WORKPLACE.detailAddress)
     expect(body.phone).toBe('02-1234-5678') // WORKPLACE.phone('0212345678')이 화면 표시 형식으로 하이픈이 붙는다.
+  })
+
+  it('수정 성공 후 목록 갱신이 실패해도 실패로 보고하지 않는다', async () => {
+    // GET /workplaces 가 일시적으로 실패해도 PATCH 자체는 이미 성공했다. 두 요청을
+    // 같은 try 에 두면 갱신 실패가 수정 실패로 둔갑해 성공 토스트 대신 오류 토스트가 뜬다.
+    const wrapper = await openEditDialog()
+    const ui = useUiStore()
+    const toastSpy = vi.spyOn(ui, 'toast')
+    listWorkplaces.mockRejectedValueOnce(new Error('일시적인 네트워크 오류'))
+
+    await findByText(wrapper, 'button', '저장').trigger('click')
+    await flushPromises()
+
+    expect(updateWorkplace).toHaveBeenCalledTimes(1)
+    expect(toastSpy).toHaveBeenCalledWith('사업장 정보를 수정했어요.', { type: 'success' })
+    expect(toastSpy).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ type: 'danger' })
+    )
+  })
+
+  it('삭제 성공 후 목록 갱신이 실패해도 실패로 보고하지 않는다', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+    const ui = useUiStore()
+    const toastSpy = vi.spyOn(ui, 'toast')
+    listWorkplaces.mockRejectedValueOnce(new Error('일시적인 네트워크 오류'))
+
+    await findByText(wrapper, 'button', '삭제').trigger('click')
+    await flushPromises()
+    await findByText(wrapper, 'button', '삭제하기').trigger('click')
+    await flushPromises()
+
+    expect(deleteWorkplace).toHaveBeenCalledTimes(1)
+    expect(toastSpy).toHaveBeenCalledWith('사업장을 삭제했어요.', { type: 'success' })
+    expect(toastSpy).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ type: 'danger' })
+    )
   })
 })

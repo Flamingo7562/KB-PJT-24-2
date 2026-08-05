@@ -11,7 +11,7 @@ vi.mock('@/services/http', () => ({
 }))
 
 import http from '@/services/http'
-import { createWorkplace, listWorkplaces } from '@/services/workplaces'
+import { createWorkplace, listWorkplaces, updateWorkplace } from '@/services/workplaces'
 
 const APPROVED_CREATE_FIELDS = [
   'businessRegistrationNumber',
@@ -96,6 +96,26 @@ describe('createWorkplace', () => {
     })
 
     expect(http.post.mock.calls[0][1]).not.toHaveProperty('detailAddress')
+  })
+})
+
+describe('updateWorkplace', () => {
+  beforeEach(() => {
+    http.patch.mockReset().mockResolvedValue({ data: { workplaceId: 1 } })
+  })
+
+  it('전화번호를 구분 문자 없는 숫자로 정규화한다', async () => {
+    // 관리 화면(OwnerWorkplaceManageView)은 화면 표시용 하이픈 형식을 그대로 넘긴다.
+    // withNormalizedPhone 이 이를 벗겨내는 유일한 방어선이다.
+    await updateWorkplace(1, { name: '강남점', phone: '02-1234-5678' })
+
+    expect(http.patch.mock.calls[0][1].phone).toBe('0212345678')
+  })
+
+  it('phone 을 보내지 않는 부분 수정은 phone 키를 만들지 않는다', async () => {
+    await updateWorkplace(1, { name: '강남점' })
+
+    expect(http.patch.mock.calls[0][1]).not.toHaveProperty('phone')
   })
 })
 

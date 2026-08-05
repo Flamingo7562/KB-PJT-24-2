@@ -122,7 +122,13 @@ async function confirmEdit() {
       detailAddress: editDetailAddress.value,
       phone: editPhone.value
     })
-    await workplaceStore.load({ force: true })
+    // 목록 갱신은 편의 동작이다. 수정 자체는 이미 성공했으므로 갱신 실패를 수정 실패로
+    // 전파하지 않는다(OwnerWorkplaceNewView 와 동일한 처리).
+    try {
+      await workplaceStore.load({ force: true })
+    } catch {
+      // 다음 진입에서 목록을 다시 읽는다.
+    }
     editOpen.value = false
     ui.toast('사업장 정보를 수정했어요.', { type: 'success' })
   } catch (err) {
@@ -147,7 +153,13 @@ async function confirmDelete() {
   deleteError.value = ''
   try {
     await deleteWorkplace(deleteTarget.value.workplaceId)
-    await workplaceStore.load({ force: true })
+    // 목록 갱신은 편의 동작이다. 삭제 자체는 이미 성공했으므로 갱신 실패를 삭제 실패로
+    // 전파하지 않는다(OwnerWorkplaceNewView 와 동일한 처리).
+    try {
+      await workplaceStore.load({ force: true })
+    } catch {
+      // 다음 진입에서 목록을 다시 읽는다.
+    }
     deleteOpen.value = false
     ui.toast('사업장을 삭제했어요.', { type: 'success' })
   } catch (err) {
