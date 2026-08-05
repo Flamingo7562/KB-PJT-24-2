@@ -5,8 +5,10 @@
 ## 관련 이슈
 
 - Refs #이슈번호
+- Spec Patch: `SPEC-NNN-NN` 또는 `N/A`
+- Base Spec: `x.y.z` 또는 `N/A`
 
-<!-- dev 대상 작업 PR은 Refs를 사용하고 우측 Development에서 이슈를 수동 연결합니다. main 대상 배포·긴급 수정 PR에서 이슈를 종료할 때는 Closes를 사용합니다. -->
+<!-- dev 대상 작업 PR은 Refs를 사용하고 우측 Development에서 이슈를 수동 연결합니다. main 대상 배포·긴급 수정 PR에서 이슈를 종료할 때는 Closes를 사용합니다. 구현 PR은 적용된 Spec Patch와 정식 Base Spec을 기록합니다. -->
 
 ## 변경 사항
 
