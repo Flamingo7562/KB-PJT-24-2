@@ -12,8 +12,6 @@ vi.mock('@/services/http', () => ({
 import http from '@/services/http'
 import { getMe, updateMe } from '@/services/users'
 
-const APPROVED_PROFILE_FIELDS = ['loginId', 'email', 'name', 'phone', 'role', 'status']
-
 const serverProfile = {
   loginId: 'owner01',
   email: 'owner@test.com',
@@ -35,7 +33,7 @@ describe('getMe', () => {
     const me = await getMe()
 
     expect(http.get).toHaveBeenCalledWith('/users/me')
-    expect(Object.keys(me).sort()).toEqual([...APPROVED_PROFILE_FIELDS].sort())
+    expect(me).toEqual(serverProfile)
   })
 })
 
