@@ -9,7 +9,6 @@ import org.springframework.http.converter.HttpMessageConverter;
 import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.servlet.config.annotation.EnableWebMvc;
-import org.springframework.web.servlet.config.annotation.CorsRegistry;
 import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
@@ -22,8 +21,8 @@ import java.util.List;
  * classpath에 있으므로 기본 JSON MessageConverter는 Spring MVC가 등록합니다.</p>
  *
  * <p>승인된 공통 오류·응답 규격의 Validator와 예외 통합은 별도 구현으로 남아 있습니다.
- * 현재 CORS는 로컬 Vite 개발 서버만 허용하며, 배포 Origin이 확정되면 환경별 정책으로
- * 분리합니다.</p>
+ * CORS는 Security Filter보다 먼저 처리돼야 하므로 Root Context의 Security 설정이 단일하게
+ * 소유합니다.</p>
  */
 @Configuration
 @EnableWebMvc
@@ -38,27 +37,6 @@ import java.util.List;
 )
 public class WebMvcConfig implements WebMvcConfigurer {
     // 기본 MVC 설정으로 시작하고 실제 요구가 생길 때 필요한 메서드만 재정의합니다.
-
-    /**
-     * 로컬 Vue 개발 서버가 Session Cookie를 포함해 API를 호출할 수 있게 합니다.
-     *
-     * @param registry Spring MVC CORS 매핑 Registry
-     */
-    @Override
-    public void addCorsMappings(CorsRegistry registry) {
-        registry.addMapping("/api/**")
-                .allowedOrigins("http://localhost:5173")
-                .allowedMethods("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
-                .allowedHeaders(
-                        "Accept",
-                        "Content-Type",
-                        "X-XSRF-TOKEN",
-                        "Idempotency-Key"
-                )
-                .exposedHeaders("Location", "Idempotency-Replayed")
-                .allowCredentials(true)
-                .maxAge(3_600);
-    }
 
     @Override
     public void extendMessageConverters(List<HttpMessageConverter<?>> converters) {
