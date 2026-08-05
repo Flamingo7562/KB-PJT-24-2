@@ -19,6 +19,7 @@ vi.mock('@/utils/daumPostcode', () => ({ embedAddressSearch: vi.fn() }))
 
 import { createWorkplace, listWorkplaces } from '@/services/workplaces'
 import { useAuthStore } from '@/stores/auth'
+import { useUiStore } from '@/stores/ui'
 import OwnerWorkplaceNewView from '@/views/owner/workplace/OwnerWorkplaceNewView.vue'
 
 // 화면은 setup 시점의 authStore.needsWorkplaceSetup 을 cameFromForcedSetup 으로 캡처한다.
@@ -96,6 +97,31 @@ describe('OwnerWorkplaceNewView', () => {
     await flushPromises()
 
     expect(push).toHaveBeenCalledWith('/owner/home')
+  })
+
+  it('세션 재조회가 실패해도 등록 성공 자체는 실패로 보고하지 않는다', async () => {
+    // refreshSession 이 일시적으로 실패하면 서버가 계산한 needsWorkplaceSetup 을
+    // 확인할 수 없다. 이때 등록 실패로 보고하면(이미 성공한) 등록을 실패로 왜곡하고,
+    // 확인 없이 홈으로 보내면 G7 가드가 즉시 되돌리는 무한 루프가 생긴다 — 그래서 화면에
+    // 머물러야 한다.
+    const auth = useAuthStore()
+    auth.setUser({ name: '김사장', role: 'OWNER', needsWorkplaceSetup: true })
+    vi.spyOn(auth, 'refreshSession').mockRejectedValue(new Error('network error'))
+    const ui = useUiStore()
+    const toastSpy = vi.spyOn(ui, 'toast')
+
+    const wrapper = mount(OwnerWorkplaceNewView)
+    await fillValidForm(wrapper)
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+
+    expect(createWorkplace).toHaveBeenCalledTimes(1)
+    expect(push).not.toHaveBeenCalledWith('/owner/home')
+    expect(toastSpy).toHaveBeenCalledWith('사업장을 등록했어요.', { type: 'success' })
+    expect(toastSpy).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ type: 'danger' })
+    )
   })
 
   it('등록 Payload 는 승인 필드만 담고 radius 를 보내지 않는다', async () => {

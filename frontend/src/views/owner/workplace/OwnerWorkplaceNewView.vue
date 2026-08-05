@@ -7,9 +7,12 @@
  * 좌표 자동 변환은 별도 지오코딩 API 필요(미구현). 인증 반경은 서버가 100m 를 적용한다(미전송).
  * 진입 경로 2가지: ① 첫 로그인(G7, 사업장 0개) 강제 진입 ② /owner/mypage/workplaces 에서 수동 추가.
  * 연계 API: POST /workplaces  →  @/services/workplaces (createWorkplace)
- * 등록 성공 후: useWorkplaceStore().load({force:true}) 갱신 →
- *   G7 강제 진입이었으면 세션을 다시 조회해 서버가 계산한 needsWorkplaceSetup=false 를
- *   확인한 뒤 /owner/home, 수동 추가였으면 /owner/mypage/workplaces 로 복귀.
+ * 등록 성공 후: useWorkplaceStore().load({force:true}) 갱신(실패해도 무시) →
+ *   세션을 다시 조회해 서버가 계산한 needsWorkplaceSetup 확인. 목록 갱신·세션 재조회
+ *   둘 다 실패해도 등록 자체는 이미 성공했으므로 성공 토스트를 띄운다.
+ *   G7 강제 진입이었고 재조회 결과 needsWorkplaceSetup=false 로 확인되면 /owner/home,
+ *   수동 추가였으면 /owner/mypage/workplaces 로 복귀. 세션 재조회가 실패해 확인이
+ *   안 되면 이동하지 않고 화면에 머무른다(다음 라우팅에서 가드가 최신 상태로 판단).
  *   (⚠ 서버 확인 없이 홈으로 보내면 G7 가드가 즉시 되돌려 무한 루프)
  * 공통: AppField · BaseButton · @/utils/validators (isBusinessNumber, isPhone)
  */
@@ -119,7 +122,15 @@ async function handleSubmit() {
 
     // needsWorkplaceSetup 은 서버가 요청 시점 DB 로 계산한다. 등록 성공만 보고
     // 클라이언트가 false 로 단정하면 서버와 어긋난 채 홈으로 보내게 된다.
-    const session = await authStore.refreshSession()
+    // 재조회 자체가 실패해도(일시적 네트워크 오류 등) 등록은 이미 성공했으므로 등록
+    // 실패로 보고하지 않는다 — 다만 서버 확인이 없는 채로 홈으로 보낼 수는 없으므로
+    // session 을 undefined 로 남겨 아래 게이트를 자연히 통과시키지 않는다(화면에 머무름).
+    let session
+    try {
+      session = await authStore.refreshSession()
+    } catch {
+      // 다음 라우팅 시도에서 가드가 최신 세션으로 다시 판단한다.
+    }
     ui.toast('사업장을 등록했어요.', { type: 'success' })
 
     if (cameFromForcedSetup && session?.needsWorkplaceSetup === false) {
