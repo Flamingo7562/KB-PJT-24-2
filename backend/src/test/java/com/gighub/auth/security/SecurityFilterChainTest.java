@@ -1,6 +1,7 @@
 package com.gighub.auth.security;
 
 import javax.servlet.Filter;
+import javax.servlet.http.HttpServletRequest;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -9,6 +10,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.ResponseEntity;
 import org.springframework.mock.web.MockServletContext;
+import org.springframework.security.web.csrf.CsrfToken;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -22,6 +24,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.cookie;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -64,6 +67,14 @@ class SecurityFilterChainTest {
                 .andExpect(content().contentType("application/json;charset=UTF-8"))
                 .andExpect(jsonPath("$.code").value("FORBIDDEN"))
                 .andExpect(jsonPath("$.traceId").isNotEmpty());
+    }
+
+    @Test
+    void csrfPreparationForcesDeferredTokenIntoReadableCookie() throws Exception {
+        mockMvc.perform(get("/api/auth/csrf"))
+                .andExpect(status().isNoContent())
+                .andExpect(cookie().exists("XSRF-TOKEN"))
+                .andExpect(cookie().httpOnly("XSRF-TOKEN", false));
     }
 
     @Test
@@ -142,6 +153,13 @@ class SecurityFilterChainTest {
         @GetMapping({"/api/health", "/api/protected", "/swagger-ui/index.html"})
         ResponseEntity<Void> getEndpoint() {
             return ResponseEntity.ok().build();
+        }
+
+        @GetMapping("/api/auth/csrf")
+        ResponseEntity<Void> csrf(HttpServletRequest request) {
+            CsrfToken token = (CsrfToken) request.getAttribute(CsrfToken.class.getName());
+            token.getToken();
+            return ResponseEntity.noContent().build();
         }
 
         @PostMapping("/api/protected")
