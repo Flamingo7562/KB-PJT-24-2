@@ -12,6 +12,7 @@ import { USE_MOCK } from '@/services/mockFlag'
 import { normalizePhone } from '@/utils/validators'
 
 /** 승인 Page Query 경계 — size 는 1~100 이다(API_SPEC.md '페이지네이션'). */
+const MIN_PAGE_SIZE = 1
 const MAX_PAGE_SIZE = 100
 
 /**
@@ -57,7 +58,7 @@ const mockWorkplaces = [
  * 승인 최대값으로 한 번에 읽는다.
  */
 export async function listWorkplaces({ page = 0, size = MAX_PAGE_SIZE } = {}) {
-  const boundedSize = Math.min(size, MAX_PAGE_SIZE)
+  const boundedSize = Math.min(Math.max(size, MIN_PAGE_SIZE), MAX_PAGE_SIZE)
   if (USE_MOCK) {
     return {
       content: mockWorkplaces.map((w) => ({ ...w })),

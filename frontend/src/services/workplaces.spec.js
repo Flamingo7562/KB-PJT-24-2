@@ -85,20 +85,21 @@ describe('createWorkplace', () => {
 })
 
 describe('listWorkplaces', () => {
+  const envelopeFixture = {
+    content: [],
+    page: { number: 0, size: 100, totalElements: 0, totalPages: 0 }
+  }
+
   beforeEach(() => {
-    http.get.mockReset().mockResolvedValue({
-      data: {
-        content: [],
-        page: { number: 0, size: 100, totalElements: 0, totalPages: 0 }
-      }
-    })
+    http.get.mockReset().mockResolvedValue({ data: envelopeFixture })
   })
 
   it('Page Envelope 를 그대로 반환한다', async () => {
     const result = await listWorkplaces()
 
-    expect(result).toHaveProperty('content')
-    expect(result).toHaveProperty('page')
+    // content/page 가 있는지가 아니라, 서버가 준 Envelope 를 뒤섞지 않고 그대로
+    // 통과시키는지를 고정한다 — content/page 를 맞바꿔도 통과하는 얕은 검증을 막는다.
+    expect(result).toEqual(envelopeFixture)
   })
 
   it('승인 Page Query 를 보낸다', async () => {
@@ -113,5 +114,11 @@ describe('listWorkplaces', () => {
     await listWorkplaces({ size: 500 })
 
     expect(http.get.mock.calls[0][1].params.size).toBe(100)
+  })
+
+  it('size 는 승인 최소값보다 작지 않다', async () => {
+    await listWorkplaces({ size: 0 })
+
+    expect(http.get.mock.calls[0][1].params.size).toBe(1)
   })
 })
