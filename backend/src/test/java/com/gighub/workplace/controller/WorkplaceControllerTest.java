@@ -1,0 +1,204 @@
+package com.gighub.workplace.controller;
+
+import java.math.BigDecimal;
+import java.util.List;
+
+import com.gighub.auth.security.AuthPrincipal;
+import com.gighub.common.exception.CommonExceptionHandler;
+import com.gighub.common.exception.ConflictException;
+import com.gighub.common.exception.ForbiddenException;
+import com.gighub.member.domain.UserRole;
+import com.gighub.workplace.service.WorkplaceService;
+import com.gighub.workplace.service.command.WorkplaceCreateCommand;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import static org.springframework.http.MediaType.APPLICATION_JSON;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+class WorkplaceControllerTest {
+
+    private WorkplaceService workplaceService;
+    private MockMvc mockMvc;
+
+    @BeforeEach
+    void setUp() {
+        workplaceService = mock(WorkplaceService.class);
+        mockMvc = MockMvcBuilders.standaloneSetup(new WorkplaceController(workplaceService))
+                .setControllerAdvice(new CommonExceptionHandler())
+                .build();
+    }
+
+    @Test
+    void createReturnsCreatedWorkplaceIdentifier() throws Exception {
+        when(workplaceService.create(any(), any())).thenReturn(42L);
+
+        mockMvc.perform(post("/api/workplaces")
+                        .principal(ownerAuthentication())
+                        .contentType(APPLICATION_JSON)
+                        .content(validBody()))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.workplaceId").value(42));
+    }
+
+    @Test
+    void createPassesAuthenticatedPrincipalAndNormalizedValuesToService() throws Exception {
+        AuthPrincipal principal = new AuthPrincipal(7L, UserRole.OWNER, "김사장");
+        when(workplaceService.create(any(), any())).thenReturn(42L);
+
+        mockMvc.perform(post("/api/workplaces")
+                        .principal(new UsernamePasswordAuthenticationToken(principal, null, List.of()))
+                        .contentType(APPLICATION_JSON)
+                        .content(validBody()))
+                .andExpect(status().isCreated());
+
+        ArgumentCaptor<WorkplaceCreateCommand> captor =
+                ArgumentCaptor.forClass(WorkplaceCreateCommand.class);
+        verify(workplaceService).create(eq(principal), captor.capture());
+
+        WorkplaceCreateCommand command = captor.getValue();
+        assertEquals("1234567890", command.getBusinessRegistrationNumber());
+        assertEquals("강남점", command.getName());
+        assertEquals("김사장", command.getRepresentativeName());
+        assertEquals("서울 강남구 테헤란로 1", command.getRoadAddress());
+        assertEquals("2층", command.getDetailAddress());
+        assertEquals("0212345678", command.getPhone());
+        assertEquals(0, new BigDecimal("37.1234567").compareTo(command.getLatitude()));
+        assertEquals(0, new BigDecimal("127.1234567").compareTo(command.getLongitude()));
+    }
+
+    @Test
+    void createKeepsOptionalValuesAbsent() throws Exception {
+        when(workplaceService.create(any(), any())).thenReturn(42L);
+
+        mockMvc.perform(post("/api/workplaces")
+                        .principal(ownerAuthentication())
+                        .contentType(APPLICATION_JSON)
+                        .content("{"
+                                + "\"businessRegistrationNumber\":\"1234567890\","
+                                + "\"name\":\"강남점\","
+                                + "\"representativeName\":\"김사장\","
+                                + "\"roadAddress\":\"서울 강남구 테헤란로 1\","
+                                + "\"phone\":\"0212345678\""
+                                + "}"))
+                .andExpect(status().isCreated());
+
+        ArgumentCaptor<WorkplaceCreateCommand> captor =
+                ArgumentCaptor.forClass(WorkplaceCreateCommand.class);
+        verify(workplaceService).create(any(), captor.capture());
+
+        WorkplaceCreateCommand command = captor.getValue();
+        assertNull(command.getDetailAddress());
+        assertNull(command.getLatitude());
+        assertNull(command.getLongitude());
+    }
+
+    @Test
+    void createWithoutAuthenticationIsRejectedBeforeService() throws Exception {
+        mockMvc.perform(post("/api/workplaces")
+                        .contentType(APPLICATION_JSON)
+                        .content(validBody()))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("AUTH_REQUIRED"));
+
+        verify(workplaceService, never()).create(any(), any());
+    }
+
+    /** 반경은 사용자가 정할 수 없는 값이라 Service까지 가지 않고 요청 단계에서 막힙니다. */
+    @Test
+    void createRejectsUnapprovedRadiusField() throws Exception {
+        mockMvc.perform(post("/api/workplaces")
+                        .principal(ownerAuthentication())
+                        .contentType(APPLICATION_JSON)
+                        .content("{"
+                                + "\"businessRegistrationNumber\":\"1234567890\","
+                                + "\"name\":\"강남점\","
+                                + "\"representativeName\":\"김사장\","
+                                + "\"roadAddress\":\"서울 강남구 테헤란로 1\","
+                                + "\"phone\":\"0212345678\","
+                                + "\"radiusM\":500"
+                                + "}"))
+                .andExpect(status().isBadRequest());
+
+        verify(workplaceService, never()).create(any(), any());
+    }
+
+    @Test
+    void createReportsMissingCoordinateAsFieldError() throws Exception {
+        mockMvc.perform(post("/api/workplaces")
+                        .principal(ownerAuthentication())
+                        .contentType(APPLICATION_JSON)
+                        .content("{"
+                                + "\"businessRegistrationNumber\":\"1234567890\","
+                                + "\"name\":\"강남점\","
+                                + "\"representativeName\":\"김사장\","
+                                + "\"roadAddress\":\"서울 강남구 테헤란로 1\","
+                                + "\"phone\":\"0212345678\","
+                                + "\"latitude\":37.1234567"
+                                + "}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.fieldErrors[0].field").value("longitude"));
+
+        verify(workplaceService, never()).create(any(), any());
+    }
+
+    @Test
+    void createSurfacesRoleRejectionAsForbidden() throws Exception {
+        when(workplaceService.create(any(), any()))
+                .thenThrow(new ForbiddenException("사업장은 OWNER만 등록할 수 있습니다."));
+
+        mockMvc.perform(post("/api/workplaces")
+                        .principal(ownerAuthentication())
+                        .contentType(APPLICATION_JSON)
+                        .content(validBody()))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+    }
+
+    @Test
+    void createSurfacesDuplicateBusinessNumberAsConflict() throws Exception {
+        when(workplaceService.create(any(), any()))
+                .thenThrow(new ConflictException("이미 등록된 사업자등록번호입니다."));
+
+        mockMvc.perform(post("/api/workplaces")
+                        .principal(ownerAuthentication())
+                        .contentType(APPLICATION_JSON)
+                        .content(validBody()))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("CONFLICT"));
+    }
+
+    private Authentication ownerAuthentication() {
+        return new UsernamePasswordAuthenticationToken(
+                new AuthPrincipal(7L, UserRole.OWNER, "김사장"), null, List.of());
+    }
+
+    private String validBody() {
+        return "{"
+                + "\"businessRegistrationNumber\":\"123-45-67890\","
+                + "\"name\":\"  강남점  \","
+                + "\"representativeName\":\"김사장\","
+                + "\"roadAddress\":\"서울 강남구 테헤란로 1\","
+                + "\"detailAddress\":\"2층\","
+                + "\"phone\":\"02-1234-5678\","
+                + "\"latitude\":37.1234567,"
+                + "\"longitude\":127.1234567"
+                + "}";
+    }
+}
