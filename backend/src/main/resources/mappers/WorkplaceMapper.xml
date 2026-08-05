@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.gighub.workplace.mapper.WorkplaceMapper">
+
+    <!--
+        radius_meters 와 status 는 Column DEFAULT에 기대지 않고 계약값을 직접 적습니다.
+        DEFAULT에 맡기면 100m 고정과 최초 ACTIVE가 코드에서 사라지고, 나중에 DEFAULT가
+        바뀌면 조용히 다른 값이 저장됩니다.
+    -->
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO workplaces
+        (owner_user_id, business_registration_number, name, representative_name,
+         road_address, detail_address, phone, latitude, longitude,
+         radius_meters, status)
+        VALUES
+        (#{ownerUserId}, #{businessRegistrationNumber}, #{name}, #{representativeName},
+         #{roadAddress}, #{detailAddress}, #{phone}, #{latitude}, #{longitude},
+         100.00, 'ACTIVE')
+    </insert>
+
+</mapper>

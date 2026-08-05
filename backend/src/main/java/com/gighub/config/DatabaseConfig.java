@@ -31,7 +31,8 @@ import org.springframework.transaction.annotation.EnableTransactionManagement;
         "com.gighub.document.mapper",
         "com.gighub.badge.mapper",
         "com.gighub.bank.mapper",
-        "com.gighub.settlement.mapper"
+        "com.gighub.settlement.mapper",
+        "com.gighub.workplace.mapper"
 })
 public class DatabaseConfig {
 
