@@ -2,7 +2,7 @@
 
 | 항목        | 값              |
 | ----------- | --------------- |
-| 명세 릴리스 | `2.1.1`         |
+| 명세 릴리스 | `3.0.0`         |
 | 승인일      | 2026-08-05      |
 | 소유자      | PM/Admin Master |
 | Base Path   | `/api`          |
@@ -74,9 +74,11 @@
   응답하며 `fieldErrors`를 포함하지 않습니다.
 - `500 INTERNAL_ERROR` 응답의 `traceId`는 서버 오류 로그에도 같은 값으로 기록합니다. 내부
   예외 메시지, SQL, Stack Trace와 민감 정보는 서버 로그에서만 다루고 응답에는 노출하지
+  않습니다. 단, PIN 원문이나 파생값은 오류·감사·SQL 바인딩을 포함한 어떤 로그에도 기록하지
   않습니다.
-- 추가 도메인 오류 Code는 `DEC-OPEN-ERROR-CATALOG`가 승인하기 전까지 새 규범 값으로
-  확정하지 않습니다.
+- Mock 계좌·지갑 금융 오류는 "지갑과 거래" 절의 표(`DEC-BANK-ERROR-CATALOG`)를 따르며
+  위 공통 오류 Code만 사용합니다. QR, 초대, 근태, 문서와 정산의 추가 도메인 오류 Code는
+  `DEC-OPEN-ERROR-CATALOG`가 승인하기 전까지 새 규범 값으로 확정하지 않습니다.
 
 ### Session, CSRF와 로컬 CORS
 
@@ -142,10 +144,47 @@ API: 2026-07-31T09:00:00Z
 - `POST /api/invitations/{token}/accept`
 - `POST /api/work-cases/{workCaseId}/settlement/approve`
 
-Key는 공백 없는 출력 가능한 ASCII 1~100자입니다. 같은 Key와 같은 요청은 같은 결과를
-반환하며 `Idempotency-Replayed: true`를 설정합니다. 같은 Key를 다른 요청에 재사용하면
-`409 IDEMPOTENCY_KEY_REUSED`입니다. QR 재발급의 재시도 방식은
-`DEC-OPEN-QR-REISSUE-IDEMPOTENCY`를 따릅니다.
+Key는 공백 없는 출력 가능한 ASCII 1~100자입니다. 저장 범위는
+`(인증 사용자, Operation, Idempotency-Key)` 조합이며 같은 사용자가 다른 Operation에서
+같은 Key 문자열을 사용해도 충돌하지 않습니다. 같은 요청 여부는 검증을 통과한 정규화 값의
+Fingerprint로 판정합니다.
+
+- 충전 Fingerprint는 정규화한 `bankCode`, `accountNo`, `amount`만 포함하고 PIN과 PIN의
+  Hash·HMAC 등 파생값은 포함하지 않습니다. 출금도 같은 세 필드를 사용합니다.
+- 형식 검증 실패와 계좌 인증 실패 등 자금 이동 전 실패는 저장·재생하지 않습니다. 실패
+  과정에서 만든 `PROCESSING` Claim은 별도 짧은 트랜잭션에서 삭제하므로 같은 Key로 입력을
+  고쳐 다시 시도할 수 있습니다.
+- 저장한 성공 결과는 24시간 보존합니다. 완료 Replay는 새 자금 이동이 아니라 저장 결과
+  조회이므로 현재 계좌 상태·잔액이나 PIN을 다시 확인하지 않고 같은 `data`를 `200`과
+  `Idempotency-Replayed: true`로 반환합니다.
+- 같은 Key를 다른 Fingerprint에 사용하면 `409 IDEMPOTENCY_KEY_REUSED`입니다.
+
+#### Claim 상태 모델
+
+멱등 처리는 요청 본체보다 먼저 Claim을 선점하는 `PROCESSING → COMPLETED` 모델을
+사용합니다(`DEC-IDEMPOTENCY-CLAIM-LIFECYCLE`).
+
+1. 구조 검증과 정규화 뒤 별도의 짧은 트랜잭션에서 `PROCESSING` Claim을 삽입하고
+   Commit합니다.
+2. Claim 선점 요청만 자금 이동 본 트랜잭션을 실행합니다. 충전의 계좌·PIN 인증 실패를
+   포함해 본 처리가 실패하면 그 요청이 선점한 Claim을 삭제합니다.
+3. 본 처리가 성공하면 HTTP 상태와 Body Snapshot, 완료·만료 시각을 기록하고
+   `COMPLETED`로 전이합니다.
+
+| 기존 Claim 상태 | Fingerprint | 응답                                                   |
+| --------------- | ----------- | ------------------------------------------------------ |
+| `COMPLETED`     | 같음        | 저장된 Body와 `200` + `Idempotency-Replayed: true`     |
+| `COMPLETED`     | 다름        | `409 IDEMPOTENCY_KEY_REUSED`                           |
+| `PROCESSING`    | 같음        | `409 CONFLICT` — 처리 중이며 잠시 후 같은 Key로 재시도 |
+| `PROCESSING`    | 다름        | `409 IDEMPOTENCY_KEY_REUSED`                           |
+
+중복 요청은 짧은 Claim 선점 트랜잭션이 끝난 뒤 상태를 판정하며 자금 본 처리의 잠금 해제를
+기다리지 않습니다. 프로세스 중단으로 남은 `PROCESSING` Claim과 만료된 `COMPLETED` Claim은
+`expires_at` 이후 정리합니다. Claim이 만료되어도 주문·요청과 양쪽 원장의 고유 제약으로 이미
+완료된 자금 이동의 중복을 막습니다. Claim 선점·비교·실패 정리·만료 정리는 애플리케이션
+책임이며 DB는 범위 유일성과 상태 필드 정합성을 강제합니다.
+
+QR 재발급의 재시도 방식은 `DEC-OPEN-QR-REISSUE-IDEMPOTENCY`를 따릅니다.
 
 ## 인증·회원
 
@@ -212,7 +251,8 @@ Key는 공백 없는 출력 가능한 ASCII 1~100자입니다. 같은 Key와 같
 
 - `role`은 `OWNER` 또는 `WORKER`입니다.
 - `phone`만 선택 필드입니다.
-- 가입은 `users`의 사용자와 KRW `wallets`를 함께 생성합니다.
+- 가입은 `users`의 사용자와 KRW `wallets`만 함께 생성하며 Mock 은행계좌를 생성하거나
+  사용자에게 귀속·연결하지 않습니다.
 - OWNER 가입도 `employer_profiles`를 만들지 않습니다.
 - OWNER의 사업장 입력을 가입 Body에 포함하지 않고 사업체·사업장 기준정보는 후속
   `workplaces` 등록에서 관리합니다.
@@ -367,12 +407,52 @@ expectedNetAmount = dailyWage - incomeTax - localIncomeTax
 
 ## 지갑과 거래
 
-| Method | Path                              | 권한        | 요청        | 성공           |
-| ------ | --------------------------------- | ----------- | ----------- | -------------- |
-| GET    | `/api/wallet`                     | 인증 사용자 | 없음        | 잔액           |
-| GET    | `/api/wallet/transactions`        | 인증 사용자 | 거래 Query  | 거래 Page      |
-| POST   | `/api/wallet/funding-orders`      | OWNER       | 계좌와 금액 | 충전 처리 결과 |
-| POST   | `/api/wallet/withdrawal-requests` | 인증 사용자 | 계좌와 금액 | 출금 처리 결과 |
+| Method | Path                              | 권한        | 요청                                 | 성공           |
+| ------ | --------------------------------- | ----------- | ------------------------------------ | -------------- |
+| GET    | `/api/wallet`                     | 인증 사용자 | 없음                                 | 잔액           |
+| GET    | `/api/wallet/transactions`        | 인증 사용자 | 거래 Query                           | 거래 Page      |
+| POST   | `/api/wallet/funding-orders`      | OWNER       | `{bankCode, accountNo, pin, amount}` | 충전 처리 결과 |
+| POST   | `/api/wallet/withdrawal-requests` | 인증 사용자 | `{bankCode, accountNo, amount}`      | 출금 처리 결과 |
+
+### Mock 은행계좌 경계
+
+Mock 은행계좌는 서비스 회원보다 먼저 Demo/Disposable Seed로 생성한 합성 Fixture입니다
+(`DEC-MOCK-ACCOUNT-FIXTURE`). Gig Hub 사용자에게 소유·귀속·연결하지 않으며
+`mock_bank_accounts.user_id`를 사용하지 않습니다.
+
+- 가입, 프로필 또는 별도 제품 API에서 계좌를 생성·등록·연결하지 않습니다.
+- 사용자용 `GET /api/mock-bank-accounts`와 계좌 CRUD·연결 API를 제공하지 않습니다.
+- 서버는 정규화한 `bankCode + accountNo`로 계좌를 식별하고 기존 내부 ID를
+  `funding_orders.linked_account_id`, `withdrawal_requests.linked_account_id`와
+  `mock_bank_transactions.account_id`에 기록합니다.
+- 내부 `bankAccountId`, `mockFintechUseNum`, Mock 계좌 잔액과 PIN은 외부 요청·응답으로
+  노출하지 않습니다.
+- 이체 확인 화면은 클라이언트가 입력값을 마스킹해 확인하고 PIN을 받는 단계입니다. 별도
+  REST Operation이나 계좌 등록·연결·조회 절차가 아닙니다.
+
+지원하는 canonical 은행 코드는 다음 5개입니다. 별칭(`KB`, `SHINHAN` 등)은 API 값으로
+허용하지 않습니다.
+
+| `bankCode` | 은행명 |
+| ---------- | ------ |
+| `004`      | KB국민 |
+| `088`      | 신한   |
+| `020`      | 우리   |
+| `081`      | 하나   |
+| `011`      | NH농협 |
+
+계좌·금액 입력 검증은 다음과 같습니다(`DEC-BANK-INPUT-VALIDATION`).
+
+- `bankCode`: 위 코드표의 숫자 3자리 문자열
+- `accountNo`: 공백과 하이픈을 제거한 뒤 10~14자리 숫자
+- `amount`: 0보다 크고 100,000,000 이하인 KRW 원 단위 정수
+- `pin`: 충전에만 필요하며 정규화하거나 trim하지 않은 정확히 4자리 ASCII 숫자
+- 위 조건을 벗어난 입력은 `400 VALIDATION_ERROR`
+
+Demo 계좌 PIN은 모두 `0000`입니다. 실행 시 인증 기준 값은
+`mock_bank_accounts.pin`에만 두며 요청 PIN은 계좌 인증 시점에만 비교합니다. 주문·원장·
+멱등 Fingerprint와 응답 Snapshot·응답·예외 메시지·오류·감사·SQL 바인딩을 포함한 모든
+로그에는 PIN 원문이나 파생값을 저장하지 않습니다.
 
 ### 잔액
 
@@ -390,21 +470,46 @@ expectedNetAmount = dailyWage - incomeTax - localIncomeTax
 
 Query:
 
-- `workplaceId?`
+- `workplaceId?`: 지정하면 해당 사업장 거래만 반환하며 `FUNDING`, `WITHDRAWAL`처럼
+  사업장과 무관한 거래는 제외합니다.
 - `from?`, `to?`
 - `type?`: `FUNDING`, `ESCROW_HOLD`, `ESCROW_RELEASE`, `ESCROW_REFUND`,
   `WITHDRAWAL`, `WITHDRAWAL_REFUND`, `ADJUSTMENT`
-- `minAmount?`, `maxAmount?`, `keyword?`
-- `sort?`: 기본 `LATEST`, 또는 `OLDEST`, `AMOUNT_ASC`, `AMOUNT_DESC`
+- `minAmount?`, `maxAmount?`: `amount` 절대값 기준
+- `keyword?`: `workTitle`, `workplaceName` 부분 일치
+- `sort?`: 기본 `LATEST`, 또는 `OLDEST`, `AMOUNT_ASC`, `AMOUNT_DESC`이며 금액 정렬은
+  절대값 기준
 - `page?`, `size?`
 
-Item은 `transactionId`, `type`, `amount`, `availableAfter`, `lockedAfter`,
-`workCaseId`, `workTitle`, `workplaceName`, `displayStatus`, `createdAt`을
-반환합니다. `createdAt`은 UTC `Instant`입니다.
+Item은 `transactionId`, `type`, `amount`, `direction`, `availableAfter`, `lockedAfter`,
+`workCaseId`, `workTitle`, `workplaceName`, `displayStatus`, `createdAt`을 반환합니다
+(`DEC-TRANSACTION-DISPLAY`).
+
+- `amount`는 항상 0 이상의 절대값이며 부호를 포함하지 않습니다.
+- `direction`은 해당 거래 Row가 속한 사용자 지갑 기준 `CREDIT`(증가) 또는
+  `DEBIT`(감소)입니다. 같은 `ESCROW_RELEASE` 사건도 OWNER Row는 `DEBIT`, WORKER Row는
+  `CREDIT`입니다. `ADJUSTMENT`도 그 Row의 실제 지갑 증감으로 결정합니다.
+- 사업장·근무와 무관한 거래의 `workCaseId`, `workTitle`, `workplaceName`은 `null`입니다.
+- `displayStatus`는 `PENDING`, `COMPLETED`, `FAILED`, `REFUNDED` 중 하나입니다.
+  `FUNDING`, `WITHDRAWAL`, `ESCROW_HOLD`, `ESCROW_RELEASE`, `ADJUSTMENT`는 원장 반영
+  시점에만 Row를 생성하므로 `COMPLETED`, `ESCROW_REFUND`는 `REFUNDED`입니다.
+  `PENDING`과 `FAILED`는 이번 릴리스에서 생성하지 않는 예약값입니다.
+- `createdAt`은 UTC `Instant`입니다.
 
 ### 충전과 출금
 
-두 요청은 같은 Body 구조를 사용합니다.
+충전 요청:
+
+```json
+{
+  "bankCode": "004",
+  "accountNo": "170000000001",
+  "pin": "0000",
+  "amount": 100000
+}
+```
+
+출금 요청:
 
 ```json
 {
@@ -414,8 +519,31 @@ Item은 `transactionId`, `type`, `amount`, `availableAfter`, `lockedAfter`,
 }
 ```
 
-서버는 인증 사용자, `bankCode`, `accountNo`, ACTIVE 상태로 내부 계좌를 식별합니다.
-클라이언트가 `bankAccountId`를 보내지 않습니다.
+충전은 OWNER가 ACTIVE Mock 계좌의 PIN을 인증해 그 계좌에서 지갑으로 자금을 옮기는
+Operation입니다. 신규 실행에서 계좌 Row를 잠근 뒤 상태·PIN·잔액을 확인하고 계좌 차감,
+은행 원장, 충전 주문 완료, 지갑 증가와 지갑 원장을 하나의 자금 트랜잭션으로 처리합니다.
+
+출금은 인증 사용자의 지갑에서 ACTIVE Mock 계좌로 자금을 입금하는 Operation입니다. 입금
+대상의 존재와 ACTIVE 상태만 확인하며 계좌 소유권이나 PIN을 검사하지 않습니다. 출금 요청
+완료, 지갑 감소, 계좌 입금과 양쪽 원장을 하나의 자금 트랜잭션으로 처리합니다.
+
+두 Operation 모두 서버가 `bankCode + accountNo`로 찾은 내부 ID를 기존
+`linked_account_id`에 기록합니다. 클라이언트는 `bankAccountId`를 보내지 않고 성공 응답도
+이를 반환하지 않습니다.
+
+계좌·금액 오류는 다음 경계를 사용합니다(`DEC-BANK-ERROR-CATALOG`).
+
+| 상황                                                   | Code               | HTTP  | `message`                                          |
+| ------------------------------------------------------ | ------------------ | ----- | -------------------------------------------------- |
+| 은행 코드·계좌번호·PIN·금액 형식 오류                  | `VALIDATION_ERROR` | `400` | `입력값을 확인해 주세요.`                          |
+| 충전 계좌 미존재·비활성·PIN 불일치                     | `FORBIDDEN`        | `403` | `계좌를 사용할 수 없습니다.`                       |
+| 출금 입금계좌 미존재·비활성                            | `FORBIDDEN`        | `403` | `계좌를 사용할 수 없습니다.`                       |
+| 충전할 Mock 계좌 잔액 부족                             | `CONFLICT`         | `409` | `계좌 잔액이 부족합니다.`                          |
+| 출금할 지갑 가용 잔액 부족                             | `CONFLICT`         | `409` | `출금 가능한 잔액이 부족합니다.`                   |
+| 계좌·지갑 동시 갱신 충돌 또는 처리 중인 같은 멱등 요청 | `CONFLICT`         | `409` | `요청이 충돌했습니다. 잠시 후 다시 시도해 주세요.` |
+
+미존재·비활성·PIN 불일치는 동일한 Code·HTTP 상태·메시지이며 `fieldErrors`를 포함하지
+않습니다. 응답만으로 계좌 존재, 상태 또는 PIN 일치 여부를 구분할 수 없습니다.
 
 최초 충전 성공:
 
