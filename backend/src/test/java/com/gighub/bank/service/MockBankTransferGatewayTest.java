@@ -30,7 +30,9 @@ import static org.mockito.Mockito.when;
 class MockBankTransferGatewayTest {
 
     private static final Long ACCOUNT_ID = 10L;
-    private static final Long USER_ID = 3L;
+    private static final String BANK_CODE = "004";
+    private static final String ACCOUNT_NO = "1234567890";
+    private static final String PIN = "0000";
     private static final Long AMOUNT = 300_000L;
 
     @Mock
@@ -49,22 +51,52 @@ class MockBankTransferGatewayTest {
     }
 
     @Test
-    @DisplayName("사전 검증은 계좌 소유권을 구현체 안에서 확인한다")
-    void preflightRejectsAnotherUsersAccount() {
-        MockBankAccount account = account(USER_ID + 1, "ACTIVE", 1_000_000L);
+    @DisplayName("bankCode+accountNo로 존재하는 비귀속 계좌의 내부 ID를 식별한다")
+    void resolveAccountIdReturnsMatchingAccount() {
+        when(mockBankMapper.findAccountIdByBankCodeAndAccountNo(BANK_CODE, ACCOUNT_NO))
+                .thenReturn(ACCOUNT_ID);
+
+        assertEquals(ACCOUNT_ID, gateway.resolveAccountId(BANK_CODE, ACCOUNT_NO));
+    }
+
+    @Test
+    @DisplayName("bankCode+accountNo에 일치하는 계좌가 없으면 승인 오류로 거부한다")
+    void resolveAccountIdRejectsUnknownAccount() {
+        when(mockBankMapper.findAccountIdByBankCodeAndAccountNo(BANK_CODE, ACCOUNT_NO))
+                .thenReturn(null);
+
+        assertThrows(
+                BankAccountForbiddenException.class,
+                () -> gateway.resolveAccountId(BANK_CODE, ACCOUNT_NO)
+        );
+    }
+
+    @Test
+    @DisplayName("충전 사전 검증은 PIN 불일치를 계좌 미존재·비활성과 같은 오류로 거부한다")
+    void preflightRejectsPinMismatch() {
+        MockBankAccount account = account("ACTIVE", 1_000_000L, PIN);
         when(mockBankMapper.getAccountById(ACCOUNT_ID)).thenReturn(account);
 
         assertThrows(
                 BankAccountForbiddenException.class,
-                () -> gateway.preflight(preflight())
+                () -> gateway.preflight(preflight("9999"))
         );
+    }
+
+    @Test
+    @DisplayName("출금 방향 사전 검증은 PIN 없이 상태만 확인한다")
+    void preflightSkipsPinCheckWhenPinAbsent() {
+        MockBankAccount account = account("ACTIVE", 1_000_000L, PIN);
+        when(mockBankMapper.getAccountById(ACCOUNT_ID)).thenReturn(account);
+
+        gateway.preflight(preflight(null));
     }
 
     @Test
     @DisplayName("출금은 계좌를 다시 잠그고 성공 은행 원장 결과를 반환한다")
     void withdrawLocksAccountAndReturnsVerifiedResult() {
         when(mockBankMapper.getAccountForUpdate(ACCOUNT_ID))
-                .thenReturn(account(USER_ID, "ACTIVE", 1_000_000L));
+                .thenReturn(account("ACTIVE", 1_000_000L, PIN));
         when(mockBankMapper.withdrawFromAccount(ACCOUNT_ID, AMOUNT)).thenReturn(1);
         when(mockBankMapper.insertBankTransaction(any())).thenAnswer(invocation -> {
             BankTransactionParam param = invocation.getArgument(0);
@@ -72,7 +104,7 @@ class MockBankTransferGatewayTest {
             return 1;
         });
 
-        BankTransferResult result = gateway.withdraw(transferCommand());
+        BankTransferResult result = gateway.withdraw(transferCommand(PIN));
 
         assertEquals(31L, result.getBankTransactionId());
         assertEquals("SUCCESS", result.getStatus());
@@ -90,14 +122,29 @@ class MockBankTransferGatewayTest {
     }
 
     @Test
+    @DisplayName("잠금 후 PIN이 일치하지 않으면 계좌와 원장을 변경하지 않는다")
+    void withdrawRejectsPinMismatchAfterLock() {
+        when(mockBankMapper.getAccountForUpdate(ACCOUNT_ID))
+                .thenReturn(account("ACTIVE", 1_000_000L, PIN));
+
+        assertThrows(
+                BankAccountForbiddenException.class,
+                () -> gateway.withdraw(transferCommand("9999"))
+        );
+
+        verify(mockBankMapper, never()).withdrawFromAccount(ACCOUNT_ID, AMOUNT);
+        verify(mockBankMapper, never()).insertBankTransaction(any());
+    }
+
+    @Test
     @DisplayName("잠금 후 계좌 잔액이 부족하면 계좌와 원장을 변경하지 않는다")
     void withdrawRejectsInsufficientBalance() {
         when(mockBankMapper.getAccountForUpdate(ACCOUNT_ID))
-                .thenReturn(account(USER_ID, "ACTIVE", AMOUNT - 1));
+                .thenReturn(account("ACTIVE", AMOUNT - 1, PIN));
 
         assertThrows(
                 InsufficientBankBalanceException.class,
-                () -> gateway.withdraw(transferCommand())
+                () -> gateway.withdraw(transferCommand(PIN))
         );
 
         verify(mockBankMapper, never()).withdrawFromAccount(ACCOUNT_ID, AMOUNT);
@@ -108,13 +155,13 @@ class MockBankTransferGatewayTest {
     @DisplayName("은행 원장 INSERT 결과나 생성 ID가 없으면 성공 결과를 반환하지 않는다")
     void withdrawRejectsMissingLedgerIdentity() {
         when(mockBankMapper.getAccountForUpdate(ACCOUNT_ID))
-                .thenReturn(account(USER_ID, "ACTIVE", 1_000_000L));
+                .thenReturn(account("ACTIVE", 1_000_000L, PIN));
         when(mockBankMapper.withdrawFromAccount(ACCOUNT_ID, AMOUNT)).thenReturn(1);
         when(mockBankMapper.insertBankTransaction(any())).thenReturn(1);
 
         assertThrows(
                 BankTransferIntegrityException.class,
-                () -> gateway.withdraw(transferCommand())
+                () -> gateway.withdraw(transferCommand(PIN))
         );
     }
 
@@ -123,7 +170,7 @@ class MockBankTransferGatewayTest {
     void withdrawRejectsInvalidCommandBeforeLock() {
         BankTransferCommand command = BankTransferCommand.builder()
                 .accountId(ACCOUNT_ID)
-                .userId(USER_ID)
+                .pin(PIN)
                 .amount(0L)
                 .referenceType("FUNDING_ORDER")
                 .referenceId(21L)
@@ -140,13 +187,12 @@ class MockBankTransferGatewayTest {
     @Test
     @DisplayName("조회된 계좌 식별자가 비정상이면 서버 무결성 오류를 반환한다")
     void preflightRejectsMalformedAccountIdentity() {
-        MockBankAccount account = account(USER_ID, "ACTIVE", 1_000_000L);
-        account.setId(null);
+        MockBankAccount account = account(null, "ACTIVE", 1_000_000L, PIN);
         when(mockBankMapper.getAccountById(ACCOUNT_ID)).thenReturn(account);
 
         assertThrows(
-                BankTransferIntegrityException.class,
-                () -> gateway.preflight(preflight())
+                BankAccountForbiddenException.class,
+                () -> gateway.preflight(preflight(PIN))
         );
     }
 
@@ -154,12 +200,12 @@ class MockBankTransferGatewayTest {
     @DisplayName("잠금 계좌 UPDATE가 0건이면 잔액 부족이 아닌 서버 무결성 오류다")
     void withdrawRejectsUnexpectedUpdateCount() {
         when(mockBankMapper.getAccountForUpdate(ACCOUNT_ID))
-                .thenReturn(account(USER_ID, "ACTIVE", 1_000_000L));
+                .thenReturn(account("ACTIVE", 1_000_000L, PIN));
         when(mockBankMapper.withdrawFromAccount(ACCOUNT_ID, AMOUNT)).thenReturn(0);
 
         assertThrows(
                 BankTransferIntegrityException.class,
-                () -> gateway.withdraw(transferCommand())
+                () -> gateway.withdraw(transferCommand(PIN))
         );
 
         verify(mockBankMapper, never()).insertBankTransaction(any());
@@ -168,13 +214,20 @@ class MockBankTransferGatewayTest {
     @Test
     @DisplayName("스키마 제약과 맞지 않는 계좌 잔액은 서버 무결성 오류다")
     void withdrawRejectsCorruptedAccountBalance() {
-        MockBankAccount account = account(USER_ID, "ACTIVE", 1_000_000L);
-        account.setAvailableAmount(1_000_001L);
+        MockBankAccount account = MockBankAccount.builder()
+                .id(ACCOUNT_ID)
+                .bankCode(BANK_CODE)
+                .mockAccountNumber(ACCOUNT_NO)
+                .pin(PIN)
+                .balance(1_000_000L)
+                .availableAmount(1_000_001L)
+                .status("ACTIVE")
+                .build();
         when(mockBankMapper.getAccountForUpdate(ACCOUNT_ID)).thenReturn(account);
 
         assertThrows(
                 BankTransferIntegrityException.class,
-                () -> gateway.withdraw(transferCommand())
+                () -> gateway.withdraw(transferCommand(PIN))
         );
 
         verify(mockBankMapper, never()).withdrawFromAccount(ACCOUNT_ID, AMOUNT);
@@ -184,41 +237,47 @@ class MockBankTransferGatewayTest {
     @DisplayName("입금 후 잔액이 long 범위를 넘으면 계좌를 변경하지 않는다")
     void depositRejectsBalanceOverflow() {
         when(mockBankMapper.getAccountForUpdate(ACCOUNT_ID))
-                .thenReturn(account(USER_ID, "ACTIVE", Long.MAX_VALUE));
+                .thenReturn(account("ACTIVE", Long.MAX_VALUE, PIN));
 
         assertThrows(
                 BankTransferIntegrityException.class,
-                () -> gateway.deposit(transferCommand())
+                () -> gateway.deposit(transferCommand(null))
         );
 
         verify(mockBankMapper, never()).depositToAccount(ACCOUNT_ID, AMOUNT);
         verify(mockBankMapper, never()).insertBankTransaction(any());
     }
 
-    private BankAccountPreflightCommand preflight() {
+    private BankAccountPreflightCommand preflight(String pin) {
         return BankAccountPreflightCommand.builder()
                 .accountId(ACCOUNT_ID)
-                .userId(USER_ID)
+                .pin(pin)
                 .build();
     }
 
-    private BankTransferCommand transferCommand() {
+    private BankTransferCommand transferCommand(String pin) {
         return BankTransferCommand.builder()
                 .accountId(ACCOUNT_ID)
-                .userId(USER_ID)
+                .pin(pin)
                 .amount(AMOUNT)
                 .referenceType("FUNDING_ORDER")
                 .referenceId(21L)
                 .build();
     }
 
-    private MockBankAccount account(Long userId, String status, Long amount) {
-        MockBankAccount account = new MockBankAccount();
-        account.setId(ACCOUNT_ID);
-        account.setUserId(userId);
-        account.setBalance(amount);
-        account.setAvailableAmount(amount);
-        account.setStatus(status);
-        return account;
+    private MockBankAccount account(String status, Long amount, String pin) {
+        return account(ACCOUNT_ID, status, amount, pin);
+    }
+
+    private MockBankAccount account(Long id, String status, Long amount, String pin) {
+        return MockBankAccount.builder()
+                .id(id)
+                .bankCode(BANK_CODE)
+                .mockAccountNumber(ACCOUNT_NO)
+                .pin(pin)
+                .balance(amount)
+                .availableAmount(amount)
+                .status(status)
+                .build();
     }
 }

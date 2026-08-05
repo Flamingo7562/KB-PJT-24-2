@@ -82,11 +82,17 @@ public class WithdrawalServiceImpl implements WithdrawalService {
         }
         validateWalletSnapshot(wallet, command.getUserId(), walletId);
 
+        // bankCode+accountNo로 비귀속 Mock 계좌를 식별한다(Client가 보낸 내부 ID는 없다).
+        // 상태는 여기서 검사하지 않는다 - Replay가 현재 계좌 상태와 무관하게 재응답해야 하므로
+        // (DEC-IDEMPOTENCY-STORAGE) 실제 검증은 claim 선점 이후 preflight에서 수행한다.
+        Long linkedAccountId = bankTransferGateway.resolveAccountId(
+                command.getBankCode(), command.getAccountNo());
+
         // 지갑을 잡은 상태에서 요청을 선점해 계좌 FK 잠금이 순서를 뒤집지 않게 한다.
         WithdrawalOrderParam order = WithdrawalOrderParam.builder()
                 .userId(command.getUserId())
                 .walletId(walletId)
-                .linkedAccountId(command.getLinkedAccountId())
+                .linkedAccountId(linkedAccountId)
                 .amount(command.getAmount())
                 .idempotencyKey(rawKey)
                 .build();
@@ -96,9 +102,9 @@ public class WithdrawalServiceImpl implements WithdrawalService {
                 throw new WithdrawalIntegrityException("출금 요청을 선점하지 못했습니다.");
             }
         }catch (DuplicateKeyException duplicate){
-            return replayClaimedRequest(command, rawKey, ledgerKey, duplicate);
+            return replayClaimedRequest(command, rawKey, ledgerKey, linkedAccountId, duplicate);
         }catch (DataIntegrityViolationException invalidOrder){
-            translateInvalidOrderReference(command, invalidOrder);
+            translateInvalidOrderReference(linkedAccountId, invalidOrder);
         }
 
         // 완료 요청의 replay는 당시 원장 스냅샷을 사용하므로 현재 상태 검증은 신규 claim에만 적용한다.
@@ -111,15 +117,14 @@ public class WithdrawalServiceImpl implements WithdrawalService {
                 "지갑 출금 후 잔액이 허용 범위를 벗어났습니다."
         );
 
+        // 출금 방향은 PIN을 검사하지 않는다(DEC-WITHDRAWAL-DESTINATION).
         bankTransferGateway.preflight(BankAccountPreflightCommand.builder()
-                .accountId(command.getLinkedAccountId())
-                .userId(command.getUserId())
+                .accountId(linkedAccountId)
                 .build());
 
         // 계좌 입금
         BankTransferResult transfer = bankTransferGateway.deposit(BankTransferCommand.builder()
-                .accountId(command.getLinkedAccountId())
-                .userId(command.getUserId())
+                .accountId(linkedAccountId)
                 .amount(command.getAmount())
                 .referenceType(REF_WITHDRAWAL_REQUEST)
                 .referenceId(order.getId())
@@ -167,6 +172,7 @@ public class WithdrawalServiceImpl implements WithdrawalService {
             WithdrawalCommand command,
             String rawKey,
             String ledgerKey,
+            Long linkedAccountId,
             DuplicateKeyException duplicate) {
         WithdrawalOrder existing = withdrawalMapper.findByIdempotencyKeyForShare(rawKey);
 
@@ -177,7 +183,7 @@ public class WithdrawalServiceImpl implements WithdrawalService {
             );
         }
 
-        validateSameRequest(existing, command);
+        validateSameRequest(existing, command, linkedAccountId);
         validateCompletedOrder(existing);
 
         WalletTransactionSnapshot snapshot =
@@ -195,10 +201,10 @@ public class WithdrawalServiceImpl implements WithdrawalService {
 
     }
 
-    private void validateSameRequest(WithdrawalOrder existing, WithdrawalCommand command) {
+    private void validateSameRequest(
+            WithdrawalOrder existing, WithdrawalCommand command, Long linkedAccountId) {
         if (!Objects.equals(existing.getUserId(), command.getUserId())
-                || !Objects.equals(
-                existing.getLinkedAccountId(), command.getLinkedAccountId())
+                || !Objects.equals(existing.getLinkedAccountId(), linkedAccountId)
                 || !Objects.equals(existing.getAmount(), command.getAmount())) {
             throw new IdempotencyKeyReusedException(
                     "같은 멱등 키로 다른 출금 요청이 접수되었습니다."
@@ -280,10 +286,9 @@ public class WithdrawalServiceImpl implements WithdrawalService {
     }
 
     private void translateInvalidOrderReference(
-            WithdrawalCommand command, DataIntegrityViolationException invalidOrder) {
+            Long linkedAccountId, DataIntegrityViolationException invalidOrder) {
         bankTransferGateway.preflight(BankAccountPreflightCommand.builder()
-                .accountId(command.getLinkedAccountId())
-                .userId(command.getUserId())
+                .accountId(linkedAccountId)
                 .build());
         throw new WithdrawalIntegrityException(
                 "출금 요청의 참조 무결성을 확인할 수 없습니다.",
@@ -317,8 +322,8 @@ public class WithdrawalServiceImpl implements WithdrawalService {
         if (command == null
                 || command.getUserId() == null
                 || command.getUserId() <= 0
-                || command.getLinkedAccountId() == null
-                || command.getLinkedAccountId() <= 0
+                || command.getBankCode() == null
+                || command.getAccountNo() == null
                 || command.getAmount() == null
                 || command.getAmount() <= 0) {
             throw new InvalidWithdrawalRequestException(

@@ -34,7 +34,8 @@ public class WithdrawalController {
 
         WithdrawalResult result = withdrawalService.withdraw(WithdrawalCommand.builder()
                 .userId(loginUserId)
-                .linkedAccountId(request.getBankAccountId())
+                .bankCode(request.getBankCode())
+                .accountNo(request.getAccountNo())
                 .amount(request.getAmount())
                 .idempotencyKey(idempotencyKey)
                 .build());

@@ -75,9 +75,15 @@ public class FundingServiceImpl implements FundingService {
         }
         validateWalletSnapshot(wallet, command.getEmployerId());
 
+        // bankCode+accountNo로 비귀속 Mock 계좌를 식별한다(Client가 보낸 내부 ID는 없다).
+        // 상태·PIN은 여기서 검사하지 않는다 - Replay가 현재 계좌 상태와 무관하게 재응답해야 하므로
+        // (DEC-IDEMPOTENCY-STORAGE) 실제 검증은 claim 선점 이후 preflight에서 수행한다.
+        Long linkedAccountId = bankTransferGateway.resolveAccountId(
+                command.getBankCode(), command.getAccountNo());
+
         FundingOrderParam order = FundingOrderParam.builder()
                 .employerId(command.getEmployerId())
-                .linkedAccountId(command.getLinkedAccountId())
+                .linkedAccountId(linkedAccountId)
                 .expectedAmount(command.getAmount())
                 .idempotencyKey(rawKey)
                 .build();
@@ -88,14 +94,15 @@ public class FundingServiceImpl implements FundingService {
                 throw new FundingIntegrityException("충전 주문을 선점하지 못했습니다.");
             }
         } catch (DuplicateKeyException duplicate) {
-            return replayClaimedOrder(command, rawKey, ledgerKey, duplicate);
+            return replayClaimedOrder(command, rawKey, ledgerKey, linkedAccountId, duplicate);
         } catch (DataIntegrityViolationException invalidOrder) {
-            translateInvalidOrderReference(command, invalidOrder);
+            translateInvalidOrderReference(linkedAccountId, command.getPin(), invalidOrder);
         }
 
+        // claim을 선점한 뒤에야 상태·PIN을 검증한다.
         bankTransferGateway.preflight(BankAccountPreflightCommand.builder()
-                .accountId(command.getLinkedAccountId())
-                .userId(command.getEmployerId())
+                .accountId(linkedAccountId)
+                .pin(command.getPin())
                 .build());
 
         Long availableAfter = addExactly(
@@ -105,8 +112,8 @@ public class FundingServiceImpl implements FundingService {
         );
 
         BankTransferResult transfer = bankTransferGateway.withdraw(BankTransferCommand.builder()
-                .accountId(command.getLinkedAccountId())
-                .userId(command.getEmployerId())
+                .accountId(linkedAccountId)
+                .pin(command.getPin())
                 .amount(command.getAmount())
                 .referenceType(REF_FUNDING_ORDER)
                 .referenceId(order.getId())
@@ -154,6 +161,7 @@ public class FundingServiceImpl implements FundingService {
             FundingCommand command,
             String rawKey,
             String ledgerKey,
+            Long linkedAccountId,
             DuplicateKeyException duplicate) {
         FundingOrder existing = fundingMapper.findByIdempotencyKeyForShare(rawKey);
         if (existing == null) {
@@ -162,7 +170,7 @@ public class FundingServiceImpl implements FundingService {
                     duplicate
             );
         }
-        validateSameRequest(existing, command);
+        validateSameRequest(existing, command, linkedAccountId);
         validateCompletedOrder(existing);
 
         WalletTransactionSnapshot snapshot =
@@ -182,10 +190,12 @@ public class FundingServiceImpl implements FundingService {
                 .build();
     }
 
-    private void validateSameRequest(FundingOrder existing, FundingCommand command) {
+    // PIN은 비교하지 않는다 - Fingerprint는 bankCode/accountNo(→linkedAccountId)와 amount만 포함한다
+    // (DEC-IDEMPOTENCY-STORAGE).
+    private void validateSameRequest(
+            FundingOrder existing, FundingCommand command, Long linkedAccountId) {
         if (!Objects.equals(existing.getEmployerId(), command.getEmployerId())
-                || !Objects.equals(
-                        existing.getLinkedAccountId(), command.getLinkedAccountId())
+                || !Objects.equals(existing.getLinkedAccountId(), linkedAccountId)
                 || !Objects.equals(existing.getExpectedAmount(), command.getAmount())) {
             throw new IdempotencyKeyReusedException(
                     "같은 멱등 키로 다른 충전 요청이 접수되었습니다."
@@ -261,10 +271,10 @@ public class FundingServiceImpl implements FundingService {
     }
 
     private void translateInvalidOrderReference(
-            FundingCommand command, DataIntegrityViolationException invalidOrder) {
+            Long linkedAccountId, String pin, DataIntegrityViolationException invalidOrder) {
         bankTransferGateway.preflight(BankAccountPreflightCommand.builder()
-                .accountId(command.getLinkedAccountId())
-                .userId(command.getEmployerId())
+                .accountId(linkedAccountId)
+                .pin(pin)
                 .build());
         throw new FundingIntegrityException(
                 "충전 주문의 참조 무결성을 확인할 수 없습니다.",
@@ -297,12 +307,13 @@ public class FundingServiceImpl implements FundingService {
         if (command == null
                 || command.getEmployerId() == null
                 || command.getEmployerId() <= 0
-                || command.getLinkedAccountId() == null
-                || command.getLinkedAccountId() <= 0
+                || command.getBankCode() == null
+                || command.getAccountNo() == null
+                || command.getPin() == null
                 || command.getAmount() == null
                 || command.getAmount() <= 0) {
             throw new InvalidFundingRequestException(
-                    "충전 요청의 사용자, 계좌, 금액을 확인해 주세요."
+                    "충전 요청의 사용자, 계좌, PIN, 금액을 확인해 주세요."
             );
         }
     }

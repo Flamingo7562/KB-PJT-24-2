@@ -33,7 +33,9 @@ public class FundingController {
 
         FundingResult result = fundingService.fund(FundingCommand.builder()
                 .employerId(loginUserId)
-                .linkedAccountId(request.getBankAccountId())
+                .bankCode(request.getBankCode())
+                .accountNo(request.getAccountNo())
+                .pin(request.getPin())
                 .amount(request.getAmount())
                 .idempotencyKey(idempotencyKey)
                 .build());

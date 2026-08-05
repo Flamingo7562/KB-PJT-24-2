@@ -4,7 +4,6 @@ import com.gighub.bank.dto.MockBankAccount;
 import com.gighub.bank.exception.BankAccountForbiddenException;
 import com.gighub.bank.exception.BankTransferIntegrityException;
 import com.gighub.bank.exception.InsufficientBankBalanceException;
-import com.gighub.bank.exception.InvalidBankAccountStateException;
 import com.gighub.bank.mapper.MockBankMapper;
 import com.gighub.bank.mapper.param.BankTransactionParam;
 import com.gighub.bank.service.BankAccountPreflightCommand;
@@ -18,7 +17,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Locale;
 import java.util.Objects;
-import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -30,10 +28,22 @@ public class MockBankTransferGateway implements BankTransferGateway {
     private static final String TRANSFER_WITHDRAW = "WITHDRAW";
     private static final String TRANSFER_DEPOSIT = "DEPOSIT";
     private static final String TRANSFER_SUCCESS = "SUCCESS";
-    private static final Set<String> ACCOUNT_STATUSES =
-            Set.of(ACCOUNT_ACTIVE, "BLOCKED", "CLOSED");
+    // 계좌 미존재·비활성·PIN 불일치를 구분 없이 같은 승인 오류로 응답한다(DEC-BANK-ERROR-CATALOG).
+    private static final String ACCOUNT_UNUSABLE_MESSAGE = "계좌를 사용할 수 없습니다.";
 
     private final MockBankMapper mockBankMapper;
+
+    @Override
+    public Long resolveAccountId(String bankCode, String accountNo) {
+        if (bankCode == null || accountNo == null) {
+            throw new BankAccountForbiddenException(ACCOUNT_UNUSABLE_MESSAGE);
+        }
+        Long accountId = mockBankMapper.findAccountIdByBankCodeAndAccountNo(bankCode, accountNo);
+        if (accountId == null) {
+            throw new BankAccountForbiddenException(ACCOUNT_UNUSABLE_MESSAGE);
+        }
+        return accountId;
+    }
 
     @Override
     public void preflight(BankAccountPreflightCommand command) {
@@ -41,7 +51,7 @@ public class MockBankTransferGateway implements BankTransferGateway {
         validate(
                 mockBankMapper.getAccountById(command.getAccountId()),
                 command.getAccountId(),
-                command.getUserId()
+                command.getPin()
         );
     }
 
@@ -80,27 +90,20 @@ public class MockBankTransferGateway implements BankTransferGateway {
         return validate(
                 mockBankMapper.getAccountForUpdate(command.getAccountId()),
                 command.getAccountId(),
-                command.getUserId()
+                command.getPin()
         );
     }
 
-    private MockBankAccount validate(MockBankAccount account, Long accountId, Long userId) {
-        if (account == null) {
-            throw new BankAccountForbiddenException("연결 계좌를 찾을 수 없습니다.");
+    // pin이 null이면 출금(입금) 방향이라 PIN을 검사하지 않는다.
+    private MockBankAccount validate(MockBankAccount account, Long accountId, String expectedPin) {
+        if (account == null || !Objects.equals(account.getId(), accountId)) {
+            throw new BankAccountForbiddenException(ACCOUNT_UNUSABLE_MESSAGE);
         }
-        if (!Objects.equals(account.getId(), accountId)
-                || account.getUserId() == null) {
-            throw new BankTransferIntegrityException("조회된 은행 계좌 식별자가 올바르지 않습니다.");
+        if (account.getStatus() == null || !ACCOUNT_ACTIVE.equals(account.getStatus())) {
+            throw new BankAccountForbiddenException(ACCOUNT_UNUSABLE_MESSAGE);
         }
-        if (!Objects.equals(account.getUserId(), userId)) {
-            throw new BankAccountForbiddenException("본인 소유 계좌가 아닙니다.");
-        }
-        if (account.getStatus() == null
-                || !ACCOUNT_STATUSES.contains(account.getStatus())) {
-            throw new BankTransferIntegrityException("조회된 은행 계좌 상태가 올바르지 않습니다.");
-        }
-        if (!ACCOUNT_ACTIVE.equals(account.getStatus())) {
-            throw new InvalidBankAccountStateException("사용할 수 없는 계좌 상태입니다.");
+        if (expectedPin != null && !expectedPin.equals(account.getPin())) {
+            throw new BankAccountForbiddenException(ACCOUNT_UNUSABLE_MESSAGE);
         }
         return account;
     }
@@ -108,9 +111,7 @@ public class MockBankTransferGateway implements BankTransferGateway {
     private void validatePreflightCommand(BankAccountPreflightCommand command) {
         if (command == null
                 || command.getAccountId() == null
-                || command.getAccountId() <= 0
-                || command.getUserId() == null
-                || command.getUserId() <= 0) {
+                || command.getAccountId() <= 0) {
             throw new BankTransferIntegrityException("은행 계좌 사전 검증 요청이 올바르지 않습니다.");
         }
     }
@@ -119,8 +120,6 @@ public class MockBankTransferGateway implements BankTransferGateway {
         if (command == null
                 || command.getAccountId() == null
                 || command.getAccountId() <= 0
-                || command.getUserId() == null
-                || command.getUserId() <= 0
                 || command.getAmount() == null
                 || command.getAmount() <= 0
                 || command.getReferenceType() == null

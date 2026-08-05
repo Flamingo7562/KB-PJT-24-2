@@ -7,7 +7,9 @@ import lombok.Value;
 @Builder
 public class FundingCommand {
     Long employerId;
-    Long linkedAccountId;
+    String bankCode;
+    String accountNo;
+    String pin;
     Long amount;
     String idempotencyKey;
 }

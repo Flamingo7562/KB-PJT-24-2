@@ -7,7 +7,8 @@ import lombok.Value;
 @Builder
 public class WithdrawalCommand {
     Long userId;
-    Long linkedAccountId;
+    String bankCode;
+    String accountNo;
     Long amount;
     String idempotencyKey;
 }

@@ -52,7 +52,8 @@ public class WithdrawalIntegrityDatabaseIntegrationTest {
             // 1,000원 출금 요청
             WithdrawalCommand command = WithdrawalCommand.builder()
                     .userId(fixture.userId())
-                    .linkedAccountId(fixture.accountId())
+                    .bankCode(FIXTURE_BANK_CODE)
+                    .accountNo(fixture.accountNo())
                     .amount(1_000L)
                     .idempotencyKey(fixture.idempotencyKey())
                     .build();
@@ -120,7 +121,8 @@ public class WithdrawalIntegrityDatabaseIntegrationTest {
             WithdrawalFixture fixture = createWithdrawalFixture(jdbcTemplate);
             WithdrawalCommand command = WithdrawalCommand.builder()
                     .userId(fixture.userId())
-                    .linkedAccountId(fixture.accountId())
+                    .bankCode(FIXTURE_BANK_CODE)
+                    .accountNo(fixture.accountNo())
                     .amount(1_000L)
                     .idempotencyKey(fixture.idempotencyKey())
                     .build();
@@ -265,7 +267,8 @@ public class WithdrawalIntegrityDatabaseIntegrationTest {
 
             WithdrawalCommand command = WithdrawalCommand.builder()
                     .userId(fixture.userId())
-                    .linkedAccountId(fixture.accountId())
+                    .bankCode(FIXTURE_BANK_CODE)
+                    .accountNo(fixture.accountNo())
                     .amount(1_000L)
                     .idempotencyKey(fixture.idempotencyKey())
                     .build();
@@ -347,7 +350,8 @@ public class WithdrawalIntegrityDatabaseIntegrationTest {
                 );
                 WithdrawalCommand command = WithdrawalCommand.builder()
                         .userId(fixture.userId())
-                        .linkedAccountId(fixture.accountId())
+                        .bankCode(FIXTURE_BANK_CODE)
+                        .accountNo(fixture.accountNo())
                         .amount(1_000L)
                         .idempotencyKey(fixture.idempotencyKey())
                         .build();
@@ -389,7 +393,6 @@ public class WithdrawalIntegrityDatabaseIntegrationTest {
                         IllegalTransactionStateException.class,
                         () -> gateway.preflight(BankAccountPreflightCommand.builder()
                                 .accountId(fixture.accountId())
-                                .userId(fixture.userId())
                                 .build())
                 );
 
@@ -398,7 +401,6 @@ public class WithdrawalIntegrityDatabaseIntegrationTest {
                             walletMapper.getWalletSnapshotForUpdate(fixture.userId());
                     gateway.preflight(BankAccountPreflightCommand.builder()
                             .accountId(fixture.accountId())
-                            .userId(fixture.userId())
                             .build());
                     status.setRollbackOnly();
                     return locked;
@@ -429,13 +431,15 @@ public class WithdrawalIntegrityDatabaseIntegrationTest {
             // 같은 지갑, 다른 멱등 키로 각각 1,000원 출금
             WithdrawalCommand first = WithdrawalCommand.builder()
                     .userId(fixture.userId())
-                    .linkedAccountId(fixture.accountId())
+                    .bankCode(FIXTURE_BANK_CODE)
+                    .accountNo(fixture.accountNo())
                     .amount(1_000L)
                     .idempotencyKey(fixture.idempotencyKey() + "-A")
                     .build();
             WithdrawalCommand second = WithdrawalCommand.builder()
                     .userId(fixture.userId())
-                    .linkedAccountId(fixture.accountId())
+                    .bankCode(FIXTURE_BANK_CODE)
+                    .accountNo(fixture.accountNo())
                     .amount(1_000L)
                     .idempotencyKey(fixture.idempotencyKey() + "-B")
                     .build();
@@ -518,7 +522,7 @@ public class WithdrawalIntegrityDatabaseIntegrationTest {
                 fintechUseNumber
         );
 
-        return new WithdrawalFixture(userId, walletId, accountId, idempotencyKey);
+        return new WithdrawalFixture(userId, walletId, accountId, accountNumber, idempotencyKey);
     }
 
     private void deleteWithdrawalFixture(JdbcTemplate jdbcTemplate, WithdrawalFixture fixture) {
@@ -554,10 +558,13 @@ public class WithdrawalIntegrityDatabaseIntegrationTest {
         }
     }
 
+    private static final String FIXTURE_BANK_CODE = "999";
+
     private record WithdrawalFixture(
             Long userId,
             Long walletId,
             Long accountId,
+            String accountNo,
             String idempotencyKey) {
     }
 }

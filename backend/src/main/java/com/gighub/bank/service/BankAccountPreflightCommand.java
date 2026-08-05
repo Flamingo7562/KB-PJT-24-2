@@ -7,5 +7,6 @@ import lombok.Value;
 @Builder
 public class BankAccountPreflightCommand {
     Long accountId;
-    Long userId;
+    // 충전 방향에서만 채운다. null이면 PIN을 검사하지 않는다(출금 입금 방향).
+    String pin;
 }
