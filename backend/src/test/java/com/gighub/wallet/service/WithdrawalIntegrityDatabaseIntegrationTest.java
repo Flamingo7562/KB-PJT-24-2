@@ -378,39 +378,40 @@ public class WithdrawalIntegrityDatabaseIntegrationTest {
                      new AnnotationConfigApplicationContext(RootConfig.class)) {
             DataSource dataSource = context.getBean(DataSource.class);
             JdbcTemplate jdbcTemplate = new JdbcTemplate(dataSource);
-            Long accountId = jdbcTemplate.queryForObject(
-                    "SELECT id FROM mock_bank_accounts ORDER BY id LIMIT 1", Long.class);
-            // 테스트용 계좌 조회
-            Long userId = jdbcTemplate.queryForObject(
-                    "SELECT user_id FROM mock_bank_accounts WHERE id = ?", Long.class, accountId);
+            WithdrawalFixture fixture = createWithdrawalFixture(jdbcTemplate);
             WalletMapper walletMapper = context.getBean(WalletMapper.class);
             BankTransferGateway gateway = context.getBean(BankTransferGateway.class);
             PlatformTransactionManager transactionManager = context.getBean(PlatformTransactionManager.class);
             TransactionTemplate transaction = new TransactionTemplate(transactionManager);
 
-            assertThrows(
-                    IllegalTransactionStateException.class,
-                    () -> gateway.preflight(BankAccountPreflightCommand.builder()
-                            .accountId(accountId)
-                            .userId(userId)
-                            .build())
-            );
+            try {
+                assertThrows(
+                        IllegalTransactionStateException.class,
+                        () -> gateway.preflight(BankAccountPreflightCommand.builder()
+                                .accountId(fixture.accountId())
+                                .userId(fixture.userId())
+                                .build())
+                );
 
-            WalletBalanceSnapshot snapshot = transaction.execute(status -> {
-                WalletBalanceSnapshot locked = walletMapper.getWalletSnapshotForUpdate(userId);
-                gateway.preflight(BankAccountPreflightCommand.builder()
-                        .accountId(accountId)
-                        .userId(userId)
-                        .build());
-                status.setRollbackOnly();
-                return locked;
-            });
+                WalletBalanceSnapshot snapshot = transaction.execute(status -> {
+                    WalletBalanceSnapshot locked =
+                            walletMapper.getWalletSnapshotForUpdate(fixture.userId());
+                    gateway.preflight(BankAccountPreflightCommand.builder()
+                            .accountId(fixture.accountId())
+                            .userId(fixture.userId())
+                            .build());
+                    status.setRollbackOnly();
+                    return locked;
+                });
 
-            assertNotNull(snapshot);
-            assertNotNull(snapshot.getWalletId());
-            assertEquals(userId, snapshot.getUserId());
-            assertNotNull(snapshot.getAvailableBalance());
-            assertNotNull(snapshot.getLockedBalance());
+                assertNotNull(snapshot);
+                assertNotNull(snapshot.getWalletId());
+                assertEquals(fixture.userId(), snapshot.getUserId());
+                assertNotNull(snapshot.getAvailableBalance());
+                assertNotNull(snapshot.getLockedBalance());
+            } finally {
+                deleteWithdrawalFixture(jdbcTemplate, fixture);
+            }
         }
     }
 
@@ -504,11 +505,12 @@ public class WithdrawalIntegrityDatabaseIntegrationTest {
 
         jdbcTemplate.update(
                 "INSERT INTO mock_bank_accounts"
-                        + " (user_id, bank_code, mock_account_number,"
+                        + " (bank_code, mock_account_number, pin,"
                         + " mock_fintech_use_num, currency, balance,"
                         + " available_amount, status)"
-                        + " VALUES (?, '999', ?, ?, 'KRW', 1000000, 1000000, 'ACTIVE')",
-                userId, accountNumber, fintechUseNumber
+                        + " VALUES ('999', ?, '0000', ?, 'KRW',"
+                        + " 1000000, 1000000, 'ACTIVE')",
+                accountNumber, fintechUseNumber
         );
         Long accountId = jdbcTemplate.queryForObject(
                 "SELECT id FROM mock_bank_accounts WHERE mock_fintech_use_num = ?",
