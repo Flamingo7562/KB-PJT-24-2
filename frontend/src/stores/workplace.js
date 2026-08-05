@@ -18,15 +18,28 @@ export const useWorkplaceStore = defineStore('workplace', () => {
   const selected = computed(
     () => workplaces.value.find((w) => w.workplaceId === selectedId.value) ?? null
   )
+
+  /** 전역 작업 Context 로 선택할 수 있는 사업장은 ACTIVE 뿐이다(API_SPEC.md:366). */
+  const activeWorkplaces = computed(() => workplaces.value.filter((w) => w.status === 'ACTIVE'))
+
+  /** 목록 존재 여부. 사업장 관리 화면은 INACTIVE 도 보여줘야 하므로 전체 기준이다. */
   const hasWorkplace = computed(() => workplaces.value.length > 0)
 
-  /** 사업장 목록 로드(최초 1회). 선택값이 없으면 첫 지점 선택 */
+  /** 지점 기준 기능(QR·근태·문서함)이 동작 가능한지. 선택 가능한 사업장이 있어야 한다. */
+  const hasActiveWorkplace = computed(() => activeWorkplaces.value.length > 0)
+
+  /**
+   * 사업장 목록 로드(최초 1회). 승인 Page Envelope 의 content 를 목록으로 쓴다.
+   * 선택값이 없으면 첫 ACTIVE 사업장을 고른다 — INACTIVE 를 자동선택하면 이후 지점
+   * 기준 조회가 전부 잘못된 사업장으로 나간다.
+   */
   async function load({ force = false } = {}) {
     if (loaded.value && !force) return
-    workplaces.value = await listWorkplaces()
+    const { content } = await listWorkplaces()
+    workplaces.value = content
     loaded.value = true
-    if (selectedId.value == null && workplaces.value.length > 0) {
-      selectedId.value = workplaces.value[0].workplaceId
+    if (selectedId.value == null && activeWorkplaces.value.length > 0) {
+      selectedId.value = activeWorkplaces.value[0].workplaceId
     }
   }
 
@@ -42,5 +55,16 @@ export const useWorkplaceStore = defineStore('workplace', () => {
     loaded.value = false
   }
 
-  return { workplaces, selectedId, loaded, selected, hasWorkplace, load, select, reset }
+  return {
+    workplaces,
+    selectedId,
+    loaded,
+    selected,
+    activeWorkplaces,
+    hasWorkplace,
+    hasActiveWorkplace,
+    load,
+    select,
+    reset
+  }
 })
