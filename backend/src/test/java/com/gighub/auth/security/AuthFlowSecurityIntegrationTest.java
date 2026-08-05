@@ -1,0 +1,233 @@
+package com.gighub.auth.security;
+
+import javax.servlet.Filter;
+import javax.servlet.http.Cookie;
+
+import com.gighub.auth.controller.AuthController;
+import com.gighub.auth.service.AuthService;
+import com.gighub.auth.service.LoginResult;
+import com.gighub.common.exception.AuthRequiredException;
+import com.gighub.common.exception.CommonExceptionHandler;
+import com.gighub.common.exception.RoleMismatchException;
+import com.gighub.member.domain.UserRole;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Import;
+import org.springframework.mock.web.MockHttpSession;
+import org.springframework.mock.web.MockServletContext;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.web.csrf.CsrfTokenRepository;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import org.springframework.web.context.support.AnnotationConfigWebApplicationContext;
+import org.springframework.web.servlet.config.annotation.EnableWebMvc;
+
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+import static org.springframework.http.MediaType.APPLICATION_JSON;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.cookie;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+class AuthFlowSecurityIntegrationTest {
+
+    private AnnotationConfigWebApplicationContext rootContext;
+    private AnnotationConfigWebApplicationContext servletContext;
+    private AuthService authService;
+    private MockMvc mockMvc;
+
+    @BeforeEach
+    void setUp() {
+        MockServletContext mockServletContext = new MockServletContext();
+
+        rootContext = new AnnotationConfigWebApplicationContext();
+        rootContext.setServletContext(mockServletContext);
+        rootContext.register(RootTestConfig.class);
+        rootContext.refresh();
+
+        servletContext = new AnnotationConfigWebApplicationContext();
+        servletContext.setServletContext(mockServletContext);
+        servletContext.setParent(rootContext);
+        servletContext.register(ServletTestConfig.class);
+        servletContext.refresh();
+
+        authService = rootContext.getBean(AuthService.class);
+        Filter securityFilter = rootContext.getBean("springSecurityFilterChain", Filter.class);
+        mockMvc = MockMvcBuilders.webAppContextSetup(servletContext)
+                .addFilters(securityFilter)
+                .build();
+    }
+
+    @AfterEach
+    void tearDown() {
+        SecurityContextHolder.clearContext();
+        servletContext.close();
+        rootContext.close();
+    }
+
+    @Test
+    void csrfLoginSessionAndLogoutUseOneRealSecurityFilterChain() throws Exception {
+        AuthPrincipal principal = new AuthPrincipal(81L, UserRole.OWNER, "김사장");
+        when(authService.signup(any())).thenReturn(80L);
+        when(authService.login(any())).thenReturn(new LoginResult(principal, true));
+        when(authService.needsWorkplaceSetup(principal)).thenReturn(true);
+
+        MvcResult csrfResult = mockMvc.perform(get("/api/auth/csrf"))
+                .andExpect(status().isNoContent())
+                .andExpect(cookie().exists("XSRF-TOKEN"))
+                .andReturn();
+        Cookie csrfCookie = csrfResult.getResponse().getCookie("XSRF-TOKEN");
+
+        MvcResult signupResult = mockMvc.perform(post("/api/auth/signup")
+                        .cookie(csrfCookie)
+                        .header("X-XSRF-TOKEN", csrfCookie.getValue())
+                        .contentType(APPLICATION_JSON)
+                        .content(signupBody()))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.userId").value(80))
+                .andReturn();
+        assertNull(signupResult.getRequest().getSession(false));
+
+        MockHttpSession anonymousSession = new MockHttpSession();
+        String anonymousSessionId = anonymousSession.getId();
+
+        MvcResult loginResult = mockMvc.perform(post("/api/auth/login")
+                        .session(anonymousSession)
+                        .cookie(csrfCookie)
+                        .header("X-XSRF-TOKEN", csrfCookie.getValue())
+                        .contentType(APPLICATION_JSON)
+                        .content(loginBody("OWNER")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.role").value("OWNER"))
+                .andExpect(jsonPath("$.data.name").value("김사장"))
+                .andExpect(jsonPath("$.data.needsWorkplaceSetup").value(true))
+                .andExpect(cookie().maxAge("XSRF-TOKEN", 0))
+                .andReturn();
+        MockHttpSession authenticatedSession =
+                (MockHttpSession) loginResult.getRequest().getSession(false);
+        assertNotEquals(anonymousSessionId, authenticatedSession.getId());
+
+        mockMvc.perform(get("/api/auth/session").session(authenticatedSession))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.authenticated").value(true))
+                .andExpect(jsonPath("$.data.role").value("OWNER"));
+
+        MvcResult refreshedCsrf = mockMvc.perform(
+                        get("/api/auth/csrf").session(authenticatedSession))
+                .andExpect(status().isNoContent())
+                .andExpect(cookie().exists("XSRF-TOKEN"))
+                .andReturn();
+        Cookie refreshedCsrfCookie = refreshedCsrf.getResponse().getCookie("XSRF-TOKEN");
+
+        mockMvc.perform(post("/api/auth/logout")
+                        .session(authenticatedSession)
+                        .cookie(refreshedCsrfCookie)
+                        .header("X-XSRF-TOKEN", refreshedCsrfCookie.getValue()))
+                .andExpect(status().isNoContent())
+                .andExpect(cookie().maxAge("JSESSIONID", 0))
+                .andExpect(cookie().maxAge("XSRF-TOKEN", 0));
+        assertTrue(authenticatedSession.isInvalid());
+
+        mockMvc.perform(get("/api/auth/session"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.authenticated").value(false));
+    }
+
+    @Test
+    void loginFailuresKeepApprovedErrorCodesAndDoNotCreateSession() throws Exception {
+        Cookie csrfCookie = prepareCsrfCookie();
+        when(authService.login(any()))
+                .thenThrow(new AuthRequiredException("아이디 또는 비밀번호를 확인해 주세요."));
+
+        MvcResult authFailure = mockMvc.perform(post("/api/auth/login")
+                        .cookie(csrfCookie)
+                        .header("X-XSRF-TOKEN", csrfCookie.getValue())
+                        .contentType(APPLICATION_JSON)
+                        .content(loginBody("OWNER")))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("AUTH_REQUIRED"))
+                .andReturn();
+        assertNull(authFailure.getRequest().getSession(false));
+    }
+
+    @Test
+    void validCredentialsWithDifferentRoleUseRoleMismatchCode() throws Exception {
+        Cookie csrfCookie = prepareCsrfCookie();
+        when(authService.login(any()))
+                .thenThrow(new RoleMismatchException("선택한 역할과 계정 역할이 일치하지 않습니다."));
+
+        mockMvc.perform(post("/api/auth/login")
+                        .cookie(csrfCookie)
+                        .header("X-XSRF-TOKEN", csrfCookie.getValue())
+                        .contentType(APPLICATION_JSON)
+                        .content(loginBody("WORKER")))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("ROLE_MISMATCH"));
+    }
+
+    private Cookie prepareCsrfCookie() throws Exception {
+        MvcResult result = mockMvc.perform(get("/api/auth/csrf"))
+                .andExpect(status().isNoContent())
+                .andReturn();
+        return result.getResponse().getCookie("XSRF-TOKEN");
+    }
+
+    private String loginBody(String expectedRole) {
+        return "{"
+                + "\"loginId\":\"owner01\","
+                + "\"password\":\"secret123\","
+                + "\"expectedRole\":\"" + expectedRole + "\"}";
+    }
+
+    private String signupBody() {
+        return "{"
+                + "\"loginId\":\"owner01\","
+                + "\"password\":\"secret123\","
+                + "\"passwordConfirm\":\"secret123\","
+                + "\"name\":\"김사장\","
+                + "\"email\":\"owner@example.invalid\","
+                + "\"role\":\"OWNER\"}";
+    }
+
+    @Configuration
+    @Import(SecurityConfig.class)
+    static class RootTestConfig {
+
+        @Bean
+        AuthService authService() {
+            return mock(AuthService.class);
+        }
+
+        @Bean
+        AuthSessionManager authSessionManager(CsrfTokenRepository csrfTokenRepository) {
+            return new AuthSessionManager(csrfTokenRepository);
+        }
+    }
+
+    @Configuration
+    @EnableWebMvc
+    static class ServletTestConfig {
+
+        @Bean
+        AuthController authController(
+                AuthService authService,
+                AuthSessionManager authSessionManager) {
+            return new AuthController(authService, authSessionManager);
+        }
+
+        @Bean
+        CommonExceptionHandler commonExceptionHandler() {
+            return new CommonExceptionHandler();
+        }
+    }
+}

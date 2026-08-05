@@ -1,0 +1,19 @@
+package com.gighub.auth.service;
+
+import com.gighub.auth.dto.SignupRequest;
+import com.gighub.auth.dto.LoginRequest;
+import com.gighub.auth.security.AuthPrincipal;
+
+/** 가입·로그인과 Session 응답에 필요한 인증 도메인 기능입니다. */
+public interface AuthService {
+
+    boolean isLoginIdAvailable(String loginId);
+
+    boolean isEmailAvailable(String email);
+
+    Long signup(SignupRequest request);
+
+    LoginResult login(LoginRequest request);
+
+    boolean needsWorkplaceSetup(AuthPrincipal principal);
+}

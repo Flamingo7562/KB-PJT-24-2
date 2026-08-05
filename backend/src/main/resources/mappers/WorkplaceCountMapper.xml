@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.gighub.auth.mapper.WorkplaceCountMapper">
+
+    <select id="countActiveByOwnerUserId" resultType="int">
+        SELECT COUNT(*)
+        FROM workplaces
+        WHERE owner_user_id = #{ownerUserId}
+          AND status = 'ACTIVE'
+    </select>
+
+</mapper>

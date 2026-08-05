@@ -6,6 +6,8 @@ import org.springframework.context.annotation.FilterType;
 import org.springframework.context.annotation.Import;
 import org.springframework.stereotype.Controller;
 
+import com.gighub.auth.security.SecurityConfig;
+
 /**
  * 웹 계층을 제외한 애플리케이션 공통 Bean을 관리하는 Root Context 설정입니다.
  *
@@ -15,7 +17,7 @@ import org.springframework.stereotype.Controller;
  * <p>MySQL 연결과 MyBatis 영속성 Bean은 {@link DatabaseConfig}에 분리해 관리합니다.</p>
  */
 @Configuration
-@Import(DatabaseConfig.class)
+@Import({DatabaseConfig.class, SecurityConfig.class})
 @ComponentScan(
         basePackages = "com.gighub",
         excludeFilters = {
