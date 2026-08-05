@@ -11,5 +11,9 @@ public interface UserMapper {
 
     int countByEmail(@Param("email") String email);
 
+    User findByLoginId(@Param("loginId") String loginId);
+
+    User findById(@Param("userId") Long userId);
+
     int insert(User user);
 }

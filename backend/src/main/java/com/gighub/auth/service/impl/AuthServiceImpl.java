@@ -1,12 +1,17 @@
 package com.gighub.auth.service.impl;
 
 import com.gighub.auth.dto.SignupRequest;
+import com.gighub.auth.dto.LoginRequest;
 import com.gighub.auth.mapper.WorkplaceCountMapper;
 import com.gighub.auth.security.AuthPrincipal;
 import com.gighub.auth.service.AuthService;
+import com.gighub.auth.service.LoginResult;
+import com.gighub.common.exception.AuthRequiredException;
 import com.gighub.common.exception.ConflictException;
+import com.gighub.common.exception.RoleMismatchException;
 import com.gighub.member.domain.User;
 import com.gighub.member.domain.UserRole;
+import com.gighub.member.domain.UserStatus;
 import com.gighub.member.mapper.UserMapper;
 import com.gighub.wallet.mapper.WalletMapper;
 import org.springframework.dao.DuplicateKeyException;
@@ -17,6 +22,9 @@ import org.springframework.transaction.annotation.Transactional;
 /** 승인된 인증 계약을 DB 현재 상태로 계산합니다. */
 @Service
 public class AuthServiceImpl implements AuthService {
+
+    private static final String DUMMY_PASSWORD_HASH =
+            "$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy";
 
     private final WorkplaceCountMapper workplaceCountMapper;
     private final UserMapper userMapper;
@@ -74,6 +82,25 @@ public class AuthServiceImpl implements AuthService {
             // 사전 조회 이후 동시 가입이 들어와도 DB Unique 제약을 최종 방어선으로 사용합니다.
             throw signupConflict();
         }
+    }
+
+    @Override
+    public LoginResult login(LoginRequest request) {
+        User user = userMapper.findByLoginId(request.getLoginId());
+        // 존재하지 않는 아이디에도 BCrypt 검증 비용을 적용해 응답 시간 차이를 줄입니다.
+        String passwordHash = user == null ? DUMMY_PASSWORD_HASH : user.getPasswordHash();
+        boolean passwordMatches = passwordEncoder.matches(request.getPassword(), passwordHash);
+
+        // 계정 존재·상태·비밀번호 중 어느 조건이 실패했는지 응답으로 구분하지 않습니다.
+        if (user == null || user.getStatus() != UserStatus.ACTIVE || !passwordMatches) {
+            throw new AuthRequiredException("아이디 또는 비밀번호를 확인해 주세요.");
+        }
+        if (user.getRole() != request.getExpectedRole()) {
+            throw new RoleMismatchException("선택한 역할과 계정 역할이 일치하지 않습니다.");
+        }
+
+        AuthPrincipal principal = new AuthPrincipal(user.getId(), user.getRole(), user.getName());
+        return new LoginResult(principal, needsWorkplaceSetup(principal));
     }
 
     @Override

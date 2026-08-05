@@ -2,8 +2,10 @@ package com.gighub.auth.controller;
 
 import java.util.List;
 
+import com.gighub.auth.security.AuthSessionManager;
 import com.gighub.auth.security.AuthPrincipal;
 import com.gighub.auth.service.AuthService;
+import com.gighub.auth.service.LoginResult;
 import com.gighub.common.exception.CommonExceptionHandler;
 import com.gighub.member.domain.UserRole;
 import org.junit.jupiter.api.BeforeEach;
@@ -18,6 +20,8 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -27,12 +31,15 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class AuthControllerTest {
 
     private AuthService authService;
+    private AuthSessionManager authSessionManager;
     private MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
         authService = mock(AuthService.class);
-        mockMvc = MockMvcBuilders.standaloneSetup(new AuthController(authService))
+        authSessionManager = mock(AuthSessionManager.class);
+        mockMvc = MockMvcBuilders.standaloneSetup(
+                        new AuthController(authService, authSessionManager))
                 .setControllerAdvice(new CommonExceptionHandler())
                 .build();
     }
@@ -127,5 +134,40 @@ class AuthControllerTest {
                         ))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+    }
+
+    @Test
+    void loginEstablishesSessionAndReturnsApprovedResponse() throws Exception {
+        AuthPrincipal principal = new AuthPrincipal(41L, UserRole.OWNER, "김사장");
+        when(authService.login(any())).thenReturn(new LoginResult(principal, true));
+
+        mockMvc.perform(post("/api/auth/login")
+                        .contentType(APPLICATION_JSON)
+                        .content("{"
+                                + "\"loginId\":\" OWNER01 \","
+                                + "\"password\":\"secret123\","
+                                + "\"expectedRole\":\"OWNER\"}"
+                        ))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.role").value("OWNER"))
+                .andExpect(jsonPath("$.data.name").value("김사장"))
+                .andExpect(jsonPath("$.data.needsWorkplaceSetup").value(true));
+
+        verify(authSessionManager).establish(any(), any(), eq(principal));
+    }
+
+    @Test
+    void logoutClearsAuthenticatedSessionAndReturnsNoContent() throws Exception {
+        AuthPrincipal principal = new AuthPrincipal(42L, UserRole.WORKER, "김근로");
+        Authentication authentication = new UsernamePasswordAuthenticationToken(
+                principal,
+                null,
+                List.of()
+        );
+
+        mockMvc.perform(post("/api/auth/logout").principal(authentication))
+                .andExpect(status().isNoContent());
+
+        verify(authSessionManager).logout(any(), any(), eq(authentication));
     }
 }

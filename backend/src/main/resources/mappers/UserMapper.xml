@@ -16,6 +16,29 @@
         WHERE email = #{email}
     </select>
 
+    <sql id="authenticationColumns">
+        id,
+        login_id,
+        password_hash,
+        name,
+        role,
+        status
+    </sql>
+
+    <select id="findByLoginId" resultType="com.gighub.member.domain.User">
+        SELECT <include refid="authenticationColumns"/>
+        FROM users
+        WHERE login_id = #{loginId}
+          AND role IN ('OWNER', 'WORKER')
+    </select>
+
+    <select id="findById" resultType="com.gighub.member.domain.User">
+        SELECT <include refid="authenticationColumns"/>
+        FROM users
+        WHERE id = #{userId}
+          AND role IN ('OWNER', 'WORKER')
+    </select>
+
     <insert id="insert"
             parameterType="com.gighub.member.domain.User"
             useGeneratedKeys="true"
