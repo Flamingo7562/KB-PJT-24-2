@@ -35,5 +35,12 @@ export const useWorkplaceStore = defineStore('workplace', () => {
     selectedId.value = workplaceId
   }
 
-  return { workplaces, selectedId, loaded, selected, hasWorkplace, load, select }
+  /** 로그아웃 시 Context 를 비운다. Pinia setup store 에는 $reset 이 없다. */
+  function reset() {
+    workplaces.value = []
+    selectedId.value = null
+    loaded.value = false
+  }
+
+  return { workplaces, selectedId, loaded, selected, hasWorkplace, load, select, reset }
 })

@@ -1,7 +1,7 @@
 /**
  * 인증/회원 API 서비스.
  *
- * 백엔드 연동 전 목(mock) 반환. 백엔드 준비 시 USE_MOCK=false 로만 바꾼다.
+ * 실제 Session·CSRF 흐름에 연결되어 있다. Mock 은 개발 환경에서 VITE_USE_MOCK=true 로만 켠다.
  * 컴포넌트·스토어는 함수 시그니처만 의존한다.
  *
  * 인증은 Session(JSESSIONID) 전용 — accessToken 없음(저장·전송 금지).
@@ -14,9 +14,8 @@
  * 사전 확인을 통과한 아이디가 최종 요청에서 중복으로 거부될 수 있다.
  */
 import http from '@/services/http'
+import { USE_MOCK } from '@/services/mockFlag'
 import { normalizeEmail, normalizeLoginId, normalizeName, normalizePhone } from '@/utils/validators'
-
-const USE_MOCK = true
 
 /**
  * CSRF 준비 (GET /api/auth/csrf → 204 No Content + XSRF-TOKEN 쿠키).

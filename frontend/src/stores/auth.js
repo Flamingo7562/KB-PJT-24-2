@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 
 import { fetchCsrf, getSession, login as loginApi, logout as logoutApi } from '@/services/auth'
+import { useWorkplaceStore } from '@/stores/workplace'
 
 /**
  * 로그인 사용자 상태. 인증은 Session(JSESSIONID) 전용 — 저장 토큰 없음.
@@ -22,22 +23,28 @@ export const useAuthStore = defineStore('auth', () => {
     return '/'
   }
 
+  /** 세션 상태를 서버 기준으로 다시 읽는다. CSRF 는 건드리지 않는다. */
+  async function refreshSession() {
+    const session = await getSession()
+    user.value = session?.authenticated
+      ? {
+          name: session.name,
+          role: session.role,
+          needsWorkplaceSetup: session.needsWorkplaceSetup ?? false
+        }
+      : null
+    return session
+  }
+
   /**
    * G0 — 앱 시작 시 세션 복원. GET /api/auth/session 결과만으로 인증 상태를 판단한다.
-   * 로컬 저장 토큰·플래그는 사용하지 않는다. CSRF 쿠키도 함께 준비한다(이후 상태변경 요청 대비).
+   * 로컬 저장 토큰·플래그는 사용하지 않는다(JSESSIONID 가 단일 기준).
    * 라우터 가드는 이 함수 완료 후 실행되어야 한다(main.js).
    */
   async function bootstrap() {
     try {
       await fetchCsrf()
-      const session = await getSession()
-      user.value = session?.authenticated
-        ? {
-            name: session.name,
-            role: session.role,
-            needsWorkplaceSetup: session.needsWorkplaceSetup ?? false
-          }
-        : null
+      await refreshSession()
     } catch {
       user.value = null
     } finally {
@@ -46,9 +53,9 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   /**
-   * 로그인. 서비스 응답으로 사용자를 채운다(토큰 저장 없음 — Session 쿠키가 서버에서 설정됨).
-   * @param {object} credentials loginId, password, role(로그인 페이지의 역할 토글 → expectedRole)
-   * @returns 로그인 응답(needsWorkplaceSetup 등 후처리에 사용)
+   * 로그인. 서버가 Session ID 를 교체하면서 CSRF Token 도 회전하므로, 성공 직후
+   * CSRF 를 다시 준비하지 않으면 첫 상태변경 요청이 403 이 된다(API_SPEC.md:91).
+   * 실패 경로에서는 Session 이 바뀌지 않았으므로 재준비하지 않는다.
    */
   async function login(credentials) {
     const res = await loginApi(credentials)
@@ -57,6 +64,7 @@ export const useAuthStore = defineStore('auth', () => {
       role: res.role,
       needsWorkplaceSetup: res.needsWorkplaceSetup ?? false
     }
+    await fetchCsrf()
     return res
   }
 
@@ -64,11 +72,17 @@ export const useAuthStore = defineStore('auth', () => {
     user.value = next
   }
 
+  /**
+   * 로그아웃. 서버 Session 을 무효화한 뒤 새 CSRF 를 준비한다.
+   * 사업장 Context 를 비우지 않으면 다른 계정으로 로그인했을 때 이전 사장의 목록이 남는다.
+   */
   async function logout() {
     try {
       await logoutApi()
+      await fetchCsrf()
     } finally {
       user.value = null
+      useWorkplaceStore().reset()
     }
   }
 
@@ -79,6 +93,7 @@ export const useAuthStore = defineStore('auth', () => {
     role,
     needsWorkplaceSetup,
     homeRoute,
+    refreshSession,
     bootstrap,
     login,
     setUser,
