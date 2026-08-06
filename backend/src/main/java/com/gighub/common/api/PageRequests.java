@@ -30,10 +30,18 @@ public final class PageRequests {
      */
     public static void validate(int page, int size) {
         if (page < DEFAULT_PAGE) {
-            throw new ValidationException("page는 0 이상이어야 합니다.");
+            throw new ValidationException(
+                    "입력값을 확인해 주세요.",
+                    "page",
+                    "page는 0 이상이어야 합니다."
+            );
         }
         if (size < 1 || size > MAX_SIZE) {
-            throw new ValidationException("size는 1 이상 " + MAX_SIZE + " 이하여야 합니다.");
+            throw new ValidationException(
+                    "입력값을 확인해 주세요.",
+                    "size",
+                    "size는 1 이상 " + MAX_SIZE + " 이하여야 합니다."
+            );
         }
     }
 

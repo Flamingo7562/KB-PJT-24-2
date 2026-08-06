@@ -4,12 +4,15 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.gighub.auth.security.AuthPrincipal;
+import com.gighub.common.api.PageResponse;
 import com.gighub.common.exception.CommonExceptionHandler;
+import com.gighub.common.exception.ResourceNotFoundException;
+import com.gighub.common.exception.ValidationException;
 import com.gighub.member.domain.UserRole;
-import com.gighub.wallet.dto.WalletSummary;
-import com.gighub.wallet.dto.WalletTransactionSearch;
-import com.gighub.wallet.dto.WalletTransactionView;
-import com.gighub.wallet.mapper.WalletQueryMapper;
+import com.gighub.wallet.dto.WalletBalanceResponse;
+import com.gighub.wallet.dto.WalletTransactionItem;
+import com.gighub.wallet.service.WalletQueryService;
+import com.gighub.wallet.service.command.WalletTransactionCriteria;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -21,12 +24,15 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.Authentication;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -34,23 +40,18 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/**
- * {@link WalletController}의 인증, 필터 검증, 응답 변환을 검증합니다.
- */
+/** {@link WalletController}의 인증, Query 검증과 외부 JSON 계약을 검증합니다. */
 @ExtendWith(MockitoExtension.class)
 class WalletControllerTest {
 
     private static final Long USER_ID = 3L;
 
     @Mock
-    private WalletQueryMapper walletQueryMapper;
+    private WalletQueryService walletQueryService;
 
     private MockMvc mockMvc;
     private Authentication authentication;
 
-    /**
-     * Java Time 직렬화를 포함한 독립형 Spring MVC 테스트 환경을 준비합니다.
-     */
     @BeforeEach
     void setUp() {
         ObjectMapper objectMapper = new ObjectMapper();
@@ -58,76 +59,51 @@ class WalletControllerTest {
         objectMapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
         MappingJackson2HttpMessageConverter converter =
                 new MappingJackson2HttpMessageConverter(objectMapper);
+        LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
+        validator.afterPropertiesSet();
+
         mockMvc = MockMvcBuilders
-                .standaloneSetup(new WalletController(walletQueryMapper))
+                .standaloneSetup(new WalletController(walletQueryService))
                 .setControllerAdvice(new CommonExceptionHandler())
                 .setMessageConverters(converter)
+                .setValidator(validator)
                 .build();
 
         AuthPrincipal principal = new AuthPrincipal(USER_ID, UserRole.OWNER, "김사장");
         authentication = new UsernamePasswordAuthenticationToken(principal, null, List.of());
     }
 
-    private WalletSummary summary(long available, long locked) {
-        return WalletSummary.builder()
-                .walletId(30L)
-                .availableBalance(available)
-                .lockedBalance(locked)
-                .build();
-    }
-
-    private WalletTransactionView view(String type, long amount) {
-        return WalletTransactionView.builder()
-                .transactionId(10L)
-                .type(type)
-                .amount(amount)
-                .availableAfter(400_000L)
-                .lockedAfter(0L)
-                .createdAt(LocalDateTime.of(2026, 7, 22, 13, 0))
-                .build();
-    }
-
-    // ===================== GET /api/wallet =====================
-
-    /**
-     * 지갑 요약이 가용 잔액과 잠금 잔액을 분리해 반환하는지 검증합니다.
-     *
-     * @throws Exception MockMvc 요청 실행에 실패한 경우
-     */
     @Test
     void returnsWalletSummary() throws Exception {
-        when(walletQueryMapper.findWalletSummaryByUserId(USER_ID))
-                .thenReturn(summary(400_000L, 300_000L));
+        when(walletQueryService.getWallet(USER_ID)).thenReturn(
+                WalletBalanceResponse.builder()
+                        .currency("KRW")
+                        .availableBalance(400_000L)
+                        .lockedBalance(300_000L)
+                        .build()
+        );
 
         mockMvc.perform(get("/api/wallet").principal(authentication))
                 .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()").value(3))
                 .andExpect(jsonPath("$.data.currency").value("KRW"))
                 .andExpect(jsonPath("$.data.availableBalance").value(400_000L))
                 .andExpect(jsonPath("$.data.lockedBalance").value(300_000L));
     }
 
-    /**
-     * 비로그인 요청이 지갑을 조회하지 않고 401을 반환하는지 검증합니다.
-     *
-     * @throws Exception MockMvc 요청 실행에 실패한 경우
-     */
     @Test
     void rejectsWalletSummaryWithoutSession() throws Exception {
         mockMvc.perform(get("/api/wallet"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value("AUTH_REQUIRED"));
 
-        verify(walletQueryMapper, never()).findWalletSummaryByUserId(any());
+        verify(walletQueryService, never()).getWallet(any());
     }
 
-    /**
-     * 지갑이 없는 사용자에게 404를 반환하는지 검증합니다.
-     *
-     * @throws Exception MockMvc 요청 실행에 실패한 경우
-     */
     @Test
-    void returnsNotFoundWhenWalletMissing() throws Exception {
-        when(walletQueryMapper.findWalletSummaryByUserId(USER_ID)).thenReturn(null);
+    void returnsCommonNotFoundWhenWalletMissing() throws Exception {
+        when(walletQueryService.getWallet(USER_ID))
+                .thenThrow(new ResourceNotFoundException("지갑을 찾을 수 없습니다."));
 
         mockMvc.perform(get("/api/wallet").principal(authentication))
                 .andExpect(status().isNotFound())
@@ -135,221 +111,139 @@ class WalletControllerTest {
                 .andExpect(jsonPath("$.traceId").isString());
     }
 
-    // ===================== GET /api/wallet/transactions =====================
-
-    /**
-     * 거래 내역이 파생 상태와 페이지 정보를 포함해 반환되는지 검증합니다.
-     *
-     * @throws Exception MockMvc 요청 실행에 실패한 경우
-     */
     @Test
-    void returnsTransactionPage() throws Exception {
-        when(walletQueryMapper.countTransactions(any())).thenReturn(1L);
-        when(walletQueryMapper.findTransactions(any()))
-                .thenReturn(List.of(view("ESCROW_HOLD", 300_000L)));
+    void returnsApprovedTransactionItemAndPage() throws Exception {
+        WalletTransactionItem item = WalletTransactionItem.builder()
+                .transactionId(10L)
+                .type("ESCROW_HOLD")
+                .amount(300_000L)
+                .direction("DEBIT")
+                .availableAfter(400_000L)
+                .lockedAfter(300_000L)
+                .workCaseId(20L)
+                .workTitle("주말 홀 서빙")
+                .workplaceName("기가 허브")
+                .displayStatus("COMPLETED")
+                .createdAt(Instant.parse("2026-07-22T04:00:00Z"))
+                .build();
+        when(walletQueryService.getTransactions(eq(USER_ID), any()))
+                .thenReturn(PageResponse.of(List.of(item), 0, 20, 1));
 
         mockMvc.perform(get("/api/wallet/transactions").principal(authentication))
                 .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.content[0].length()").value(11))
                 .andExpect(jsonPath("$.data.content[0].type").value("ESCROW_HOLD"))
-                .andExpect(jsonPath("$.data.content[0].displayStatus").value("예치중"))
-                .andExpect(jsonPath("$.data.content[0].createdAt").value("2026-07-22T04:00:00Z"))
+                .andExpect(jsonPath("$.data.content[0].direction").value("DEBIT"))
+                .andExpect(jsonPath("$.data.content[0].displayStatus").value("COMPLETED"))
+                .andExpect(jsonPath("$.data.content[0].createdAt")
+                        .value("2026-07-22T04:00:00Z"))
                 .andExpect(jsonPath("$.data.page.number").value(0))
                 .andExpect(jsonPath("$.data.page.size").value(20))
                 .andExpect(jsonPath("$.data.page.totalElements").value(1))
                 .andExpect(jsonPath("$.data.page.totalPages").value(1));
     }
 
-    /**
-     * 조회 결과가 없으면 목록 쿼리를 호출하지 않는지 검증합니다.
-     *
-     * @throws Exception MockMvc 요청 실행에 실패한 경우
-     */
     @Test
-    void skipsListQueryWhenCountIsZero() throws Exception {
-        when(walletQueryMapper.countTransactions(any())).thenReturn(0L);
-
-        mockMvc.perform(get("/api/wallet/transactions").principal(authentication))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.content").isEmpty())
-                .andExpect(jsonPath("$.data.page.totalPages").value(0));
-
-        verify(walletQueryMapper, never()).findTransactions(any());
-    }
-
-    /**
-     * to 조건이 해당 일자를 포함하도록 다음 날 자정 미만으로 변환되는지 검증합니다.
-     *
-     * @throws Exception MockMvc 요청 실행에 실패한 경우
-     */
-    @Test
-    void convertsToDateAsExclusiveUpperBound() throws Exception {
-        when(walletQueryMapper.countTransactions(any())).thenReturn(0L);
+    void bindsApprovedQueryNamesAndDefaults() throws Exception {
+        when(walletQueryService.getTransactions(eq(USER_ID), any()))
+                .thenReturn(PageResponse.of(List.of(), 0, 20, 0));
 
         mockMvc.perform(get("/api/wallet/transactions")
-                        .param("from", "2026-07-22")
-                        .param("to", "2026-07-22")
+                        .param("workplaceId", "7")
+                        .param("from", "2026-07-01")
+                        .param("to", "2026-07-31")
+                        .param("type", "FUNDING")
+                        .param("minAmount", "1000")
+                        .param("maxAmount", "5000")
+                        .param("keyword", " 허브 ")
                         .principal(authentication))
                 .andExpect(status().isOk());
 
-        ArgumentCaptor<WalletTransactionSearch> captor =
-                ArgumentCaptor.forClass(WalletTransactionSearch.class);
-        verify(walletQueryMapper).countTransactions(captor.capture());
-
-        WalletTransactionSearch search = captor.getValue();
-        assertEquals(LocalDateTime.of(2026, 7, 22, 0, 0), search.getFrom());
-        assertEquals(LocalDateTime.of(2026, 7, 23, 0, 0), search.getToExclusive());
+        ArgumentCaptor<WalletTransactionCriteria> captor =
+                ArgumentCaptor.forClass(WalletTransactionCriteria.class);
+        verify(walletQueryService).getTransactions(eq(USER_ID), captor.capture());
+        WalletTransactionCriteria criteria = captor.getValue();
+        assertEquals(7L, criteria.getWorkplaceId());
+        assertEquals(LocalDate.of(2026, 7, 1), criteria.getFrom());
+        assertEquals(LocalDate.of(2026, 7, 31), criteria.getTo());
+        assertEquals("FUNDING", criteria.getType());
+        assertEquals(1_000L, criteria.getMinAmount());
+        assertEquals(5_000L, criteria.getMaxAmount());
+        assertEquals(" 허브 ", criteria.getKeyword());
+        assertEquals("LATEST", criteria.getSort());
+        assertEquals(0, criteria.getPage());
+        assertEquals(20, criteria.getSize());
     }
 
-    /**
-     * page와 size로 계산한 offset이 조회 조건에 반영되는지 검증합니다.
-     *
-     * @throws Exception MockMvc 요청 실행에 실패한 경우
-     */
     @Test
-    void appliesOffsetFromPageAndSize() throws Exception {
-        when(walletQueryMapper.countTransactions(any())).thenReturn(0L);
-
-        mockMvc.perform(get("/api/wallet/transactions")
-                        .param("page", "2")
-                        .param("size", "10")
-                        .principal(authentication))
-                .andExpect(status().isOk());
-
-        ArgumentCaptor<WalletTransactionSearch> captor =
-                ArgumentCaptor.forClass(WalletTransactionSearch.class);
-        verify(walletQueryMapper).countTransactions(captor.capture());
-
-        assertEquals(20, captor.getValue().getOffset());
-        assertEquals(10, captor.getValue().getSize());
+    void rejectsUnknownSortWithFieldError() throws Exception {
+        assertFieldValidation("sort", "id;DROP", "sort");
     }
 
-    /**
-     * 공백만 있는 keyword가 조건에서 제외되는지 검증합니다.
-     *
-     * @throws Exception MockMvc 요청 실행에 실패한 경우
-     */
     @Test
-    void treatsBlankKeywordAsAbsent() throws Exception {
-        when(walletQueryMapper.countTransactions(any())).thenReturn(0L);
-
-        mockMvc.perform(get("/api/wallet/transactions")
-                        .param("keyword", "   ")
-                        .principal(authentication))
-                .andExpect(status().isOk());
-
-        ArgumentCaptor<WalletTransactionSearch> captor =
-                ArgumentCaptor.forClass(WalletTransactionSearch.class);
-        verify(walletQueryMapper).countTransactions(captor.capture());
-
-        assertEquals(null, captor.getValue().getKeyword());
+    void rejectsUnknownTypeWithFieldError() throws Exception {
+        assertFieldValidation("type", "UNKNOWN_TYPE", "type");
     }
 
-    // ===================== 필터 검증 =====================
-
-    /**
-     * whitelist에 없는 정렬 키가 쿼리 실행 전에 차단되는지 검증합니다.
-     *
-     * @throws Exception MockMvc 요청 실행에 실패한 경우
-     */
     @Test
-    void rejectsUnknownSortKey() throws Exception {
-        mockMvc.perform(get("/api/wallet/transactions")
-                        .param("sort", "id;DROP")
-                        .principal(authentication))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
-                .andExpect(jsonPath("$.traceId").isString());
-
-        verify(walletQueryMapper, never()).countTransactions(any());
+    void rejectsNegativeMinAmountWithFieldError() throws Exception {
+        assertFieldValidation("minAmount", "-1", "minAmount");
     }
 
-    /**
-     * 허용되지 않은 거래 유형이 차단되는지 검증합니다.
-     *
-     * @throws Exception MockMvc 요청 실행에 실패한 경우
-     */
     @Test
-    void rejectsUnknownTransactionType() throws Exception {
-        mockMvc.perform(get("/api/wallet/transactions")
-                        .param("type", "UNKNOWN_TYPE")
-                        .principal(authentication))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
-
-        verify(walletQueryMapper, never()).countTransactions(any());
+    void rejectsNegativePageWithFieldError() throws Exception {
+        assertFieldValidation("page", "-1", "page");
     }
 
-    /**
-     * 최대 페이지 크기를 초과한 요청이 차단되는지 검증합니다.
-     *
-     * @throws Exception MockMvc 요청 실행에 실패한 경우
-     */
     @Test
-    void rejectsPageSizeAboveLimit() throws Exception {
-        mockMvc.perform(get("/api/wallet/transactions")
-                        .param("size", "1000")
-                        .principal(authentication))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
-
-        verify(walletQueryMapper, never()).countTransactions(any());
+    void rejectsPageSizeAboveLimitWithFieldError() throws Exception {
+        assertFieldValidation("size", "101", "size");
     }
 
-    /**
-     * 음수 페이지 번호가 차단되는지 검증합니다.
-     *
-     * @throws Exception MockMvc 요청 실행에 실패한 경우
-     */
     @Test
-    void rejectsNegativePage() throws Exception {
-        mockMvc.perform(get("/api/wallet/transactions")
-                        .param("page", "-1")
-                        .principal(authentication))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+    void rejectsMalformedDateWithFieldError() throws Exception {
+        assertFieldValidation("from", "2026-99-99", "from");
     }
 
-    /**
-     * from이 to보다 뒤인 기간 조건이 차단되는지 검증합니다.
-     *
-     * @throws Exception MockMvc 요청 실행에 실패한 경우
-     */
     @Test
-    void rejectsReversedDateRange() throws Exception {
+    void exposesServiceCrossFieldValidationAsFieldError() throws Exception {
+        when(walletQueryService.getTransactions(eq(USER_ID), any()))
+                .thenThrow(new ValidationException(
+                        "입력값을 확인해 주세요.",
+                        "to",
+                        "to는 from과 같거나 이후여야 합니다."
+                ));
+
         mockMvc.perform(get("/api/wallet/transactions")
                         .param("from", "2026-07-24")
                         .param("to", "2026-07-22")
                         .principal(authentication))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.fieldErrors[0].field").value("to"));
     }
 
-    /**
-     * minAmount가 maxAmount보다 큰 금액 조건이 차단되는지 검증합니다.
-     *
-     * @throws Exception MockMvc 요청 실행에 실패한 경우
-     */
-    @Test
-    void rejectsReversedAmountRange() throws Exception {
-        mockMvc.perform(get("/api/wallet/transactions")
-                        .param("minAmount", "500000")
-                        .param("maxAmount", "100000")
-                        .principal(authentication))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
-    }
-
-    /**
-     * 비로그인 요청이 거래 내역을 조회하지 않고 401을 반환하는지 검증합니다.
-     *
-     * @throws Exception MockMvc 요청 실행에 실패한 경우
-     */
     @Test
     void rejectsTransactionsWithoutSession() throws Exception {
         mockMvc.perform(get("/api/wallet/transactions"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value("AUTH_REQUIRED"));
 
-        verify(walletQueryMapper, never()).countTransactions(any());
+        verify(walletQueryService, never()).getTransactions(any(), any());
+    }
+
+    private void assertFieldValidation(
+            String parameter,
+            String value,
+            String expectedField) throws Exception {
+        mockMvc.perform(get("/api/wallet/transactions")
+                        .param(parameter, value)
+                        .principal(authentication))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.traceId").isString())
+                .andExpect(jsonPath("$.fieldErrors[0].field").value(expectedField));
+
+        verify(walletQueryService, never()).getTransactions(any(), any());
     }
 }
