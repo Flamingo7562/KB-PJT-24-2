@@ -489,8 +489,9 @@ Aggregate Transaction은 다음 순서로 처리한다. 검증 실패는 성공 
 - Backend 수락 Aggregate: [#156](https://github.com/Flamingo7562/KB-PJT-24-2/issues/156)
 - Backend 계약 PDF·접근: [#157](https://github.com/Flamingo7562/KB-PJT-24-2/issues/157)
 - Frontend WORKER 조회·수락: [#159](https://github.com/Flamingo7562/KB-PJT-24-2/issues/159)
-- Patch 전용 PR: 생성 전. PR 제출 직전에 기준선과 활성 Patch 중복을 재검토하고 상태를
-  `proposed`로 전환한다.
+- Patch 전용 Draft PR:
+  [#227](https://github.com/Flamingo7562/KB-PJT-24-2/pull/227). 제출 직전 기준선과 활성 Patch
+  중복을 재검토했고 상태를 `proposed`로 전환했다.
 - 적용 순서: `SPEC-218-01` → `SPEC-220-01` → `SPEC-221-01`. 세 Patch가 Controller 정식
   명세 릴리스에 `applied`되기 전 #156, #157, #159 구현 PR을 병합하지 않는다.
 - 대상 중복: 이 Patch는 `SPEC-218-01`의 `DEC-INVITE-ACCEPT`와
