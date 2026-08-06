@@ -1,12 +1,13 @@
 ---
 patch_id: SPEC-218-01
 author: flamingo7562
-status: proposed
+status: accepted
 issue: 218
 created_at: 2026-08-06
 base_spec_version: 3.0.1
-base_commit: "62709cb585c15284c1c0d236c535ddfbd791d277"
+base_commit: "1ad5d6458361a8c5ec32afb53185e22ad475a016"
 change_type: breaking
+delivery_mode: spec_first
 targets:
   - requirement: WORK-005
   - requirement: WORK-006
@@ -40,7 +41,7 @@ applied_by_pr: null
 정식 명세 3.0.1은 Token Hash 저장, 조건 Version 검증, Body 없는 수락과 OWNER Badge 노출
 경계는 승인했지만 초대 대상, 만료 시각, 활성 초대가 있을 때의 발급 응답, 재발급 경로,
 조회 DTO 전체 필드와 상태별 오류를 확정하지 않았다. 현재 스키마에는 사전 대상 WORKER
-컬럼이 없고 `accepted_by_user_id`만 있으므로 Bearer 모델은 Flyway `202608051337`과
+컬럼이 없고 `accepted_by_user_id`만 있으므로 Bearer 모델은 Flyway `202608061428`과
 호환되며 Migration이 필요하지 않다.
 
 이 Patch는 초대 Link 자체의 생명주기만 다룬다. 수락 멱등 Fingerprint, 전자동의 증거,
@@ -65,6 +66,19 @@ applied_by_pr: null
   `CONFLICT` 하나로 합치거나 임의의 도메인 Code로 나눌 수 있다.
 - `WORK-006`은 초대 이력이 있는 DRAFT를 취소 상태로 전환하지만 남아 있는 `PENDING`
   초대의 철회를 명시하지 않는다.
+
+## 전달 방식과 위험 판정
+
+`spec_first`를 사용한다.
+
+- 사전 지정 초대가 아닌 Bearer Link 의미, 재발급 Operation과 상태·오류 계약을 확정하는
+  breaking 변경이다.
+- Token Hash, 인증·역할, 만료·철회와 조건 Version은 보안·인가 경계이며 구현이 먼저
+  병합되면 승인되지 않은 Link 접근 의미를 강제할 수 있다.
+- Backend 발급·조회·수락과 Frontend 로그인 복귀가 공유하고 SPEC-220/221이 이 생명주기에
+  의존하므로 독립 구현 PR에서 일방적으로 바꾸기 어렵다.
+- Flyway `202608061428` 기준으로 이 Patch 자체의 Migration·DDL은 없지만 정식 명세에
+  적용되기 전 관련 구현을 `dev`에 병합하지 않는다.
 
 ## 제안할 최종 규범 문장 또는 Before/After
 
@@ -342,7 +356,7 @@ applied_by_pr: null
 ## 검증 가능한 수용 조건
 
 - [ ] Patch의 기준이 Spec `3.0.1`, `origin/dev` Commit
-      `62709cb585c15284c1c0d236c535ddfbd791d277`, Flyway `202608051337`과 일치한다.
+      `1ad5d6458361a8c5ec32afb53185e22ad475a016`, Flyway `202608061428`과 일치한다.
 - [ ] 초대가 사전 지정형이 아닌 Bearer Link이며 추가 WORKER FK나 Migration을 요구하지 않는다.
 - [ ] 최초 발급 201, 동일 활성 Link 재조회 200, 별도 재발급 201의 응답과 상태 전이가
       구분된다.
@@ -358,8 +372,7 @@ applied_by_pr: null
 
 ## 미결 사항
 
-없음. 이 문서의 제품 방향 전체를 Controller가 승인하거나 거절한다. 승인 뒤 제품 의미를
-바꿔야 하면 같은 파일을 덮어쓰지 않고 새 Patch 리비전으로 재승인받는다.
+없음
 
 ## 관련 Issue·PR·의존 Patch
 

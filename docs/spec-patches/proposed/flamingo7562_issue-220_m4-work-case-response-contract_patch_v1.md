@@ -1,12 +1,13 @@
 ---
 patch_id: SPEC-220-01
 author: flamingo7562
-status: proposed
+status: accepted
 issue: 220
 created_at: 2026-08-06
 base_spec_version: 3.0.1
-base_commit: "38c28f50f22ab809c1bbd4a060bb503879027766"
+base_commit: "1ad5d6458361a8c5ec32afb53185e22ad475a016"
 change_type: breaking
+delivery_mode: spec_first
 targets:
   - requirement: WORK-001
   - requirement: WORK-002
@@ -45,7 +46,7 @@ OWNER의 Work Case 상태별 요약, 목록, 상세, 수정과 삭제에서 관�
 사용하므로 Backend 구현자가 이 Shape를 그대로 계약으로 오인하면 8상태 요구사항,
 UTC `Instant` 원칙과 Aggregate 경계에 어긋날 수 있다.
 
-이 Patch는 Flyway `202608051337`의 기존 컬럼과 관계만으로 반환할 수 있는 조회 계약을
+이 Patch는 Flyway `202608061428`의 기존 컬럼과 관계만으로 반환할 수 있는 조회 계약을
 고정한다. 초대 Token과 Link 생명주기는 `SPEC-218-01`, 수락·전자동의 원자성은 후속 Patch,
 문서 본문과 다운로드 계약은 문서 명세가 담당한다. 애플리케이션 구현, Migration, DDL과
 `docs/specs/**` 편집은 포함하지 않는다.
@@ -60,6 +61,8 @@ UTC `Instant` 원칙과 Aggregate 경계에 어긋날 수 있다.
   `work_cases.workplace_address` 한 컬럼에 조합하는 규칙과 외부 필드명을 정하지 않는다.
 - `WORK-004`와 `GET /api/work-cases/{workCaseId}`는 초대·계약·근태·에스크로·정산을
   조회하도록 요구하면서 각 요약 객체의 필드와 Aggregate가 없을 때의 표현을 정하지 않는다.
+- 수락 성공 응답은 `workCaseId`만 제공하고 계약 파일 API는 `documentId`를 요구하므로,
+  상세의 계약 요약에서 문서 식별자를 제공하지 않으면 당사자가 파일 경로를 구성할 수 없다.
 - 현재 Mock의 `startTime`·`endTime`은 요청용 지역 시각 필드인데 조회 응답에도 사용되어
   `DEC-TIME`의 UTC `Instant` 원칙과 충돌한다.
 - `canEdit`, `canDelete`, `canIssueInvitation` 같은 Capability를 서버가 반환할지, 상태와
@@ -68,6 +71,22 @@ UTC `Instant` 원칙과 Aggregate 경계에 어긋날 수 있다.
   전환의 외부 응답이 달라지는지도 알 수 없다.
 - `SPEC_TRACEABILITY.md`의 `WORK-005` 데이터 연결은 실제 컬럼에 없는
   `work_cases.condition_version`을 가리킨다.
+
+## 전달 방식과 위험 판정
+
+`spec_first`를 사용한다.
+
+- 목록·상세의 전체 응답 Shape와 `null` 의미를 교체하고 기존 Mock 별칭·Capability를
+  제거하며 PATCH·DELETE 성공 의미를 고정하는 breaking 변경이다.
+- Frontend와 여러 Backend 구현 이슈가 함께 소비하는 공유 REST 계약이므로 한 구현 PR의
+  DTO가 먼저 병합되면 Controller 결정을 사실상 강제한다.
+- 수락 뒤 계약 파일 발견 경로가 `contract.documentId`에 의존하고 SPEC-218의 초대
+  생명주기와 SPEC-221의 수락·문서 계약 사이 경계를 연결한다.
+- `WORK-005/006` 대상 중첩은 의도적이다. SPEC-218은 활성 초대의 발급·철회·잠금 순서를,
+  이 Patch는 Work Case 요청·204 응답과 수정·삭제 결과를 소유하며 `depends_on` 순서로
+  통합한다.
+- Flyway `202608061428` 기준으로 이 Patch 자체의 Migration·DDL은 없지만 SPEC-218 다음,
+  SPEC-221 이전에 정식 명세로 적용될 때까지 관련 구현을 `dev`에 병합하지 않는다.
 
 ## 제안할 최종 규범 문장 또는 Before/After
 
@@ -256,6 +275,7 @@ Snapshot은 다음 순서로 처리한다.
     },
     "contract": {
       "contractId": 31,
+      "documentId": 51,
       "sourceTermsVersion": 3,
       "acceptedAt": "2026-08-10T04:00:00Z"
     },
@@ -282,8 +302,12 @@ Snapshot은 다음 순서로 처리한다.
 - `worker`: `work_cases.worker_id`가 없으면 `null`이다.
 - `latestInvitation`: 초대 이력이 없으면 `null`이다. 객체가 있으면 `status`,
   `expected_terms_version`을 외부 `termsVersion`으로 바꾼 값과 `expiresAt`을 반환한다.
-- `contract`: `work_contracts`가 없으면 `null`이다. 객체가 있으면 `contractId`,
-  `sourceTermsVersion`, `acceptedAt`을 반환한다.
+- `contract`: `work_contracts`가 없으면 `null`이다. 객체가 있으면 `contractId`, 연결된
+  `EMPLOYMENT_CONTRACT`의 `documentId`, `sourceTermsVersion`, `acceptedAt`을 반환한다.
+  수락 성공 뒤 클라이언트는 응답의 `workCaseId`로 상세를 다시 조회하고 이 `documentId`를
+  사용해 `GET /api/documents/{documentId}/file`을 호출한다. 일반 문서 목록 Shape를 계약서
+  파일 발견 경로로 추정하지 않는다. `work_contracts`는 있는데 연결 계약 문서가 없으면
+  부분 객체나 `null`을 반환하지 않고 `500 INTERNAL_ERROR`와 `traceId` 무결성 로그를 남긴다.
 - `attendance`: 항상 객체이며 성공 출근·퇴근 기록별로 시점이 없으면 해당 필드가 `null`이다.
 - `escrow`: `escrows`가 없으면 `null`이다. 객체가 있으면 `status`, `amount`를 반환한다.
 - `settlement`: `settlements`가 없으면 `null`이다. 객체가 있으면 `status`, `amount`,
@@ -351,12 +375,14 @@ Snapshot은 다음 순서로 처리한다.
   `worker`를 사용한다.
 - 상세는 조건과 5개 Aggregate 요약의 필드·`null`을 닫힌 집합으로 고정하고 기존 Mock의
   평면 `settleStatus`를 제거한다.
+- 수락 성공 뒤 Work Case 상세의 `contract.documentId`에서 계약 파일 식별자를 얻으므로
+  일반 문서 목록의 미승인 필드에 의존하지 않는다.
 - PATCH 성공 응답을 데이터 Body에서 204로, DELETE의 두 저장 경로를 같은 204로 고정한다.
 
 ### 데이터 및 Migration
 
-- 현재 `work_cases`, `work_invitations`, `work_contracts`, `attendance_records`, `escrows`,
-  `settlements`, `users`만 조회한다.
+- 현재 `work_cases`, `work_invitations`, `work_contracts`, `documents`, `attendance_records`,
+  `escrows`, `settlements`, `users`만 조회한다.
 - `workplaceAddress`는 이미 존재하는 단일 Snapshot 컬럼을 그대로 사용하므로
   `roadAddress`와 `detailAddress`로 역분해하지 않는다.
 - 새 컬럼, Flyway Migration, DDL, Backfill과 기존 Migration 수정은 없다.
@@ -381,6 +407,9 @@ Snapshot은 다음 순서로 처리한다.
 
 - 요약 집계, 검색 JOIN, 기간 필터, 동률 정렬과 공통 Page Envelope를 구현해야 한다.
 - 상세는 Aggregate별 Left Join 또는 분리 조회 후 중복 행 없이 한 DTO로 조립해야 한다.
+- 계약이 없으면 `contract: null`을 반환한다. 계약이 있으면 같은 Work Case의
+  `EMPLOYMENT_CONTRACT`를 조회해 `documentId`를 포함하고, 연결 문서 누락은 무결성 오류로
+  처리한다.
 - PATCH는 Work Case 잠금과 `terms_version` 증가, DELETE는 이력 유무 분기를 수행하며
   초대 잠금·철회 순서는 `SPEC-218-01`을 따른다.
 - 이 변경은 정식 명세 적용 뒤 별도 Backend 구현 이슈와 브랜치에서 수행한다.
@@ -390,6 +419,10 @@ Snapshot은 다음 순서로 처리한다.
 - 8개 요약 Key의 존재, 0 채움과 상태별 정확한 집계를 계약 테스트로 고정한다.
 - 제목·WORKER 이름 검색, 단일 상태, 양끝 포함 날짜, 페이지 경계와 동률 정렬을 검증한다.
 - 목록·상세의 전체 필드, UTC 변환, Worker와 Aggregate의 `null` 규칙을 검증한다.
+- 수락 성공의 `workCaseId`로 상세를 재조회해 `contract.documentId`를 얻고 계약 파일 API를
+  호출할 수 있는지 검증한다.
+- 계약은 있지만 연결 `EMPLOYMENT_CONTRACT`가 없는 손상 Fixture에서 부분 객체나 `null`
+  대신 `500 INTERNAL_ERROR`와 무결성 로그가 남는지 검증한다.
 - 주소 조합과 사업장 변경 뒤 Snapshot 불변성을 검증한다.
 - PATCH의 완전한 Body, Version 증가, 204와 잠금 오류를 검증한다.
 - DELETE의 Hard Delete·`CANCELED` 분기와 동일한 204, 참조 이력 잠금을 검증한다.
@@ -398,10 +431,13 @@ Snapshot은 다음 순서로 처리한다.
 ## 검증 가능한 수용 조건
 
 - [ ] Patch 기준이 Spec `3.0.1`, `origin/dev` Commit
-      `38c28f50f22ab809c1bbd4a060bb503879027766`, Flyway `202608051337`과 일치한다.
+      `1ad5d6458361a8c5ec32afb53185e22ad475a016`, Flyway `202608061428`과 일치한다.
 - [ ] 요약 응답이 8개 Key를 항상 포함하고 없는 상태를 0으로 반환한다.
 - [ ] 목록 Query의 검색 대상, 상태, 포함 날짜 범위, 페이지와 고정 정렬이 명시되어 있다.
 - [ ] 목록 Item과 상세의 닫힌 필드 집합, UTC·LocalDate·금액 형식이 JSON 예시와 일치한다.
+- [ ] 수락 성공 뒤 상세의 `contract.documentId`로 계약 파일 Endpoint를 호출할 수 있고 일반
+      문서 목록 응답을 추정하지 않는다.
+- [ ] 계약 미생성의 `contract: null`과 계약 문서 누락의 `500 INTERNAL_ERROR`를 구분한다.
 - [ ] 미매칭 Worker와 미생성 Aggregate의 객체 단위 `null`, 성공 근태 시점의 필드 단위
       `null`이 구분된다.
 - [ ] 결합 주소를 한 Snapshot 필드로 저장·반환하며 현재 사업장 주소와 역분해에 의존하지
@@ -418,8 +454,7 @@ Snapshot은 다음 순서로 처리한다.
 
 ## 미결 사항
 
-없음. 이 문서의 제품 방향 전체를 Controller가 승인하거나 거절한다. 승인 뒤 제품 의미를
-바꿔야 하면 같은 파일을 덮어쓰지 않고 새 Patch 리비전으로 재승인받는다.
+없음
 
 ## 관련 Issue·PR·의존 Patch
 
