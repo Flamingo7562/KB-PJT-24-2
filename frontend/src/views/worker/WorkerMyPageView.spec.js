@@ -118,4 +118,46 @@ describe('WorkerMyPageView', () => {
 
     expect(wrapper.text()).toContain('탈퇴하면 되돌릴 수 없어요')
   })
+
+  it('로그아웃 요청 중에는 버튼이 비활성화되고 완료되면 다시 활성화된다', async () => {
+    let resolveLogout
+    logout.mockReturnValue(
+      new Promise((resolve) => {
+        resolveLogout = resolve
+      })
+    )
+    const wrapper = mountView()
+    await flushPromises()
+
+    await findByText(wrapper, 'button', '로그아웃').trigger('click')
+    await flushPromises()
+
+    expect(findByText(wrapper, 'button', '로그아웃').attributes('disabled')).toBeDefined()
+
+    resolveLogout()
+    await flushPromises()
+
+    expect(findByText(wrapper, 'button', '로그아웃').attributes('disabled')).toBeUndefined()
+  })
+
+  it('로그아웃이 실패해도 버튼은 다시 활성화된다', async () => {
+    let rejectLogout
+    logout.mockReturnValue(
+      new Promise((_resolve, reject) => {
+        rejectLogout = reject
+      })
+    )
+    const wrapper = mountView()
+    await flushPromises()
+
+    await findByText(wrapper, 'button', '로그아웃').trigger('click')
+    await flushPromises()
+
+    expect(findByText(wrapper, 'button', '로그아웃').attributes('disabled')).toBeDefined()
+
+    rejectLogout({ response: { data: { message: '로그아웃에 실패했습니다.' } } })
+    await flushPromises()
+
+    expect(findByText(wrapper, 'button', '로그아웃').attributes('disabled')).toBeUndefined()
+  })
 })
