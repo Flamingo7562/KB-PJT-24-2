@@ -1,13 +1,8 @@
 ---
 patch_id: SPEC-218-01
-author: flamingo7562
-status: applied
+status: accepted
 issue: 218
-created_at: 2026-08-06
 base_spec_version: 3.0.1
-base_commit: "1ad5d6458361a8c5ec32afb53185e22ad475a016"
-change_type: breaking
-delivery_mode: spec_first
 targets:
   - requirement: WORK-005
   - requirement: WORK-006
@@ -23,16 +18,11 @@ targets:
   - rest_operation: "POST /api/work-cases/{workCaseId}/invitations"
   - rest_operation: "POST /api/work-cases/{workCaseId}/invitations/reissue"
   - rest_operation: "GET /api/invitations/{token}"
-depends_on: []
-supersedes: null
-superseded_by: null
-applied_in_version: 4.0.0
-applied_by_pr: 235
 ---
 
 # SPEC-218-01: M4 초대 생명주기 계약 확정
 
-## 변경 요약과 필요성
+## 추가 사항
 
 미매칭 Work Case의 초대를 특정 WORKER에게 미리 귀속하지 않는 Bearer Link로 확정하고,
 발급·동일 Link 재조회·재발급·만료·철회·조회까지의 관찰 가능한 생명주기를 하나의 최소
@@ -353,7 +343,7 @@ applied_by_pr: 235
 - Token·Secret이 DB 원문, 응답 외 로그, 오류와 SQL 바인딩에 남지 않는지 검증한다.
 - 네 가지 초대 도메인 Code와 공통 Code의 HTTP 매핑을 검증한다.
 
-## 검증 가능한 수용 조건
+## 완료 조건
 
 - [ ] Patch의 기준이 Spec `3.0.1`, `origin/dev` Commit
       `1ad5d6458361a8c5ec32afb53185e22ad475a016`, Flyway `202608061428`과 일치한다.

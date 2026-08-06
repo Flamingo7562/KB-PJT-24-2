@@ -1,13 +1,8 @@
 ---
 patch_id: SPEC-221-01
-author: flamingo7562
-status: applied
+status: accepted
 issue: 221
-created_at: 2026-08-06
 base_spec_version: 3.0.1
-base_commit: "1ad5d6458361a8c5ec32afb53185e22ad475a016"
-change_type: breaking
-delivery_mode: spec_first
 targets:
   - requirement: CONTRACT-001
   - requirement: CONTRACT-002
@@ -29,18 +24,11 @@ targets:
   - decision: DEC-OPEN-E-SIGN-EVIDENCE
   - rest_operation: "POST /api/invitations/{token}/accept"
   - rest_operation: "GET /api/documents/{documentId}/file"
-depends_on:
-  - SPEC-218-01
-  - SPEC-220-01
-supersedes: null
-superseded_by: null
-applied_in_version: 4.0.0
-applied_by_pr: 235
 ---
 
 # SPEC-221-01: M4 수락·전자동의 Aggregate 계약 확정
 
-## 변경 요약과 필요성
+## 추가 사항
 
 유효한 Bearer 초대를 인증 WORKER가 Body 없이 수락할 때 당사자 결정, 멱등 Claim, 동시 수락,
 Work Case 매칭, 조건 Snapshot, 전자동의 증거, 근로계약 PDF, OWNER 임금 예치, 원장과 정산
@@ -482,7 +470,7 @@ Aggregate Transaction은 다음 순서로 처리한다. 검증 실패는 성공 
   삭제·200 Replay·Fallback·고아 정리를 검증한다.
 - Token, Key, 이름·파일·저장 Key가 응답과 일반 로그에 남지 않는지 검증한다.
 
-## 검증 가능한 수용 조건
+## 완료 조건
 
 - [ ] Patch 기준이 Spec `3.0.1`, `origin/dev` Commit
       `1ad5d6458361a8c5ec32afb53185e22ad475a016`, Flyway `202608061428`과 일치한다.
