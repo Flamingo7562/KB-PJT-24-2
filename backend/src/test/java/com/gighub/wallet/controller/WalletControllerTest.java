@@ -69,22 +69,22 @@ class WalletControllerTest {
     }
 
     private WalletSummary summary(long available, long locked) {
-        WalletSummary walletSummary = new WalletSummary();
-        walletSummary.setWalletId(30L);
-        walletSummary.setAvailableBalance(available);
-        walletSummary.setLockedBalance(locked);
-        return walletSummary;
+        return WalletSummary.builder()
+                .walletId(30L)
+                .availableBalance(available)
+                .lockedBalance(locked)
+                .build();
     }
 
     private WalletTransactionView view(String type, long amount) {
-        WalletTransactionView row = new WalletTransactionView();
-        row.setTransactionId(10L);
-        row.setType(type);
-        row.setAmount(amount);
-        row.setAvailableAfter(400_000L);
-        row.setLockedAfter(0L);
-        row.setCreatedAt(LocalDateTime.of(2026, 7, 22, 13, 0));
-        return row;
+        return WalletTransactionView.builder()
+                .transactionId(10L)
+                .type(type)
+                .amount(amount)
+                .availableAfter(400_000L)
+                .lockedAfter(0L)
+                .createdAt(LocalDateTime.of(2026, 7, 22, 13, 0))
+                .build();
     }
 
     // ===================== GET /api/wallet =====================

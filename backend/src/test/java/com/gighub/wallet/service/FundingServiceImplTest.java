@@ -217,10 +217,11 @@ class FundingServiceImplTest {
     @Test
     @DisplayName("완료되지 않은 주문은 기존 요청이라도 다시 이체하지 않는다")
     void incompleteClaimCannotBeReplayed() {
-        FundingOrder existing = completedOrder(AMOUNT);
-        existing.setStatus("READY");
-        existing.setTransferredAmount(null);
-        existing.setMockBankTransactionId(null);
+        FundingOrder existing = completedOrder(AMOUNT).toBuilder()
+                .transferredAmount(null)
+                .mockBankTransactionId(null)
+                .status("READY")
+                .build();
         when(fundingMapper.insertFundingOrder(any()))
                 .thenThrow(new DuplicateKeyException("duplicate"));
         when(fundingMapper.findByIdempotencyKeyForShare(KEY)).thenReturn(existing);
@@ -298,8 +299,9 @@ class FundingServiceImplTest {
     @Test
     @DisplayName("손상된 지갑 스냅샷은 계좌 출금 전 서버 무결성 오류로 거부한다")
     void corruptedWalletSnapshotStopsBankWithdrawal() {
-        WalletBalanceSnapshot corrupted = wallet(50L, 700_000L, 20_000L);
-        corrupted.setUserId(EMPLOYER_ID + 1);
+        WalletBalanceSnapshot corrupted = wallet(50L, 700_000L, 20_000L).toBuilder()
+                .userId(EMPLOYER_ID + 1)
+                .build();
         when(walletMapper.getWalletSnapshotForUpdate(EMPLOYER_ID))
                 .thenReturn(corrupted);
 
@@ -434,8 +436,9 @@ class FundingServiceImplTest {
         when(fundingMapper.findByIdempotencyKeyForShare(KEY))
                 .thenReturn(completedOrder(AMOUNT));
         WalletTransactionSnapshot snapshot =
-                fundingSnapshot(1_000_000L, 20_000L, AMOUNT);
-        snapshot.setAvailableBefore(999_999L);
+                fundingSnapshot(1_000_000L, 20_000L, AMOUNT).toBuilder()
+                        .availableBefore(999_999L)
+                        .build();
         when(walletMapper.findFundingTransactionSnapshot(
                 ORDER_ID, EMPLOYER_ID, WalletIdempotencyKeys.funding(KEY)))
                 .thenReturn(snapshot);
@@ -454,8 +457,9 @@ class FundingServiceImplTest {
         when(fundingMapper.findByIdempotencyKeyForShare(KEY))
                 .thenReturn(completedOrder(AMOUNT));
         WalletTransactionSnapshot snapshot =
-                fundingSnapshot(1_000_000L, 20_000L, AMOUNT);
-        snapshot.setLockedBefore(19_999L);
+                fundingSnapshot(1_000_000L, 20_000L, AMOUNT).toBuilder()
+                        .lockedBefore(19_999L)
+                        .build();
         when(walletMapper.findFundingTransactionSnapshot(
                 ORDER_ID, EMPLOYER_ID, WalletIdempotencyKeys.funding(KEY)))
                 .thenReturn(snapshot);
@@ -501,12 +505,12 @@ class FundingServiceImplTest {
 
     private WalletBalanceSnapshot wallet(
             Long walletId, Long availableBalance, Long lockedBalance) {
-        WalletBalanceSnapshot wallet = new WalletBalanceSnapshot();
-        wallet.setWalletId(walletId);
-        wallet.setUserId(EMPLOYER_ID);
-        wallet.setAvailableBalance(availableBalance);
-        wallet.setLockedBalance(lockedBalance);
-        return wallet;
+        return WalletBalanceSnapshot.builder()
+                .walletId(walletId)
+                .userId(EMPLOYER_ID)
+                .availableBalance(availableBalance)
+                .lockedBalance(lockedBalance)
+                .build();
     }
 
     private BankTransferResult successfulTransfer() {
@@ -521,31 +525,31 @@ class FundingServiceImplTest {
     }
 
     private FundingOrder completedOrder(Long amount) {
-        FundingOrder order = new FundingOrder();
-        order.setId(ORDER_ID);
-        order.setEmployerId(EMPLOYER_ID);
-        order.setLinkedAccountId(ACCOUNT_ID);
-        order.setExpectedAmount(amount);
-        order.setTransferredAmount(amount);
-        order.setMockBankTransactionId(BANK_TRANSACTION_ID);
-        order.setStatus("COMPLETED");
-        return order;
+        return FundingOrder.builder()
+                .id(ORDER_ID)
+                .employerId(EMPLOYER_ID)
+                .linkedAccountId(ACCOUNT_ID)
+                .expectedAmount(amount)
+                .transferredAmount(amount)
+                .mockBankTransactionId(BANK_TRANSACTION_ID)
+                .status("COMPLETED")
+                .build();
     }
 
     private WalletTransactionSnapshot fundingSnapshot(
             Long availableAfter, Long lockedAfter, Long amount) {
-        WalletTransactionSnapshot snapshot = new WalletTransactionSnapshot();
-        snapshot.setId(41L);
-        snapshot.setWalletId(50L);
-        snapshot.setWalletUserId(EMPLOYER_ID);
-        snapshot.setTransactionType("FUNDING");
-        snapshot.setAmount(amount);
-        snapshot.setAvailableBefore(availableAfter - amount);
-        snapshot.setAvailableAfter(availableAfter);
-        snapshot.setLockedBefore(lockedAfter);
-        snapshot.setLockedAfter(lockedAfter);
-        snapshot.setReferenceType("FUNDING_ORDER");
-        snapshot.setReferenceId(ORDER_ID);
-        return snapshot;
+        return WalletTransactionSnapshot.builder()
+                .id(41L)
+                .walletId(50L)
+                .walletUserId(EMPLOYER_ID)
+                .transactionType("FUNDING")
+                .amount(amount)
+                .availableBefore(availableAfter - amount)
+                .availableAfter(availableAfter)
+                .lockedBefore(lockedAfter)
+                .lockedAfter(lockedAfter)
+                .referenceType("FUNDING_ORDER")
+                .referenceId(ORDER_ID)
+                .build();
     }
 }

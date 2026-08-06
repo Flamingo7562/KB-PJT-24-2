@@ -4,8 +4,21 @@
 
 <mapper namespace="com.gighub.wallet.mapper.FundingMapper">
 
+    <!-- DTO가 setter를 갖지 않으므로 생성자 인자로 매핑한다. 인자 순서는 필드 선언 순서를 따른다 -->
+    <resultMap id="fundingOrderResult" type="com.gighub.wallet.dto.FundingOrder">
+        <constructor>
+            <idArg column="id" javaType="java.lang.Long"/>
+            <arg column="employerId" javaType="java.lang.Long"/>
+            <arg column="linkedAccountId" javaType="java.lang.Long"/>
+            <arg column="expectedAmount" javaType="java.lang.Long"/>
+            <arg column="transferredAmount" javaType="java.lang.Long"/>
+            <arg column="mockBankTransactionId" javaType="java.lang.Long"/>
+            <arg column="status" javaType="java.lang.String"/>
+        </constructor>
+    </resultMap>
+
     <select id="findByIdempotencyKeyForShare"
-            resultType="com.gighub.wallet.dto.FundingOrder">
+            resultMap="fundingOrderResult">
         SELECT id                       AS id,
                employer_id              AS employerId,
                linked_account_id        AS linkedAccountId,

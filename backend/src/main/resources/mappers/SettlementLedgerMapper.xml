@@ -4,8 +4,27 @@
 
 <mapper namespace="com.gighub.settlement.mapper.SettlementLedgerMapper">
 
+    <!-- DTO가 setter를 갖지 않으므로 생성자 인자로 매핑한다. 인자 순서는 필드 선언 순서를 따른다 -->
+    <resultMap id="walletTransactionSnapshotResult"
+               type="com.gighub.wallet.dto.WalletTransactionSnapshot">
+        <constructor>
+            <idArg column="id" javaType="java.lang.Long"/>
+            <arg column="walletId" javaType="java.lang.Long"/>
+            <arg column="walletUserId" javaType="java.lang.Long"/>
+            <arg column="workCaseId" javaType="java.lang.Long"/>
+            <arg column="transactionType" javaType="java.lang.String"/>
+            <arg column="amount" javaType="java.lang.Long"/>
+            <arg column="availableBefore" javaType="java.lang.Long"/>
+            <arg column="availableAfter" javaType="java.lang.Long"/>
+            <arg column="lockedBefore" javaType="java.lang.Long"/>
+            <arg column="lockedAfter" javaType="java.lang.Long"/>
+            <arg column="referenceType" javaType="java.lang.String"/>
+            <arg column="referenceId" javaType="java.lang.Long"/>
+        </constructor>
+    </resultMap>
+
     <select id="findByIdempotencyKeyForShare"
-            resultType="com.gighub.wallet.dto.WalletTransactionSnapshot">
+            resultMap="walletTransactionSnapshotResult">
         SELECT wt.id               AS id,
                wt.wallet_id        AS walletId,
                w.user_id           AS walletUserId,

@@ -278,9 +278,10 @@ class WithdrawalServiceImplTest {
     @Test
     @DisplayName("완료되지 않은 요청은 기존 요청이라도 다시 이체하지 않는다")
     void incompleteClaimCannotBeReplayed() {
-        WithdrawalOrder existing = completedOrder(AMOUNT);
-        existing.setStatus("READY");
-        existing.setMockBankTransactionId(null);
+        WithdrawalOrder existing = completedOrder(AMOUNT).toBuilder()
+                .mockBankTransactionId(null)
+                .status("READY")
+                .build();
 
         stubClaim();
         when(walletMapper.getWalletSnapshotForUpdate(anyLong())).thenReturn(wallet(500_000L, 20_000L));
@@ -306,8 +307,10 @@ class WithdrawalServiceImplTest {
         when(withdrawalMapper.findByIdempotencyKeyForShare(anyString()))
                 .thenReturn(completedOrder(AMOUNT));
 
-        WalletTransactionSnapshot snapshot = withdrawalSnapshot(AMOUNT);
-        snapshot.setAvailableAfter(snapshot.getAvailableAfter() + 1);
+        WalletTransactionSnapshot base = withdrawalSnapshot(AMOUNT);
+        WalletTransactionSnapshot snapshot = base.toBuilder()
+                .availableAfter(base.getAvailableAfter() + 1)
+                .build();
         when(walletMapper.findTransactionByIdempotencyKey(anyString())).thenReturn(snapshot);
 
         assertThrows(
@@ -326,8 +329,10 @@ class WithdrawalServiceImplTest {
         when(withdrawalMapper.findByIdempotencyKeyForShare(anyString()))
                 .thenReturn(completedOrder(AMOUNT));
 
-        WalletTransactionSnapshot snapshot = withdrawalSnapshot(AMOUNT);
-        snapshot.setLockedAfter(snapshot.getLockedBefore() + 1);
+        WalletTransactionSnapshot base = withdrawalSnapshot(AMOUNT);
+        WalletTransactionSnapshot snapshot = base.toBuilder()
+                .lockedAfter(base.getLockedBefore() + 1)
+                .build();
         when(walletMapper.findTransactionByIdempotencyKey(anyString())).thenReturn(snapshot);
 
         assertThrows(
@@ -434,8 +439,9 @@ class WithdrawalServiceImplTest {
     @DisplayName("손상된 지갑 스냅샷은 계좌 입금 전 서버 무결성 오류로 거부한다")
     void corruptedWalletSnapshotStopsBankDeposit() {
         stubClaim();
-        WalletBalanceSnapshot corrupted = wallet(500_000L, 20_000L);
-        corrupted.setUserId(USER_ID + 1); // 고의로 ID 불일치 발생
+        WalletBalanceSnapshot corrupted = wallet(500_000L, 20_000L).toBuilder()
+                .userId(USER_ID + 1) // 고의로 ID 불일치 발생
+                .build();
         when(walletMapper.getWalletSnapshotForUpdate(anyLong())).thenReturn(corrupted);
 
         assertThrows(
@@ -481,12 +487,12 @@ class WithdrawalServiceImplTest {
     }
 
     private WalletBalanceSnapshot wallet(Long availableBalance, Long lockedBalance) {
-        WalletBalanceSnapshot wallet = new WalletBalanceSnapshot();
-        wallet.setWalletId(WALLET_ID);
-        wallet.setUserId(USER_ID);
-        wallet.setAvailableBalance(availableBalance);
-        wallet.setLockedBalance(lockedBalance);
-        return wallet;
+        return WalletBalanceSnapshot.builder()
+                .walletId(WALLET_ID)
+                .userId(USER_ID)
+                .availableBalance(availableBalance)
+                .lockedBalance(lockedBalance)
+                .build();
     }
 
     private BankTransferResult successfulTransfer() {
@@ -501,31 +507,31 @@ class WithdrawalServiceImplTest {
     }
 
     private WithdrawalOrder completedOrder(Long amount) {
-        WithdrawalOrder order = new WithdrawalOrder();
-        order.setId(REQUEST_ID);
-        order.setUserId(USER_ID);
-        order.setWalletId(WALLET_ID);
-        order.setLinkedAccountId(ACCOUNT_ID);
-        order.setAmount(amount);
-        order.setMockBankTransactionId(BANK_TRANSACTION_ID);
-        order.setStatus("COMPLETED");
-        return order;
+        return WithdrawalOrder.builder()
+                .id(REQUEST_ID)
+                .userId(USER_ID)
+                .walletId(WALLET_ID)
+                .linkedAccountId(ACCOUNT_ID)
+                .amount(amount)
+                .mockBankTransactionId(BANK_TRANSACTION_ID)
+                .status("COMPLETED")
+                .build();
     }
 
     private WalletTransactionSnapshot withdrawalSnapshot(Long amount) {
-        WalletTransactionSnapshot snapshot = new WalletTransactionSnapshot();
-        snapshot.setId(42L);
-        snapshot.setWalletId(WALLET_ID);
-        snapshot.setWalletUserId(USER_ID);
-        snapshot.setWorkCaseId(null);
-        snapshot.setTransactionType("WITHDRAWAL");
-        snapshot.setAmount(amount);
-        snapshot.setAvailableBefore(500_000L);
-        snapshot.setAvailableAfter(500_000L - amount);
-        snapshot.setLockedBefore(20_000L);
-        snapshot.setLockedAfter(20_000L);
-        snapshot.setReferenceType("WITHDRAWAL_REQUEST");
-        snapshot.setReferenceId(REQUEST_ID);
-        return snapshot;
+        return WalletTransactionSnapshot.builder()
+                .id(42L)
+                .walletId(WALLET_ID)
+                .walletUserId(USER_ID)
+                .workCaseId(null)
+                .transactionType("WITHDRAWAL")
+                .amount(amount)
+                .availableBefore(500_000L)
+                .availableAfter(500_000L - amount)
+                .lockedBefore(20_000L)
+                .lockedAfter(20_000L)
+                .referenceType("WITHDRAWAL_REQUEST")
+                .referenceId(REQUEST_ID)
+                .build();
     }
 }

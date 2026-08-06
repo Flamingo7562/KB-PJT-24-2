@@ -155,9 +155,10 @@ class SettlementServiceTest {
         SettlementSnapshot waiting = settlement(SettlementStatus.WAITING);
         SettlementSnapshot completed = settlement(SettlementStatus.COMPLETED);
         completed.setApprovedByUserId(employerId);
-        WalletTransactionSnapshot held = holdLedger();
-        held.setWalletId(80L);
-        held.setWalletUserId(employerId);
+        WalletTransactionSnapshot held = holdLedger().toBuilder()
+                .walletId(80L)
+                .walletUserId(employerId)
+                .build();
 
         when(workMapper.getEscrowContextForUpdate(WORK_CASE_ID))
                 .thenReturn(context);
@@ -524,52 +525,46 @@ class SettlementServiceTest {
             Long userId,
             Long availableBalance,
             Long lockedBalance) {
-        WalletBalanceSnapshot wallet = new WalletBalanceSnapshot();
-        wallet.setWalletId(walletId);
-        wallet.setUserId(userId);
-        wallet.setAvailableBalance(availableBalance);
-        wallet.setLockedBalance(lockedBalance);
-        return wallet;
+        return WalletBalanceSnapshot.builder()
+                .walletId(walletId)
+                .userId(userId)
+                .availableBalance(availableBalance)
+                .lockedBalance(lockedBalance)
+                .build();
     }
 
     private WalletTransactionSnapshot holdLedger() {
-        WalletTransactionSnapshot ledger = new WalletTransactionSnapshot();
-        ledger.setId(1L);
-        ledger.setWalletId(30L);
-        ledger.setWalletUserId(EMPLOYER_ID);
-        ledger.setWorkCaseId(WORK_CASE_ID);
-        ledger.setTransactionType("ESCROW_HOLD");
-        ledger.setAmount(AGREED_WAGE);
-        ledger.setAvailableBefore(700_000L);
-        ledger.setAvailableAfter(400_000L);
-        ledger.setLockedBefore(0L);
-        ledger.setLockedAfter(AGREED_WAGE);
-        ledger.setReferenceType("ESCROW");
-        ledger.setReferenceId(ESCROW_ID);
-        return ledger;
+        return WalletTransactionSnapshot.builder()
+                .id(1L)
+                .walletId(30L)
+                .walletUserId(EMPLOYER_ID)
+                .workCaseId(WORK_CASE_ID)
+                .transactionType("ESCROW_HOLD")
+                .amount(AGREED_WAGE)
+                .availableBefore(700_000L)
+                .availableAfter(400_000L)
+                .lockedBefore(0L)
+                .lockedAfter(AGREED_WAGE)
+                .referenceType("ESCROW")
+                .referenceId(ESCROW_ID)
+                .build();
     }
 
     private WalletTransactionSnapshot releaseLedger(Long walletUserId) {
-        WalletTransactionSnapshot ledger = new WalletTransactionSnapshot();
-        ledger.setId(2L);
-        ledger.setWalletId(EMPLOYER_ID.equals(walletUserId) ? 30L : 40L);
-        ledger.setWalletUserId(walletUserId);
-        ledger.setWorkCaseId(WORK_CASE_ID);
-        ledger.setTransactionType("ESCROW_RELEASE");
-        ledger.setAmount(AGREED_WAGE);
-        if (EMPLOYER_ID.equals(walletUserId)) {
-            ledger.setAvailableBefore(400_000L);
-            ledger.setAvailableAfter(400_000L);
-            ledger.setLockedBefore(AGREED_WAGE);
-            ledger.setLockedAfter(0L);
-        } else {
-            ledger.setAvailableBefore(0L);
-            ledger.setAvailableAfter(AGREED_WAGE);
-            ledger.setLockedBefore(0L);
-            ledger.setLockedAfter(0L);
-        }
-        ledger.setReferenceType("ESCROW");
-        ledger.setReferenceId(ESCROW_ID);
-        return ledger;
+        boolean isEmployer = EMPLOYER_ID.equals(walletUserId);
+        return WalletTransactionSnapshot.builder()
+                .id(2L)
+                .walletId(isEmployer ? 30L : 40L)
+                .walletUserId(walletUserId)
+                .workCaseId(WORK_CASE_ID)
+                .transactionType("ESCROW_RELEASE")
+                .amount(AGREED_WAGE)
+                .availableBefore(isEmployer ? 400_000L : 0L)
+                .availableAfter(isEmployer ? 400_000L : AGREED_WAGE)
+                .lockedBefore(isEmployer ? AGREED_WAGE : 0L)
+                .lockedAfter(0L)
+                .referenceType("ESCROW")
+                .referenceId(ESCROW_ID)
+                .build();
     }
 }
