@@ -5,13 +5,17 @@
  * 연계 API: PATCH /users/me/password  →  @/services/users (changePassword)
  * 공통: AppField · BaseButton · @/utils/validators (passwordRule, passwordsMatch)
  *
- * 실시간 검증(#238): useFieldValidation 이 형식 오류(errors)를 담당한다. 이 화면은 중복확인이
- * 없어 별도 슬롯이 필요 없다. passwordsMatch 는 새 비밀번호와 확인란을 함께 보는 교차 필드
- * 규칙이라 새 비밀번호를 고치면 확인란의 불일치 오류도 자동으로 재검증된다.
- * 제출 실패 시 서버가 지목한 필드 오류도 같은 errors 슬롯에 담는다 — handleSubmit 이
- * validateAll() 로 모든 필드를 이미 touched 로 올린 뒤라 이후 값을 고치면 정상적으로 지워진다.
+ * 실시간 검증(#238): useFieldValidation 이 형식 오류(errors)를 담당한다. passwordsMatch 는
+ * 새 비밀번호와 확인란을 함께 보는 교차 필드 규칙이라 새 비밀번호를 고치면 확인란의
+ * 불일치 오류도 자동으로 재검증된다.
+ * 제출 실패 시 서버가 지목한 필드 오류는 errors 가 아니라 별도 슬롯(serverErrors)에 담는다.
+ * handleSubmit 이 validateAll() 로 이미 모든 필드를 touched 로 올려놓은 뒤라, errors 에
+ * 쓰면 관계없는 다른 필드(예: newPassword)를 고치는 순간 재검증 watcher 가 서버가 지목한
+ * 필드(예: currentPassword)의 형식 규칙을 다시 평가해(형식은 여전히 유효) 메시지를
+ * 지워버린다. serverErrors 는 그 필드 자신의 값이 바뀔 때만 지운다(AuthSignupForm 의
+ * checkErrors → serverErrors 일반화와 같은 패턴, #238 Finding 1).
  */
-import { ref } from 'vue'
+import { reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
 import AppBackHeader from '@/components/common/AppBackHeader.vue'
@@ -51,6 +55,16 @@ const { errors, handleBlur, validateAll } = useFieldValidation(
 
 const submitting = ref(false)
 
+// 서버 전용 오류 슬롯 — errors 와 같은 키(규칙표의 모든 필드)를 가진다. 그 필드 자신의
+// 값이 바뀔 때만 지운다 — 다른 필드를 고쳐도 남아있어야 한다(#238 Finding 1).
+const serverErrors = reactive(Object.fromEntries(Object.keys(errors).map((name) => [name, ''])))
+const fieldRefs = { currentPassword, newPassword, newPasswordConfirm }
+Object.keys(errors).forEach((name) => {
+  watch(fieldRefs[name], () => {
+    serverErrors[name] = ''
+  })
+})
+
 async function handleSubmit() {
   if (!validateAll()) return
 
@@ -67,9 +81,9 @@ async function handleSubmit() {
     // '현재 비밀번호가 일치하지 않아요' 로 단정하지 않는다(#187 이전에도 지켜야 하는 계약).
     const fieldErrors = fieldErrorMap(err)
     if (fieldErrors.currentPassword) {
-      errors.currentPassword = fieldErrors.currentPassword
+      serverErrors.currentPassword = fieldErrors.currentPassword
     } else if (fieldErrors.newPassword) {
-      errors.newPassword = fieldErrors.newPassword
+      serverErrors.newPassword = fieldErrors.newPassword
     } else if (err?.response?.data?.message) {
       ui.toast(err.response.data.message, { type: 'danger' })
     } else {
@@ -93,7 +107,7 @@ async function handleSubmit() {
           type="password"
           placeholder="현재 비밀번호를 입력하세요"
           required
-          :error="errors.currentPassword"
+          :error="errors.currentPassword || serverErrors.currentPassword"
           @blur="handleBlur('currentPassword')"
         />
         <AppField
@@ -102,7 +116,7 @@ async function handleSubmit() {
           type="password"
           placeholder="영문+숫자 포함 8자 이상"
           required
-          :error="errors.newPassword"
+          :error="errors.newPassword || serverErrors.newPassword"
           @blur="handleBlur('newPassword')"
         />
         <AppField
@@ -111,7 +125,7 @@ async function handleSubmit() {
           type="password"
           placeholder="새 비밀번호를 다시 입력하세요"
           required
-          :error="errors.newPasswordConfirm"
+          :error="errors.newPasswordConfirm || serverErrors.newPasswordConfirm"
           @blur="handleBlur('newPasswordConfirm')"
         />
 

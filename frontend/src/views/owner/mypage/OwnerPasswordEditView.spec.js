@@ -130,6 +130,31 @@ describe('OwnerPasswordEditView 실시간 검증(#238)', () => {
     setActivePinia(createPinia())
   })
 
+  // Finding 1: 서버가 currentPassword 를 지목한 뒤 사용자가 newPassword(관계없는 필드)를
+  // 고쳐도 메시지는 남아 있어야 한다. handleSubmit 이 validateAll() 로 이미 모든 필드를
+  // touched 로 올려놨으므로, 서버 오류를 errors 슬롯에 쓰면 newPassword 를 고치는 순간
+  // 재검증 watcher 가 currentPassword 규칙(형식은 여전히 유효)을 다시 평가해 지워버린다.
+  it('서버가 지목한 현재 비밀번호 오류는 새 비밀번호를 고쳐도 사라지지 않는다', async () => {
+    const fieldError = { field: 'currentPassword', reason: '현재 비밀번호가 올바르지 않습니다.' }
+    changePassword.mockRejectedValue({
+      response: { status: 400, data: { fieldErrors: [fieldError] } },
+      fieldErrors: [fieldError]
+    })
+
+    const wrapper = mount(OwnerPasswordEditView)
+    await fillValidForm(wrapper)
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+    expect(wrapper.text()).toContain('현재 비밀번호가 올바르지 않습니다.')
+
+    // currentPassword 가 아니라 newPassword(관계없는 필드)를 고친다. 확인란도 같이 맞춰
+    // passwordsMatch 교차 규칙이 끼어들지 않게 한다 — 순수하게 F1 버그만 본다.
+    await wrapper.findAll('input')[1].setValue('newpassword2')
+    await wrapper.findAll('input')[2].setValue('newpassword2')
+
+    expect(wrapper.text()).toContain('현재 비밀번호가 올바르지 않습니다.')
+  })
+
   it('새 비밀번호 필드를 떠나면 형식 오류가 뜨고 고치면 사라진다', async () => {
     const wrapper = mount(OwnerPasswordEditView)
     // [0] 현재 비밀번호 [1] 새 비밀번호 [2] 새 비밀번호 확인
