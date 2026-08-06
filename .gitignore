@@ -79,6 +79,7 @@ replay_pid*.log
 /NOTICE.md
 /.agents/
 /.codex/
+/.superpowers/
 /scripts/check-agent-docs.js
 
 # Shared cross-agent harness
