@@ -130,9 +130,15 @@ public final class WorkplaceCreateRequest {
         private Builder() {
         }
 
+        /**
+         * 사업자등록번호는 trim만 적용하고 구분 문자를 벗기지 않습니다.
+         *
+         * <p>승인 명세의 정규화 대상 목록에 없는 입력이라 표시 형식을 서버가 받아 주면
+         * 명세대로면 거절될 요청이 통과합니다. 화면 형식 해제는 클라이언트 몫입니다.</p>
+         */
         public Builder businessRegistrationNumber(String businessRegistrationNumber) {
             this.businessRegistrationNumber =
-                    WorkplaceNormalizer.normalizeBusinessRegistrationNumber(businessRegistrationNumber);
+                    WorkplaceNormalizer.normalizeText(businessRegistrationNumber);
             return this;
         }
 

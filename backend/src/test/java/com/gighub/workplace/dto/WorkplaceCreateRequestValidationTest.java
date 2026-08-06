@@ -65,20 +65,35 @@ class WorkplaceCreateRequestValidationTest {
                 validate(validBuilder().businessRegistrationNumber("12345678901")),
                 "businessRegistrationNumber"));
 
-        // 구분 문자를 벗겨도 숫자가 아닌 값이 남으면 거절합니다.
         assertTrue(hasViolation(
                 validate(validBuilder().businessRegistrationNumber("123-45-6789A")),
                 "businessRegistrationNumber"));
 
-        WorkplaceCreateRequest blank = validBuilder().businessRegistrationNumber(" - ").build();
+        WorkplaceCreateRequest blank = validBuilder().businessRegistrationNumber("   ").build();
         assertTrue(hasViolation(validator.validate(blank), "businessRegistrationNumber"));
-        assertNull(blank.getBusinessRegistrationNumber());
     }
 
+    /**
+     * 사업자등록번호는 승인 명세의 정규화 대상 목록에 없습니다.
+     *
+     * <p>서버가 표시 형식을 벗겨 주면 명세대로면 400인 요청이 통과해 입력 계약이 넓어지므로
+     * 화면 형식은 거절하고 입력값을 그대로 둡니다.</p>
+     */
     @Test
-    void acceptsBusinessRegistrationNumberInDisplayFormat() {
+    void rejectsBusinessRegistrationNumberInDisplayFormat() {
         WorkplaceCreateRequest request = validBuilder()
                 .businessRegistrationNumber("123-45-67890")
+                .build();
+
+        assertTrue(hasViolation(validator.validate(request), "businessRegistrationNumber"));
+        assertEquals("123-45-67890", request.getBusinessRegistrationNumber());
+    }
+
+    /** 앞뒤 공백은 사용자의 입력 실수라 trim만 적용하고 그 뒤에는 숫자 10자리를 그대로 요구합니다. */
+    @Test
+    void acceptsBusinessRegistrationNumberWithSurroundingWhitespaceOnly() {
+        WorkplaceCreateRequest request = validBuilder()
+                .businessRegistrationNumber("  1234567890  ")
                 .build();
 
         assertTrue(validator.validate(request).isEmpty());

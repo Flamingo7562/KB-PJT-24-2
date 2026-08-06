@@ -21,7 +21,7 @@ class WorkplaceCreateRequestJsonTest {
     @Test
     void bindsApprovedBodyThroughBuilder() throws JsonProcessingException {
         String body = "{"
-                + "\"businessRegistrationNumber\":\"123-45-67890\","
+                + "\"businessRegistrationNumber\":\"1234567890\","
                 + "\"name\":\"  강남점  \","
                 + "\"representativeName\":\"김사장\","
                 + "\"roadAddress\":\"서울 강남구 테헤란로 1\","

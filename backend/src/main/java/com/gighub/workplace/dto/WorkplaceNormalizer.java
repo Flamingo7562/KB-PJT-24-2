@@ -23,19 +23,14 @@ final class WorkplaceNormalizer {
         return normalized == null || normalized.isEmpty() ? null : normalized;
     }
 
-    static String normalizePhone(String value) {
-        return stripSeparators(value);
-    }
-
     /**
-     * 화면은 {@code 123-45-67890} 표시 형식을 쓰지만 DB는 숫자 10자리만 허용하므로
-     * 전화번호와 같은 구분 문자 제거 규칙을 적용합니다.
+     * 전화번호만 구분 문자를 제거합니다.
+     *
+     * <p>승인 명세가 정규화 대상으로 열거한 입력에만 적용합니다. 사업자등록번호는 그 목록에
+     * 없으므로 같은 규칙을 확대 적용하지 않습니다. 표시 형식을 서버가 받아 주면 명세대로면
+     * 거절될 요청이 통과해 입력 계약이 조용히 넓어집니다.</p>
      */
-    static String normalizeBusinessRegistrationNumber(String value) {
-        return stripSeparators(value);
-    }
-
-    private static String stripSeparators(String value) {
+    static String normalizePhone(String value) {
         if (value == null) {
             return null;
         }

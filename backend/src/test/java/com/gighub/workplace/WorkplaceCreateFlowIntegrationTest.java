@@ -140,8 +140,8 @@ class WorkplaceCreateFlowIntegrationTest {
 
         // 소유자는 Body가 아니라 Session Principal에서 결정돼야 합니다.
         assertEquals(ownerUserId, ((Number) row.get("owner_user_id")).longValue());
-        // 화면 표시 형식으로 보내도 숫자만 저장돼야 합니다.
         assertEquals(businessNumber(1), row.get("business_registration_number"));
+        // 전화번호는 승인된 정규화 대상이라 화면 표시 형식으로 보내도 숫자만 저장돼야 합니다.
         assertEquals("0212345678", row.get("phone"));
         assertEquals("강남점", row.get("name"));
         assertEquals("서울 강남구 테헤란로 1", row.get("road_address"));
