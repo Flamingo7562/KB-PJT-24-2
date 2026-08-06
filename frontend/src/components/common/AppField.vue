@@ -34,6 +34,9 @@ const props = defineProps({
 const emit = defineEmits(['update:modelValue', 'blur'])
 
 const fieldId = useId()
+// 에러·성공·힌트 메시지(셋 중 하나만 보인다)의 id. aria-describedby 로 input 과 이어서
+// 스크린리더가 값과 함께 이 메시지를 읽게 한다.
+const messageId = `${fieldId}-msg`
 const inputEl = ref(null)
 const composing = ref(false)
 // 조합 취소용 내부 blur 인지 표시한다. 이 구간의 blur 는 사용자가 필드를 떠난 것이
@@ -103,6 +106,8 @@ function onCompositionEnd(e) {
         :placeholder="placeholder"
         :disabled="disabled"
         :maxlength="maxlength"
+        :aria-describedby="error || success || hint ? messageId : undefined"
+        :aria-invalid="error ? 'true' : undefined"
         @input="onInput"
         @compositionstart="onCompositionStart"
         @compositionend="onCompositionEnd"
@@ -111,9 +116,9 @@ function onCompositionEnd(e) {
       <div v-if="$slots.suffix" class="suffix"><slot name="suffix" /></div>
     </div>
 
-    <p v-if="error" class="msg error">{{ error }}</p>
-    <p v-else-if="success" class="msg success">{{ success }}</p>
-    <p v-else-if="hint" class="msg hint">{{ hint }}</p>
+    <p v-if="error" :id="messageId" class="msg error" role="alert">{{ error }}</p>
+    <p v-else-if="success" :id="messageId" class="msg success">{{ success }}</p>
+    <p v-else-if="hint" :id="messageId" class="msg hint">{{ hint }}</p>
   </div>
 </template>
 

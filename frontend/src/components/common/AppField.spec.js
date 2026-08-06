@@ -73,3 +73,47 @@ describe('AppField success', () => {
     expect(wrapper.text()).not.toContain('사용 가능합니다')
   })
 })
+
+// F3: 이 브랜치(#238)가 blur 시 뜨는 메시지를 주된 피드백 채널로 만들었으니, 스크린리더
+// 사용자에게도 같은 신호가 가야 한다. 메시지는 input 의 형제 <p> 로만 렌더되고 있었다 —
+// DOM 상 연결이 없으면 시각적으로만 오류가 "보이고" 스크린리더는 아무 것도 알리지 않는다.
+describe('AppField 접근성', () => {
+  it('오류가 있으면 input 이 aria-describedby 로 메시지를 가리키고 aria-invalid 를 켠다', () => {
+    const wrapper = mount(AppField, { props: { label: '아이디', error: '이미 사용 중입니다' } })
+
+    const input = wrapper.find('input')
+    const describedBy = input.attributes('aria-describedby')
+    expect(describedBy).toBeTruthy()
+    expect(input.attributes('aria-invalid')).toBe('true')
+
+    // aria-describedby 가 가리키는 id 가 실제로 그 메시지 엘리먼트의 id 여야 한다 —
+    // 값만 있고 대상이 없으면 스크린리더가 아무 것도 읽지 못한다.
+    const msg = wrapper.find(`#${describedBy}`)
+    expect(msg.exists()).toBe(true)
+    expect(msg.text()).toBe('이미 사용 중입니다')
+    expect(msg.attributes('role')).toBe('alert')
+  })
+
+  it('오류가 없으면 aria-invalid 를 켜지 않는다', () => {
+    const wrapper = mount(AppField, { props: { label: '아이디' } })
+
+    expect(wrapper.find('input').attributes('aria-invalid')).toBeUndefined()
+  })
+
+  it('메시지가 없으면 aria-describedby 를 걸지 않는다', () => {
+    const wrapper = mount(AppField, { props: { label: '아이디' } })
+
+    expect(wrapper.find('input').attributes('aria-describedby')).toBeUndefined()
+  })
+
+  it('success 문구도 aria-describedby 로 연결된다', () => {
+    const wrapper = mount(AppField, {
+      props: { label: '아이디', success: '사용 가능한 아이디입니다' }
+    })
+
+    const input = wrapper.find('input')
+    const describedBy = input.attributes('aria-describedby')
+    expect(describedBy).toBeTruthy()
+    expect(wrapper.find(`#${describedBy}`).text()).toBe('사용 가능한 아이디입니다')
+  })
+})
