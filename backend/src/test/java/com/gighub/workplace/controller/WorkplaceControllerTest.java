@@ -7,7 +7,7 @@ import com.gighub.auth.security.AuthPrincipal;
 import com.gighub.common.api.PageResponse;
 import com.gighub.common.exception.CommonExceptionHandler;
 import com.gighub.common.exception.ConflictException;
-import com.gighub.common.exception.ForbiddenException;
+import com.gighub.common.exception.RoleMismatchException;
 import com.gighub.common.exception.ValidationException;
 import com.gighub.member.domain.UserRole;
 import com.gighub.workplace.dto.WorkplaceListItemResponse;
@@ -167,16 +167,16 @@ class WorkplaceControllerTest {
     }
 
     @Test
-    void createSurfacesRoleRejectionAsForbidden() throws Exception {
+    void createSurfacesRoleRejectionAsRoleMismatch() throws Exception {
         when(workplaceService.create(any(), any()))
-                .thenThrow(new ForbiddenException("사업장은 OWNER만 등록할 수 있습니다."));
+                .thenThrow(new RoleMismatchException("사업장은 OWNER만 등록할 수 있습니다."));
 
         mockMvc.perform(post("/api/workplaces")
                         .principal(ownerAuthentication())
                         .contentType(APPLICATION_JSON)
                         .content(validBody()))
                 .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+                .andExpect(jsonPath("$.code").value("ROLE_MISMATCH"));
     }
 
     @Test
@@ -286,13 +286,13 @@ class WorkplaceControllerTest {
     }
 
     @Test
-    void findOwnedSurfacesRoleRejectionAsForbidden() throws Exception {
+    void findOwnedSurfacesRoleRejectionAsRoleMismatch() throws Exception {
         when(workplaceService.findOwnedWorkplaces(any(), anyInt(), anyInt()))
-                .thenThrow(new ForbiddenException("사업장 목록은 OWNER만 조회할 수 있습니다."));
+                .thenThrow(new RoleMismatchException("사업장 목록은 OWNER만 조회할 수 있습니다."));
 
         mockMvc.perform(get("/api/workplaces").principal(ownerAuthentication()))
                 .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+                .andExpect(jsonPath("$.code").value("ROLE_MISMATCH"));
     }
 
     private WorkplaceListItemResponse listItem() {

@@ -6,7 +6,7 @@ import java.util.List;
 import com.gighub.auth.security.AuthPrincipal;
 import com.gighub.common.api.PageResponse;
 import com.gighub.common.exception.ConflictException;
-import com.gighub.common.exception.ForbiddenException;
+import com.gighub.common.exception.RoleMismatchException;
 import com.gighub.common.exception.ValidationException;
 import com.gighub.member.domain.UserRole;
 import com.gighub.workplace.dto.WorkplaceListItemResponse;
@@ -69,7 +69,7 @@ class WorkplaceServiceImplTest {
     void rejectsNonOwnerBeforeTouchingStorage() {
         AuthPrincipal worker = new AuthPrincipal(9L, UserRole.WORKER, "김근로");
 
-        assertThrows(ForbiddenException.class, () -> service.create(worker, validCommand()));
+        assertThrows(RoleMismatchException.class, () -> service.create(worker, validCommand()));
         verify(workplaceMapper, never()).insert(any(WorkplaceInsertParam.class));
     }
 
@@ -147,7 +147,7 @@ class WorkplaceServiceImplTest {
     void rejectsNonOwnerBeforeQueryingList() {
         AuthPrincipal worker = new AuthPrincipal(9L, UserRole.WORKER, "김근로");
 
-        assertThrows(ForbiddenException.class, () -> service.findOwnedWorkplaces(worker, 0, 20));
+        assertThrows(RoleMismatchException.class, () -> service.findOwnedWorkplaces(worker, 0, 20));
         verifyNoInteractions(workplaceMapper);
     }
 
@@ -160,7 +160,7 @@ class WorkplaceServiceImplTest {
     void rejectsNonOwnerEvenWhenPageBoundsAreAlsoInvalid() {
         AuthPrincipal worker = new AuthPrincipal(9L, UserRole.WORKER, "김근로");
 
-        assertThrows(ForbiddenException.class, () -> service.findOwnedWorkplaces(worker, -1, 101));
+        assertThrows(RoleMismatchException.class, () -> service.findOwnedWorkplaces(worker, -1, 101));
         verifyNoInteractions(workplaceMapper);
     }
 

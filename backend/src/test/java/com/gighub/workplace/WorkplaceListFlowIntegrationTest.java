@@ -220,13 +220,13 @@ class WorkplaceListFlowIntegrationTest {
 
     @Test
     @Timeout(60)
-    void workerIsRejectedWithApprovedForbiddenEnvelope() throws Exception {
+    void workerIsRejectedWithApprovedRoleMismatchEnvelope() throws Exception {
         MockHttpSession session = authenticatedSession(workerUserId, UserRole.WORKER, "김근로");
         insertWorkplaceRow(ownerUserId, businessNumber(1), "ACTIVE", NEWEST);
 
         mockMvc.perform(get("/api/workplaces").session(session))
                 .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+                .andExpect(jsonPath("$.code").value("ROLE_MISMATCH"));
     }
 
     /** 조회는 상태를 바꾸지 않아 CSRF 대상이 아니므로 비인증 요청은 Token 없이도 401이어야 합니다. */

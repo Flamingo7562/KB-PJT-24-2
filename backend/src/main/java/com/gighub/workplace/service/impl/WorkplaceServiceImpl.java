@@ -6,7 +6,7 @@ import java.util.Objects;
 import com.gighub.auth.security.AuthPrincipal;
 import com.gighub.common.api.PageRequests;
 import com.gighub.common.api.PageResponse;
-import com.gighub.common.exception.ForbiddenException;
+import com.gighub.common.exception.RoleMismatchException;
 import com.gighub.common.exception.ConflictException;
 import com.gighub.member.domain.UserRole;
 import com.gighub.workplace.dto.WorkplaceListItemResponse;
@@ -81,10 +81,13 @@ public class WorkplaceServiceImpl implements WorkplaceService {
      *
      * <p>OWNER가 아닌 모든 인증 사용자를 거절합니다. 허용 역할을 지정하지 않고 OWNER만
      * 통과시키므로 나중에 역할이 늘어도 기본값이 거절로 유지됩니다.</p>
+     *
+     * <p>거절 근거가 역할 하나뿐이라 {@code 403 ROLE_MISMATCH}로 응답합니다. 소유권이나
+     * 리소스 상태를 근거로 한 거절은 {@code FORBIDDEN}을 유지합니다.</p>
      */
     private void requireOwner(AuthPrincipal principal, String message) {
         if (principal.getRole() != UserRole.OWNER) {
-            throw new ForbiddenException(message);
+            throw new RoleMismatchException(message);
         }
     }
 

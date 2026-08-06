@@ -153,7 +153,7 @@ class WorkplaceCreateFlowIntegrationTest {
 
     @Test
     @Timeout(60)
-    void workerIsRejectedWithApprovedForbiddenEnvelope() throws Exception {
+    void workerIsRejectedWithApprovedRoleMismatchEnvelope() throws Exception {
         MockHttpSession session = authenticatedSession(workerUserId, UserRole.WORKER, "김근로");
         Cookie csrf = csrfCookie(session);
 
@@ -164,7 +164,7 @@ class WorkplaceCreateFlowIntegrationTest {
                         .contentType(APPLICATION_JSON)
                         .content(body(businessNumber(2), "")))
                 .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+                .andExpect(jsonPath("$.code").value("ROLE_MISMATCH"));
 
         assertEquals(0, countWorkplaces(businessNumber(2)));
     }
