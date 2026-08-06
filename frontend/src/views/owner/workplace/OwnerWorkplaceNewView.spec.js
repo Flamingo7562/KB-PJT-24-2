@@ -153,6 +153,17 @@ describe('OwnerWorkplaceNewView', () => {
     expect(payload).not.toHaveProperty('address')
   })
 
+  it('상호명·대표자명·도로명주소·세부주소는 서버 @Size 제한과 같은 maxlength 를 갖는다', () => {
+    // WorkplaceCreateRequest 의 @Size(max=...) 를 그대로 반영한 값이다 — 서버가 바뀌면 같이 바꿔야 한다.
+    const wrapper = mount(OwnerWorkplaceNewView)
+    const inputs = wrapper.findAll('input')
+    // [0] 사업자등록번호 [1] 상호명 [2] 대표자명 [3] 도로명주소 [4] 세부주소 [5] 전화번호
+    expect(inputs[1].attributes('maxlength')).toBe('120')
+    expect(inputs[2].attributes('maxlength')).toBe('100')
+    expect(inputs[3].attributes('maxlength')).toBe('255')
+    expect(inputs[4].attributes('maxlength')).toBe('100')
+  })
+
   it('사업자등록번호는 화면 표시 형식(하이픈 포함) 그대로 서비스에 넘긴다', async () => {
     // 화면은 입력 중 자동으로 하이픈을 채운다(formatBusinessNumberInput). 숫자만 남기는
     // 정규화는 서비스 계층(createWorkplace)의 책임이다 — 화면은 하이픈이 섞인 값을

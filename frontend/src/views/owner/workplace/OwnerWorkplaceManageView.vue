@@ -215,11 +215,19 @@ async function confirmDelete() {
 
     <BaseModal :open="editOpen" title="사업장 수정" @close="editOpen = false">
       <div class="edit-form">
-        <AppField v-model="editName" label="상호명" required :error="editNameError" />
+        <!-- maxlength 는 WorkplaceCreateRequest 의 @Size(max=...) 를 그대로 반영한다 — 임의로 바꾸지 말 것 -->
+        <AppField
+          v-model="editName"
+          label="상호명"
+          required
+          maxlength="120"
+          :error="editNameError"
+        />
         <AppField
           v-model="editRoadAddress"
           :label="editDetailOpen ? '사업장 주소 (도로명)' : '사업장 주소'"
           required
+          maxlength="255"
           :error="editAddressError"
         >
           <template #suffix>
@@ -233,6 +241,7 @@ async function confirmDelete() {
           v-model="editDetailAddress"
           label="세부 주소"
           placeholder="건물명·동·호수 등을 입력하세요"
+          maxlength="100"
         />
         <AppField
           :model-value="editPhone"

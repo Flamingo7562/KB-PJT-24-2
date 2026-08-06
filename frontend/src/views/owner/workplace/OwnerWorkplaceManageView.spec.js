@@ -81,6 +81,16 @@ describe('OwnerWorkplaceManageView', () => {
     expect(values).toContain('2층')
   })
 
+  it('상호명·도로명주소·세부주소는 서버 @Size 제한과 같은 maxlength 를 갖는다', async () => {
+    // WorkplaceCreateRequest 의 @Size(max=...) 를 그대로 반영한 값이다 — 서버가 바뀌면 같이 바꿔야 한다.
+    const wrapper = await openEditDialog()
+    const inputs = wrapper.findAll('input')
+    // [0] 상호명 [1] 도로명주소 [2] 세부주소(WORKPLACE.detailAddress 가 있어 열려 있다) [3] 전화번호
+    expect(inputs[0].attributes('maxlength')).toBe('120')
+    expect(inputs[1].attributes('maxlength')).toBe('255')
+    expect(inputs[2].attributes('maxlength')).toBe('100')
+  })
+
   it('수정 요청은 승인 허용 필드만 보낸다', async () => {
     const wrapper = await openEditDialog()
 

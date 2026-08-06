@@ -162,11 +162,13 @@ async function handleSubmit() {
           @keydown="blockNonDigitKeydown"
           @update:model-value="onBusinessNumberInput"
         />
+        <!-- maxlength 는 WorkplaceCreateRequest 의 @Size(max=...) 를 그대로 반영한다 — 임의로 바꾸지 말 것 -->
         <AppField
           v-model="name"
           label="상호명"
           placeholder="상호명을 입력하세요"
           required
+          maxlength="120"
           :error="nameError"
         />
         <AppField
@@ -174,6 +176,7 @@ async function handleSubmit() {
           label="대표자명"
           placeholder="대표자명을 입력하세요"
           required
+          maxlength="100"
           :error="representativeNameError"
         />
         <AppField
@@ -181,6 +184,7 @@ async function handleSubmit() {
           label="사업장 주소 (도로명)"
           placeholder="주소 검색을 이용하거나 직접 입력하세요"
           required
+          maxlength="255"
           :error="addressError"
         >
           <template #suffix>
@@ -191,6 +195,7 @@ async function handleSubmit() {
           v-model="detailAddress"
           label="세부 주소"
           placeholder="건물명·동·호수 등을 입력하세요"
+          maxlength="100"
         />
         <AppField
           :model-value="phone"
