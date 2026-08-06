@@ -61,6 +61,25 @@ describe('WorkerPasswordEditView 오류 귀속', () => {
     )
   })
 
+  it('서버가 새 비밀번호 필드를 지목하면 그 필드 아래에 표시하고 토스트는 띄우지 않는다', async () => {
+    const fieldError = { field: 'newPassword', reason: '이전에 사용한 비밀번호는 쓸 수 없습니다.' }
+    changePassword.mockRejectedValue({
+      response: { status: 400, data: { fieldErrors: [fieldError] } },
+      fieldErrors: [fieldError]
+    })
+    const toastSpy = vi.spyOn(useUiStore(), 'toast')
+
+    const wrapper = mount(WorkerPasswordEditView)
+    await fillValidForm(wrapper)
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+
+    expect(wrapper.findAll('.field')[1].find('.msg.error').text()).toBe(
+      '이전에 사용한 비밀번호는 쓸 수 없습니다.'
+    )
+    expect(toastSpy).not.toHaveBeenCalled()
+  })
+
   it('fieldErrors 없이 message 만 있으면 필드가 아니라 폼 레벨 토스트로 보여준다', async () => {
     changePassword.mockRejectedValue({
       response: { status: 500, data: { message: '잠시 후 다시 시도해주세요.' } }

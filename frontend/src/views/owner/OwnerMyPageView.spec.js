@@ -240,6 +240,9 @@ describe('OwnerMyPageView', () => {
   })
 
   describe('회원 탈퇴 준비 중 안내', () => {
+    // 이 블록은 #188 이 열려 있는 '오늘'의 상태(비활성화)를 고정한다.
+    // #188 이 머지되면 PENDING_FEATURES.WITHDRAWAL 항목이 사라지므로 이 describe 는
+    // 통과하지 못하게 된다 — mock 값을 다시 맞춰 억지로 살리지 말고 블록 전체를 삭제한다.
     it('모달에 준비 중 안내를 보여주고 탈퇴하기 버튼을 비활성화한다', async () => {
       const wrapper = mountView()
       await flushPromises()

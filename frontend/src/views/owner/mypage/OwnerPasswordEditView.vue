@@ -49,7 +49,6 @@ async function handleSubmit() {
   if (!validate()) return
 
   submitting.value = true
-  currentPasswordError.value = ''
   try {
     await changePassword({
       currentPassword: currentPassword.value,
