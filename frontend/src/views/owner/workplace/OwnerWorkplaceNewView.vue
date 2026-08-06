@@ -15,6 +15,10 @@
  *   안 되면 이동하지 않고 화면에 머무른다(다음 라우팅에서 가드가 최신 상태로 판단).
  *   (⚠ 서버 확인 없이 홈으로 보내면 G7 가드가 즉시 되돌려 무한 루프)
  * 공통: AppField · BaseButton · @/utils/validators (isBusinessNumber, isPhone)
+ *
+ * 실시간 검증(#238): useFieldValidation 이 형식 오류(errors)를 담당한다. 이 화면은 중복확인이
+ * 없어(사업자등록번호·상호명 모두 서버에 물어보지 않는다) AuthSignupForm 의 checkErrors 같은
+ * 별도 슬롯이 필요 없다 — errors 하나로 충분하다.
  */
 import { nextTick, ref } from 'vue'
 import { useRouter } from 'vue-router'
@@ -23,6 +27,7 @@ import AppBackHeader from '@/components/common/AppBackHeader.vue'
 import AppField from '@/components/common/AppField.vue'
 import BaseButton from '@/components/common/BaseButton.vue'
 import BaseModal from '@/components/common/BaseModal.vue'
+import { useFieldValidation } from '@/composables/useFieldValidation'
 import { createWorkplace } from '@/services/workplaces'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
@@ -47,11 +52,24 @@ const roadAddress = ref('')
 const detailAddress = ref('')
 const phone = ref('')
 
-const businessNumberError = ref('')
-const nameError = ref('')
-const representativeNameError = ref('')
-const addressError = ref('')
-const phoneError = ref('')
+// 형식 오류 전용. 규칙은 기존 validate() 가 쓰던 것을 그대로 옮겼다 — 규칙 자체는 불변.
+const { errors, handleBlur, validateAll } = useFieldValidation(
+  () => ({
+    businessRegistrationNumber: businessRegistrationNumber.value,
+    name: name.value,
+    representativeName: representativeName.value,
+    roadAddress: roadAddress.value,
+    phone: phone.value
+  }),
+  {
+    businessRegistrationNumber: (v) => isBusinessNumber(v.businessRegistrationNumber),
+    name: (v) => isRequired(v.name, '상호명'),
+    representativeName: (v) => isRequired(v.representativeName, '대표자명'),
+    roadAddress: (v) => isRequired(v.roadAddress, '사업장 주소'),
+    phone: (v) => isPhone(v.phone, { required: true })
+  }
+)
+
 const submitting = ref(false)
 
 function onBusinessNumberInput(v) {
@@ -71,8 +89,9 @@ async function searchAddress() {
   embedAddressSearch(
     addressSearchContainer.value,
     (result) => {
+      // roadAddress.value 를 바꾸면 useFieldValidation 의 watcher 가(이미 떠났던 필드라면)
+      // 자동으로 재검증해 오류를 지운다 — 여기서 따로 지울 필요가 없다.
       roadAddress.value = result.address
-      addressError.value = ''
       addressSearchOpen.value = false
     },
     () => {
@@ -82,22 +101,8 @@ async function searchAddress() {
   )
 }
 
-function validate() {
-  const checks = [
-    [isBusinessNumber(businessRegistrationNumber.value), businessNumberError],
-    [isRequired(name.value, '상호명'), nameError],
-    [isRequired(representativeName.value, '대표자명'), representativeNameError],
-    [isRequired(roadAddress.value, '사업장 주소'), addressError],
-    [isPhone(phone.value, { required: true }), phoneError]
-  ]
-  checks.forEach(([check, errorRef]) => {
-    errorRef.value = check.valid ? '' : check.message
-  })
-  return checks.every(([check]) => check.valid)
-}
-
 async function handleSubmit() {
-  if (!validate()) return
+  if (!validateAll()) return
 
   submitting.value = true
   try {
@@ -158,9 +163,10 @@ async function handleSubmit() {
           placeholder="000-00-00000"
           required
           maxlength="12"
-          :error="businessNumberError"
+          :error="errors.businessRegistrationNumber"
           @keydown="blockNonDigitKeydown"
           @update:model-value="onBusinessNumberInput"
+          @blur="handleBlur('businessRegistrationNumber')"
         />
         <!-- maxlength 는 WorkplaceCreateRequest 의 @Size(max=...) 를 그대로 반영한다 — 임의로 바꾸지 말 것 -->
         <AppField
@@ -169,7 +175,8 @@ async function handleSubmit() {
           placeholder="상호명을 입력하세요"
           required
           maxlength="120"
-          :error="nameError"
+          :error="errors.name"
+          @blur="handleBlur('name')"
         />
         <AppField
           v-model="representativeName"
@@ -177,7 +184,8 @@ async function handleSubmit() {
           placeholder="대표자명을 입력하세요"
           required
           maxlength="100"
-          :error="representativeNameError"
+          :error="errors.representativeName"
+          @blur="handleBlur('representativeName')"
         />
         <AppField
           v-model="roadAddress"
@@ -185,7 +193,8 @@ async function handleSubmit() {
           placeholder="주소 검색을 이용하거나 직접 입력하세요"
           required
           maxlength="255"
-          :error="addressError"
+          :error="errors.roadAddress"
+          @blur="handleBlur('roadAddress')"
         >
           <template #suffix>
             <BaseButton type="button" variant="secondary" @click="searchAddress">검색</BaseButton>
@@ -205,9 +214,10 @@ async function handleSubmit() {
           placeholder="02-0000-0000"
           required
           maxlength="13"
-          :error="phoneError"
+          :error="errors.phone"
           @keydown="blockNonDigitKeydown"
           @update:model-value="onPhoneInput"
+          @blur="handleBlur('phone')"
         />
 
         <BaseButton type="submit" variant="owner" block :disabled="submitting">등록</BaseButton>

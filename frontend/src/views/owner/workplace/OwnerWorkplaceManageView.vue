@@ -6,6 +6,10 @@
  *   →  @/services/workplaces (list, create, update, remove)
  * 진행 중 근무 건수: GET /workplaces/{id}/work-cases/summary → @/services/workCases (getWorkCaseSummary)
  * 변경 후 useWorkplaceStore().load({force:true}) 로 네비 select 갱신.
+ *
+ * 실시간 검증(#238): 수정 다이얼로그는 중복확인이 없어 errors 슬롯 하나로 충분하다.
+ * 다이얼로그를 다시 열 때(openEdit)는 reset() 으로 이전 세션의 touched·errors 를 지운다 —
+ * 지우지 않으면 다른 사업장을 열었을 때 이전 오류가 그대로 남아 보인다.
  */
 import { Building2 } from 'lucide-vue-next'
 import { storeToRefs } from 'pinia'
@@ -17,6 +21,7 @@ import AppField from '@/components/common/AppField.vue'
 import BaseButton from '@/components/common/BaseButton.vue'
 import BaseModal from '@/components/common/BaseModal.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
+import { useFieldValidation } from '@/composables/useFieldValidation'
 import { getWorkCaseSummary } from '@/services/workCases'
 import { deleteWorkplace, updateWorkplace } from '@/services/workplaces'
 import { useUiStore } from '@/stores/ui'
@@ -40,10 +45,17 @@ const editRoadAddress = ref('')
 const editDetailAddress = ref('')
 const editDetailOpen = ref(false)
 const editPhone = ref('')
-const editNameError = ref('')
-const editAddressError = ref('')
-const editPhoneError = ref('')
 const saving = ref(false)
+
+// 형식 오류 전용. 규칙은 기존 confirmEdit() 이 쓰던 것을 그대로 옮겼다 — 규칙 자체는 불변.
+const { errors, handleBlur, validateAll, reset } = useFieldValidation(
+  () => ({ name: editName.value, roadAddress: editRoadAddress.value, phone: editPhone.value }),
+  {
+    name: (v) => isRequired(v.name, '상호명'),
+    roadAddress: (v) => isRequired(v.roadAddress, '사업장 주소'),
+    phone: (v) => isPhone(v.phone, { required: true })
+  }
+)
 
 const deleteOpen = ref(false)
 const deleteTarget = ref(null)
@@ -71,9 +83,7 @@ function openEdit(workplace) {
   editDetailAddress.value = workplace.detailAddress ?? ''
   editDetailOpen.value = Boolean(workplace.detailAddress)
   editPhone.value = workplace.phone ? formatPhoneInput(workplace.phone) : ''
-  editNameError.value = ''
-  editAddressError.value = ''
-  editPhoneError.value = ''
+  reset()
   editOpen.value = true
 }
 
@@ -91,10 +101,11 @@ async function searchEditAddress() {
     addressSearchContainer.value,
     (result) => {
       // 도로명이 통째로 바뀌므로 이전 세부주소는 버리고 입력란을 연다.
+      // editRoadAddress.value 변경은 useFieldValidation 의 watcher 가(떠났던 필드라면)
+      // 자동으로 재검증해 오류를 지운다 — 여기서 따로 지울 필요가 없다.
       editRoadAddress.value = result.address
       editDetailAddress.value = ''
       editDetailOpen.value = true
-      editAddressError.value = ''
       addressSearchOpen.value = false
     },
     () => {
@@ -105,13 +116,7 @@ async function searchEditAddress() {
 }
 
 async function confirmEdit() {
-  const nameCheck = isRequired(editName.value, '상호명')
-  const addressCheck = isRequired(editRoadAddress.value, '사업장 주소')
-  const phoneCheck = isPhone(editPhone.value, { required: true })
-  editNameError.value = nameCheck.valid ? '' : nameCheck.message
-  editAddressError.value = addressCheck.valid ? '' : addressCheck.message
-  editPhoneError.value = phoneCheck.valid ? '' : phoneCheck.message
-  if (!nameCheck.valid || !addressCheck.valid || !phoneCheck.valid) return
+  if (!validateAll()) return
 
   saving.value = true
   try {
@@ -221,14 +226,16 @@ async function confirmDelete() {
           label="상호명"
           required
           maxlength="120"
-          :error="editNameError"
+          :error="errors.name"
+          @blur="handleBlur('name')"
         />
         <AppField
           v-model="editRoadAddress"
           :label="editDetailOpen ? '사업장 주소 (도로명)' : '사업장 주소'"
           required
           maxlength="255"
-          :error="editAddressError"
+          :error="errors.roadAddress"
+          @blur="handleBlur('roadAddress')"
         >
           <template #suffix>
             <BaseButton type="button" variant="secondary" @click="searchEditAddress"
@@ -250,9 +257,10 @@ async function confirmDelete() {
           digits-only
           required
           maxlength="13"
-          :error="editPhoneError"
+          :error="errors.phone"
           @keydown="blockNonDigitKeydown"
           @update:model-value="onEditPhoneInput"
+          @blur="handleBlur('phone')"
         />
       </div>
       <template #footer>

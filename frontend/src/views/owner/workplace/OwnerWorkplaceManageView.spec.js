@@ -146,4 +146,19 @@ describe('OwnerWorkplaceManageView', () => {
       expect.objectContaining({ type: 'danger' })
     )
   })
+
+  // 실시간 검증(#238): AuthSignupForm 과 같은 패턴 — 필드를 떠나면 형식 오류가 뜨고
+  // 값을 고치면 즉시 사라진다. Teleport 로 렌더되는 다이얼로그 안에서도 배선이 살아있는지 고정한다.
+  it('수정 다이얼로그의 상호명 필드를 비우고 떠나면 오류가 뜨고 채우면 사라진다', async () => {
+    const wrapper = await openEditDialog()
+    // [0] 상호명 [1] 도로명주소 [2] 세부주소(있으면) [3] 전화번호
+    const nameInput = wrapper.findAll('input')[0]
+
+    await nameInput.setValue('')
+    await nameInput.trigger('blur')
+    expect(wrapper.text()).toContain('상호명을(를) 입력해주세요.')
+
+    await nameInput.setValue('새 상호명')
+    expect(wrapper.text()).not.toContain('상호명을(를) 입력해주세요.')
+  })
 })
