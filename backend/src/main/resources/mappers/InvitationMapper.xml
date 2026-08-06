@@ -67,6 +67,30 @@
         FOR UPDATE
     </select>
 
+    <!--
+        초대 응답에 없는 좌표와 인증 반경은 SELECT에서 뺍니다. 읽지 않아야 이후 계층이
+        실수로 노출할 수 없습니다.
+
+        break_paid 는 TINYINT(0/1)이라 Boolean으로 그대로 매핑됩니다.
+    -->
+    <select id="findWorkCaseForInvitation"
+            resultType="com.gighub.invitation.mapper.result.InvitationWorkCaseRow">
+        SELECT id AS work_case_id,
+               employer_id,
+               worker_id,
+               title,
+               workplace_name,
+               starts_at,
+               ends_at,
+               break_minutes,
+               break_paid,
+               agreed_wage AS daily_wage,
+               terms_version,
+               status
+        FROM work_cases
+        WHERE id = #{workCaseId}
+    </select>
+
     <update id="markExpired">
         UPDATE work_invitations
         SET status = 'EXPIRED'

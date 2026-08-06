@@ -2,6 +2,7 @@ package com.gighub.invitation.mapper;
 
 import com.gighub.invitation.mapper.param.InvitationInsertParam;
 import com.gighub.invitation.mapper.result.InvitationRow;
+import com.gighub.invitation.mapper.result.InvitationWorkCaseRow;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -61,6 +62,18 @@ public interface InvitationMapper {
      * @return 활성 초대. 없으면 {@code null}
      */
     InvitationRow findActivePendingByWorkCaseIdForUpdate(@Param("workCaseId") long workCaseId);
+
+    /**
+     * 초대가 가리키는 근무의 현재 조건을 조회합니다.
+     *
+     * <p>초대 행을 이미 잠근 뒤에 호출하므로 여기서는 잠그지 않습니다. 근무 조건을 바꾸는
+     * Transaction은 같은 Transaction에서 활성 초대를 철회해야 하고, 그 철회가 우리가 잡은 초대
+     * 잠금에서 대기하므로 조건과 초대 상태가 어긋난 채로 읽히지 않습니다.</p>
+     *
+     * @param workCaseId 초대가 가리키는 근무 식별자
+     * @return 근무의 현재 조건. 없으면 {@code null}
+     */
+    InvitationWorkCaseRow findWorkCaseForInvitation(@Param("workCaseId") long workCaseId);
 
     /**
      * 초대 한 건을 {@code EXPIRED}로 전이합니다.
