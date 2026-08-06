@@ -7,6 +7,7 @@
 - **정식 명세(Canonical/Released Spec)**: PM/Repository Admin이 릴리스하고 `SPEC_LOCK.json`으로 잠근 `docs/specs/**`
 - **명세 Patch**: 정식 명세 변경을 요청하는 비규범 제안·승인·감사 기록
 - **Controller**: Patch 승인과 정식 명세 통합을 담당하는 PM/Repository Admin `Flamingo7562`
+- **전달 방식(Delivery Mode)**: 구현과 Patch를 함께 검토하는 `implementation_bundled` 또는 정식 명세를 먼저 확정하는 `spec_first`
 
 ## 역할과 책임
 
@@ -14,6 +15,7 @@
 
 - 최신 `origin/dev`와 현재 정식 명세를 기준으로, 독립적으로 승인 가능한 최소 기능 단위마다 Patch 하나를 작성한다.
 - 같은 기능 변경 때문에 요구사항, API, 결정, 추적성이 함께 달라져야 한다면 그 전체 영향을 하나의 Patch에 적는다.
+- 변경의 호환성·보안·데이터·외부 소비자 영향을 평가해 `delivery_mode`를 선택하고 근거를 Patch 본문에 적는다.
 - 정식 명세를 직접 만들거나 수정·삭제·이동·복구하지 않는다.
 - 기준 명세와 활성 Patch가 바뀌면 대상 계약의 의미 호환성을 다시 확인하고 필요한 재검토를 요청한다.
 
@@ -26,8 +28,10 @@
 
 ### 구현자와 리뷰어
 
-- `accepted` Patch를 기준으로 구현을 병행할 수는 있지만, 해당 Patch가 `applied`된 정식 명세 버전을 구현 PR에 기록하기 전에는 병합하지 않는다.
-- Patch PR의 기술 검토는 가능하지만 Controller의 제품 승인이나 정식 명세 릴리스를 대신하지 않는다.
+- `implementation_bundled` Patch는 같은 PR의 구현만 설명하며, Controller가 `accepted`로 전환한 뒤 코드와 함께 `dev`에 병합할 수 있다.
+- `spec_first` Patch는 별도 Patch PR에서 승인·적용하고, 구현 PR은 해당 Patch가 `applied`된 정식 명세 버전을 기록한 뒤 병합한다.
+- 구현 PR은 `Spec Patch`, `Base Spec`, `Delivery Mode`, `Contract Change`를 기록한다.
+- 기술 검토와 코드 병합은 Controller의 제품 승인이나 정식 명세 릴리스를 대신하지 않는다.
 
 ## 디렉터리
 
@@ -82,6 +86,7 @@ Patch는 파일 첫 줄부터 YAML front matter를 가져야 한다. 필드의 �
 | `base_spec_version`  | 작성·재검토 기준이 된 정식 명세의 정확한 SemVer이다.                                                                                                     |
 | `base_commit`        | 그 정식 명세를 포함한 최신 `origin/dev`의 축약 없는 소문자 40자리 Commit SHA이다.                                                                        |
 | `change_type`        | `additive`, `clarification`, `breaking` 중 하나이다.                                                                                                     |
+| `delivery_mode`      | `implementation_bundled` 또는 `spec_first`이다. 이 필드가 없는 정책 변경 이전 Patch는 `spec_first`로 취급한다.                                           |
 | `targets`            | 줄 번호가 아닌 안정적인 계약 식별자를 한 개 이상 적는다. 각 항목은 `requirement`, `decision`, `rest_operation` 등 식별자 종류 하나와 값 하나로 구성한다. |
 | `depends_on`         | 먼저 검토·적용되어야 하는 Patch ID 목록이며 없으면 `[]`이다.                                                                                             |
 | `supersedes`         | 이 리비전이 대체하는 Patch ID이며 없으면 `null`이다.                                                                                                     |
@@ -97,6 +102,33 @@ Patch는 파일 첫 줄부터 YAML front matter를 가져야 한다. 필드의 �
 
 Patch 본문은 변경 요약과 필요성, 현재 명세와 문제, 최종 규범 문장 또는 Before/After, 모든 영향 영역, 검증 가능한 수용 조건, 미결 사항, 관련 Issue·PR·의존 Patch를 빠짐없이 포함한다. 대상은 줄 번호 대신 요구사항 ID, 결정 ID, REST Operation처럼 변경 후에도 추적 가능한 식별자를 사용한다.
 
+## 전달 방식과 위험 경계
+
+### `implementation_bundled`
+
+다음 조건을 모두 만족하는 변경만 사용할 수 있다.
+
+- `change_type`이 `additive` 또는 제품 의미를 바꾸지 않는 `clarification`이다.
+- 기존 요청·응답과 호출자의 하위 호환성을 유지한다.
+- Flyway Migration, DDL, 통합 Schema 또는 저장 데이터 의미를 바꾸지 않는다.
+- 인증·인가·개인정보·감사·위협 모델의 제품 결정을 바꾸지 않는다.
+- 외부 소비자나 여러 독립 기능이 공유하는 계약을 일방적으로 바꾸지 않는다.
+- 되돌릴 때 같은 PR의 구현만 수정하면 되고 이미 배포된 호출자에게 강제 전환을 요구하지 않는다.
+
+제안자는 기능 브랜치에서 코드와 Patch를 함께 작성하고 Patch를 `proposed`로 제출한다. Controller는 같은 PR에서 기준선, 대상, 호환성과 위험 분류를 검토한 뒤 Patch를 `accepted`로 전환한다. `accepted` 전에는 PR을 병합하지 않는다. 병합 뒤 Patch가 정식 명세에 적용되기 전까지 코드는 `dev`의 잠정 구현이고 Patch는 비규범 변경 기록이다.
+
+### `spec_first`
+
+다음 중 하나라도 해당하면 반드시 이 방식을 사용한다.
+
+- `breaking` 변경 또는 기존 필드·Operation·오류 의미의 삭제·교체
+- 인증·인가·개인정보·보안·감사 계약 변경
+- Migration, DDL, 데이터 의미·정합성·역호환성 변경
+- 외부 소비자나 여러 기능이 공유하는 계약 변경
+- 구현 병합이 사실상 제품 결정을 강제하거나 되돌리기 어려운 변경
+
+Patch 전용 PR을 먼저 병합하고 Controller가 정식 명세 릴리스로 `applied`한 뒤 구현 PR을 병합한다. 구현을 병행할 수는 있지만 적용 전 코드를 `dev`에 병합하지 않는다. 판단이 모호하면 `spec_first`를 사용한다.
+
 ## 상태 수명주기
 
 허용 전이는 아래 여섯 가지뿐이다.
@@ -111,7 +143,7 @@ accepted ─────────→ superseded
 | 상태         | 의미와 계약 효력                                                            | 위치        | 다음 상태                            |
 | ------------ | --------------------------------------------------------------------------- | ----------- | ------------------------------------ |
 | `draft`      | 작성 중인 비규범 초안                                                       | `proposed/` | `proposed`                           |
-| `proposed`   | Patch 전용 PR에서 검토 중인 비규범 제안                                     | `proposed/` | `accepted`, `rejected`, `superseded` |
+| `proposed`   | Patch 전용 또는 구현 동반 PR에서 검토 중인 비규범 제안                      | `proposed/` | `accepted`, `rejected`, `superseded` |
 | `accepted`   | Controller가 내용을 승인했지만 아직 정식 명세에 적용하지 않은 비규범 기록   | `proposed/` | `applied`, `superseded`              |
 | `applied`    | Controller 릴리스에 적용된 감사 기록. 계약 효력은 갱신된 정식 명세에만 있음 | `archive/`  | 없음                                 |
 | `rejected`   | 채택하지 않은 사유를 보존하는 종료 기록                                     | `archive/`  | 없음                                 |
@@ -122,26 +154,26 @@ accepted ─────────→ superseded
 ## Patch 제출 절차
 
 1. 작업 시작 전에 최신 `origin/dev`를 확인하고 그 Commit의 정식 명세 버전을 읽는다.
-2. Patch 전용 브랜치에서 [`TEMPLATE.md`](TEMPLATE.md)를 `proposed/` 아래 올바른 파일명으로 복사한다.
+2. [`TEMPLATE.md`](TEMPLATE.md)를 `proposed/` 아래 올바른 파일명으로 복사하고 `delivery_mode`를 선택한다.
 3. 하나의 최소 기능 단위와 함께 바뀌어야 할 계약 영향을 모두 작성한다. 서로 독립적으로 승인할 수 있는 변경은 별도 Patch로 나눈다.
 4. 최초 기준의 `base_spec_version`과 축약하지 않은 `base_commit`을 기록하고, 모든 안내문과 Placeholder를 실제 값 또는 명시적인 “영향 없음”·“미결 사항 없음”으로 바꾼다.
-5. PR을 열기 전에 상태를 `proposed`로 바꾸고 `dev`를 대상으로 Patch 전용 PR을 만든다. PR에는 `Spec Patch: SPEC-...`와 `Base Spec: x.y.z`를 적는다.
-6. Controller는 기준선, 대상, 의존성, 다른 활성 Patch와의 중복, 호환성을 확인한다. 기준이 오래되었거나 대상이 겹치면 자동 적용하지 않고 재검토 절차를 따른다.
-7. Controller가 승인하면 Patch를 `accepted`로 전환한다. 구현은 병행할 수 있지만 정식 명세 적용 전에는 구현 PR을 병합하지 않는다.
+5. PR을 Ready로 전환하기 전에 상태를 `proposed`로 바꾸고 `Spec Patch`, `Base Spec`, `Delivery Mode`, `Contract Change`를 기록한다.
+6. Controller는 기준선, 대상, 의존성, 다른 활성 Patch와의 중복, 호환성, 전달 방식의 적합성을 확인한다. 기준이 오래되었거나 대상이 겹치면 자동 적용하지 않고 재검토 절차를 따른다.
+7. Controller가 승인하면 Patch를 `accepted`로 전환한다.
+8. `implementation_bundled`는 같은 PR의 구현과 함께 `dev`에 병합할 수 있다. `spec_first` Patch PR은 제품 구현 없이 끝내고 별도 정식 명세 릴리스 뒤 구현 PR을 병합한다.
 
-Patch 전용 제안 PR은 여기서 끝난다. `accepted` Patch 기록을 `dev`에 병합하는 PR이며, 정식 명세·릴리스 메타데이터·`SPEC_LOCK.json`이나 제품 구현을 포함하지 않는다. 이후 Controller가 별도의 정식 명세 릴리스 PR을 만든다.
+## 허용·금지 조합
 
-## 혼합 변경 금지
+| 변경 조합                                         | 허용 여부 | 조건                                                                 |
+| ------------------------------------------------- | --------- | -------------------------------------------------------------------- |
+| `implementation_bundled` Patch + 같은 기능의 코드 | 허용      | 하위 호환, Migration·보안·데이터 영향 없음, 병합 전 `accepted`       |
+| `spec_first` Patch + 애플리케이션 코드            | 금지      | Patch 전용 PR과 정식 명세 릴리스를 먼저 완료                         |
+| 모든 Patch + Migration·DDL·통합 Schema            | 금지      | 별도 관리자 승인 Migration·DDL 작업 필요                             |
+| 제안·구현 PR + `docs/specs/**`·`SPEC_LOCK.json`   | 금지      | Controller 정식 명세 릴리스에서만 변경                               |
+| `applied` 전환 + 영향받는 정식 명세·Lock          | 허용      | Controller가 하나의 원자적 명세 릴리스로 처리                        |
+| Patch 거버넌스 관리 문서 + 관련 Guardrail·테스트  | 허용      | 명시적으로 승인된 거버넌스 변경 범위이며 제품 Patch·제품 구현은 제외 |
 
-Patch PR에는 Patch 파일과 명시적으로 범위에 포함된 Patch 작성 지원 문서만 둔다. 다음 변경을 섞지 않는다.
-
-- Frontend 또는 Backend 애플리케이션 코드와 테스트
-- Flyway Migration, DDL, 통합 Schema
-- `docs/specs/**` 정식 명세와 `SPEC_LOCK.json`
-- Patch가 제안하는 제품 기능이나 REST 계약의 구현
-- Patch 운영과 무관한 문서·자동화·설정
-
-거버넌스 자체를 도입하거나 변경하는 관리 PR은 승인된 범위에서 지원 문서와 Guardrail을 함께 바꿀 수 있지만, 개별 제품 Patch나 제품 구현을 같은 PR에 포함하지 않는다.
+구현 동반형이라도 Patch가 설명하지 않는 제품 기능, 관련 없는 문서·자동화·설정, 다른 Patch의 구현을 같은 PR에 끌어오지 않는다.
 
 ## 기준선 변경, 충돌과 재검토
 
@@ -163,13 +195,22 @@ Patch PR에는 Patch 파일과 명시적으로 범위에 포함된 Patch 작성 
 
 ## Controller 정식 명세 릴리스
 
-1. `accepted` Patch 전용 PR이 병합된 최신 `dev`에서 Controller 릴리스 브랜치를 만들고 적용할 Patch의 의존성과 순서를 다시 확인한다.
+1. `accepted` Patch가 병합된 최신 `dev`에서 Controller 릴리스 브랜치를 만들고 적용할 Patch의 의존성, 전달 방식과 순서를 다시 확인한다.
 2. 보호 파일이나 제품 의미를 바꾸지 않는 빈 번호 예약 커밋으로 브랜치를 Push하고 `dev` 대상 **Draft 정식 명세 릴리스 PR**을 먼저 열어 PR 번호를 확보한다. 이 PR은 Patch 전용 제안 PR과 별개다.
 3. 각 Patch의 추가·교체·삭제 의도와 다른 활성 Patch의 의미 충돌을 검토하며 최신 정식 명세에 편집 통합한다. 문장을 단순히 이어 붙이지 않는다.
 4. 영향받는 정식 명세, 릴리스 버전·승인일·소유자, 변경 이력, 필요한 호환 기준을 같은 릴리스로 정합화한다.
 5. 확보한 Draft PR의 양의 번호를 Patch의 `applied_by_pr`에, 릴리스 SemVer를 `applied_in_version`에 기록한다. `SPEC_LOCK.json`을 최종 정식 명세 파일 집합으로 재생성하고 Patch를 `applied`로 바꾸어 `archive/`로 이동한다.
 6. 3~5단계의 정식 명세, 릴리스 메타데이터, Lock, Patch 상태와 위치를 **하나의 최종 원자 커밋**으로 만들고 Push한다. 부분 상태를 중간 커밋이나 중간 Push로 공개하지 않는다.
 7. 릴리스 PR을 검토·병합한 뒤에는 갱신된 `docs/specs/**`만 계약으로 사용한다. 보관 Patch는 감사와 추적 용도일 뿐 두 번째 규범 원본이 아니다.
+
+승인 또는 운영 릴리스 전에는 `npm run check:guardrails:release`를 실행한다. 이 검사는 `accepted` 상태로 남은 `implementation_bundled` Patch가 있으면 실패한다. 해당 Patch를 정식 명세에 적용하거나 구현을 교정하고 Patch를 종료하기 전에는 릴리스를 진행하지 않는다.
+
+## 기존 Patch 전환
+
+- 이 정책 변경 전에 만들어져 `delivery_mode`가 없는 Patch는 자동으로 `spec_first`로 취급한다.
+- 기존 Patch를 `implementation_bundled`로 바꾸려면 `accepted` 전 같은 리비전에 `delivery_mode`와 위험 판단 근거를 추가하고 Controller의 명시적 재검토를 받는다.
+- 이미 `accepted`된 Patch는 전달 방식을 바꾸지 않는다. 새 리비전을 만들고 기존 리비전을 `superseded` 처리한다.
+- 기존 Patch 전용 PR과 구현 PR을 자동으로 합치지 않는다. Controller가 Issue와 Patch별로 전환 여부를 결정한다.
 
 ## 거절, 대체와 Revert
 
@@ -181,9 +222,11 @@ Patch PR에는 Patch 파일과 명시적으로 범위에 포함된 Patch 작성 
 
 - [ ] 파일명, `patch_id`, `author`, `issue`가 서로 일치한다.
 - [ ] 기준 명세 버전과 축약하지 않은 최신 `origin/dev` Commit을 기록했다.
+- [ ] `delivery_mode`와 호환성·보안·데이터·외부 소비자 위험 판단 근거를 기록했다.
 - [ ] 안정적인 대상 계약 식별자와 의존 Patch를 빠짐없이 적었다.
 - [ ] 모든 영향 영역과 검증 가능한 수용 조건을 작성했다.
 - [ ] `accepted` 전환 전에 미결 사항과 Placeholder를 해소했다.
 - [ ] 같은 대상을 다루는 활성 Patch와 기준선 변경을 재검토했다.
-- [ ] Patch PR에 애플리케이션 코드, Migration, DDL 또는 보호 명세 변경을 섞지 않았다.
+- [ ] `implementation_bundled`가 아닌 Patch에 애플리케이션 코드를 섞지 않았고, 모든 Patch에서 Migration·DDL·보호 명세 변경을 분리했다.
+- [ ] 구현 동반형 PR은 병합 전에 Patch가 `accepted`되었고, 명세 우선형 구현 PR은 Patch가 `applied`되었다.
 - [ ] `accepted`와 `applied`를 구분하고 상태에 맞는 디렉터리를 사용했다.

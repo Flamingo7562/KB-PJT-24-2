@@ -40,6 +40,11 @@ const PATCH_REQUIRED_METADATA = [
   "applied_in_version",
   "applied_by_pr",
 ];
+const PATCH_OPTIONAL_METADATA = ["delivery_mode"];
+const PATCH_SUPPORTED_METADATA = new Set([
+  ...PATCH_REQUIRED_METADATA,
+  ...PATCH_OPTIONAL_METADATA,
+]);
 const PATCH_REQUIRED_SECTIONS = [
   "변경 요약과 필요성",
   "현재 명세와 문제",
@@ -69,6 +74,7 @@ const PATCH_STATUSES = new Set([
 const PATCH_ACTIVE_STATUSES = new Set(["draft", "proposed", "accepted"]);
 const PATCH_ARCHIVED_STATUSES = new Set(["applied", "rejected", "superseded"]);
 const PATCH_CHANGE_TYPES = new Set(["additive", "clarification", "breaking"]);
+const PATCH_DELIVERY_MODES = new Set(["implementation_bundled", "spec_first"]);
 const PATCH_ALLOWED_TRANSITIONS = new Map([
   ["draft", new Set(["proposed"])],
   ["proposed", new Set(["accepted", "rejected", "superseded"])],
@@ -826,7 +832,7 @@ function hasTemplateSentinel(metadata, body, targets) {
     targets.some((target) =>
       /^(?:REQUIREMENT-ID|DECISION-ID|REST-OPERATION)$/i.test(target.value),
     ) ||
-    /^#\s+SPEC-000-01(?::|\s|$)|^#\s+.*명세 Patch 제목\s*$|수용 조건을 작성한다|최소 계약 변경을 제안한다|현재 계약의 공백을 설명한다|최종 규범 문장을 제시한다/im.test(
+    /^#\s+SPEC-000-01(?::|\s|$)|^#\s+.*명세 Patch 제목\s*$|수용 조건을 작성한다|최소 계약 변경을 제안한다|현재 계약의 공백을 설명한다|최종 규범 문장을 제시한다|implementation_bundled 또는 spec_first 선택 이유를 적는다/im.test(
       body,
     )
   );
@@ -863,7 +869,7 @@ function parsePatchDocument(file, content) {
     }
   }
   for (const key of metadataKeys) {
-    if (!PATCH_REQUIRED_METADATA.includes(key)) {
+    if (!PATCH_SUPPORTED_METADATA.has(key)) {
       errors.push(`${file} has unsupported metadata: ${key}.`);
     }
   }
@@ -913,6 +919,20 @@ function parsePatchDocument(file, content) {
     errors.push(
       `${file} change_type must be one of: ${[...PATCH_CHANGE_TYPES].join(", ")}.`,
     );
+  }
+
+  // 정책 변경 전에 만든 Patch는 기존의 보수적인 spec-first 흐름을 그대로 따른다.
+  const deliveryMode = metadata.delivery_mode ?? "spec_first";
+  if (!PATCH_DELIVERY_MODES.has(deliveryMode)) {
+    errors.push(
+      `${file} delivery_mode must be one of: ${[...PATCH_DELIVERY_MODES].join(", ")}.`,
+    );
+  }
+  if (
+    deliveryMode === "implementation_bundled" &&
+    metadata.change_type === "breaking"
+  ) {
+    errors.push(`${file} breaking Patch must use spec_first delivery_mode.`);
   }
 
   const targets = [];
@@ -1026,6 +1046,18 @@ function parsePatchDocument(file, content) {
       errors.push(`${file} requires a non-empty "## ${title}" section.`);
     }
   }
+  if (metadataKeys.has("delivery_mode")) {
+    const deliverySection = getMarkdownSection(
+      body,
+      "전달 방식과 위험 판정",
+      2,
+    );
+    if (deliverySection === null || deliverySection === "") {
+      errors.push(
+        `${file} with delivery_mode requires a non-empty "## 전달 방식과 위험 판정" section.`,
+      );
+    }
+  }
   const impact = getMarkdownSection(body, "영향 분석", 2);
   if (impact !== null) {
     for (const title of PATCH_REQUIRED_IMPACT_SECTIONS) {
@@ -1059,6 +1091,7 @@ function parsePatchDocument(file, content) {
     patch: {
       body,
       content: normalizeSpecContent(content),
+      deliveryMode,
       file,
       metadata,
       pathInfo,
@@ -1275,6 +1308,13 @@ function isDdlPath(file) {
   );
 }
 
+function isApiContractPath(file) {
+  return (
+    /^backend\/src\/main\/java\/.+\/(?:controller|dto)\//.test(file) ||
+    file.startsWith("frontend/src/services/")
+  );
+}
+
 function verifyPatchSnapshot({
   currentFiles,
   previousFiles,
@@ -1282,6 +1322,8 @@ function verifyPatchSnapshot({
   canonicalSpecVersion = null,
   currentDevCommit = null,
   previousCanonicalSpecVersion = null,
+  requireBundledAcceptance = false,
+  requireBundledApplied = false,
   validateLifecycle = true,
 }) {
   const errors = [];
@@ -1405,10 +1447,40 @@ function verifyPatchSnapshot({
       (file) => file.startsWith("frontend/") || file.startsWith("backend/"),
     );
     const mixedDdl = [...changedFiles].filter(isDdlPath);
-    for (const file of new Set([...mixedApplication, ...mixedDdl])) {
-      errors.push(
-        `Patch change must not include application, Migration, or DDL: ${file}`,
+    for (const file of new Set(mixedDdl)) {
+      errors.push(`Patch change must not include Migration or DDL: ${file}`);
+    }
+
+    if (mixedApplication.length > 0) {
+      // 코드 혼합은 모든 변경 Patch가 구현 동반형일 때만 허용해 서로 다른 계약의 오염을 막는다.
+      const specFirstPatches = scopeCurrentPatches.filter(
+        (patch) => patch.deliveryMode !== "implementation_bundled",
       );
+      for (const patch of specFirstPatches) {
+        errors.push(
+          `${patch.file} spec_first Patch must not include application code in the same change.`,
+        );
+      }
+
+      const bundledPatches = scopeCurrentPatches.filter(
+        (patch) => patch.deliveryMode === "implementation_bundled",
+      );
+      if (requireBundledAcceptance) {
+        for (const patch of bundledPatches) {
+          if (patch.metadata.status !== "accepted") {
+            errors.push(
+              `${patch.file} implementation_bundled Patch must be accepted before its application change can merge.`,
+            );
+          }
+        }
+      }
+      for (const patch of scopeCurrentPatches) {
+        if (patch.metadata.status === "applied") {
+          errors.push(
+            `${patch.file} Controller release must not include application code.`,
+          );
+        }
+      }
     }
 
     const protectedSpecChanges = [...changedFiles].filter((file) =>
@@ -1428,6 +1500,28 @@ function verifyPatchSnapshot({
             `Patch proposal must not include protected spec changes: ${file}`,
           );
         }
+      }
+    }
+  }
+
+  if (changedPatchPaths.length === 0) {
+    const apiBoundaryChanges = [...changedFiles].filter(isApiContractPath);
+    if (apiBoundaryChanges.length > 0) {
+      warnings.push(
+        `API boundary change requires a Spec Patch or an explicit N/A rationale in the pull request: ${apiBoundaryChanges.join(", ")}.`,
+      );
+    }
+  }
+
+  if (requireBundledApplied) {
+    for (const patch of currentPatches) {
+      if (
+        patch.deliveryMode === "implementation_bundled" &&
+        patch.metadata.status === "accepted"
+      ) {
+        errors.push(
+          `Approved release is blocked by accepted, unapplied implementation_bundled Patch ${patch.metadata.patch_id} (${patch.file}).`,
+        );
       }
     }
   }
@@ -1523,9 +1617,11 @@ function validatePatchGovernance(mode) {
       currentDevCommit: getOriginDevCommit(),
       previousCanonicalSpecVersion: getPreviousCanonicalSpecVersion(mode),
       previousFiles: collectPreviousPatchSnapshot(mode),
+      requireBundledAcceptance: mode !== "staged",
+      requireBundledApplied: mode === "release",
       validateLifecycle: mode === "staged",
     });
-    if (mode === "all") {
+    if (mode !== "staged") {
       result.errors.push(...validateAllPatchLifecycle(currentFiles));
     }
     return result;
@@ -1535,13 +1631,18 @@ function validatePatchGovernance(mode) {
 }
 
 function parseMode(args) {
-  if (args.length !== 1 || !["--staged", "--all"].includes(args[0])) {
+  if (
+    args.length !== 1 ||
+    !["--staged", "--all", "--release"].includes(args[0])
+  ) {
     throw new Error(
-      "Use one mode: node scripts/check-project-guardrails.js --staged|--all",
+      "Use one mode: node scripts/check-project-guardrails.js --staged|--all|--release",
     );
   }
 
-  return args[0] === "--staged" ? "staged" : "all";
+  if (args[0] === "--staged") return "staged";
+  if (args[0] === "--release") return "release";
+  return "all";
 }
 
 function printViolations(violations) {
@@ -1611,7 +1712,11 @@ function runGuardrails(mode) {
   }
 
   const scope =
-    mode === "staged" ? "staged index content" : "working tree content";
+    mode === "staged"
+      ? "staged index content"
+      : mode === "release"
+        ? "release candidate working tree content"
+        : "working tree content";
   console.log(`Project guardrail check passed (${scope}).`);
   return 0;
 }
@@ -1633,6 +1738,7 @@ module.exports = {
   CANONICAL_SPEC_MARKDOWN_PATHS,
   FULL_GIT_COMMIT_PATTERN,
   PATCH_CHANGE_TYPES,
+  PATCH_DELIVERY_MODES,
   PATCH_FILE_PATTERN,
   PATCH_ID_PATTERN,
   PATCH_ROOT,
