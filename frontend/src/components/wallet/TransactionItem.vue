@@ -1,5 +1,5 @@
 <script setup>
-import { ArrowUpRight, CircleCheck, Lock, Plus, RotateCcw } from 'lucide-vue-next'
+import { ArrowUpRight, CircleCheck, CircleX, Clock, Lock, Plus, RotateCcw } from 'lucide-vue-next'
 import { computed } from 'vue'
 
 import { formatDateTime, formatSignedKRW } from '@/utils/format'
@@ -8,9 +8,23 @@ const props = defineProps({
   tx: { type: Object, required: true }
 })
 
-const CREDIT_TYPES = new Set(['FUNDING', 'ESCROW_REFUND', 'WITHDRAWAL_REFUND'])
+const TYPE_LABELS = {
+  FUNDING: '충전',
+  ESCROW_HOLD: '예치',
+  ESCROW_RELEASE: '지급',
+  ESCROW_REFUND: '예치 환불',
+  WITHDRAWAL: '출금',
+  WITHDRAWAL_REFUND: '출금 환불',
+  ADJUSTMENT: '잔액 조정'
+}
 
-// 거래 유형 → 좌측 아이콘
+const STATUS_META = {
+  PENDING: { label: '처리 중', color: 'var(--color-warning)', icon: Clock },
+  COMPLETED: { label: '완료', color: 'var(--color-success)', icon: CircleCheck },
+  FAILED: { label: '실패', color: 'var(--color-danger)', icon: CircleX },
+  REFUNDED: { label: '환불 완료', color: 'var(--color-text-sub)', icon: RotateCcw }
+}
+
 const typeIcon = computed(() => {
   switch (props.tx.type) {
     case 'FUNDING':
@@ -23,35 +37,22 @@ const typeIcon = computed(() => {
     case 'ESCROW_RELEASE':
       return CircleCheck
     case 'ESCROW_HOLD':
-    default:
       return Lock
-  }
-})
-
-// 상태 → 칩 라벨·색 토큰·아이콘
-const statusMeta = computed(() => {
-  switch (props.tx.type) {
-    case 'ESCROW_HOLD':
-      return { color: 'var(--color-owner)', icon: Lock }
-    case 'ESCROW_RELEASE':
-      return { color: 'var(--color-success)', icon: CircleCheck }
-    case 'ESCROW_REFUND':
-    case 'WITHDRAWAL_REFUND':
-      return { color: 'var(--color-text-sub)', icon: RotateCcw }
     default:
-      return { color: 'var(--color-text-sub)', icon: CircleCheck }
+      return CircleCheck
   }
 })
 
-const isCredit = computed(() => CREDIT_TYPES.has(props.tx.type))
-const amountText = computed(() =>
-  formatSignedKRW(props.tx.amount, isCredit.value ? 'CREDIT' : 'DEBIT')
-)
+const statusMeta = computed(() => STATUS_META[props.tx.displayStatus] ?? STATUS_META.COMPLETED)
+
+// 거래 Type으로 부호를 추정하면 WORKER의 ESCROW_RELEASE와 ADJUSTMENT를 오표시한다.
+const isCredit = computed(() => props.tx.direction === 'CREDIT')
+const amountText = computed(() => formatSignedKRW(props.tx.amount, props.tx.direction))
 const description = computed(() => {
   if (props.tx.workTitle && props.tx.workplaceName) {
     return `${props.tx.workTitle} · ${props.tx.workplaceName}`
   }
-  return props.tx.workTitle || props.tx.workplaceName || props.tx.displayStatus
+  return props.tx.workTitle || props.tx.workplaceName || TYPE_LABELS[props.tx.type] || '지갑 거래'
 })
 </script>
 
@@ -70,7 +71,7 @@ const description = computed(() => {
       <p class="amount" :class="{ 'is-credit': isCredit }">{{ amountText }}</p>
       <span class="status" :style="{ color: statusMeta.color }">
         <component :is="statusMeta.icon" :size="12" />
-        {{ tx.displayStatus }}
+        {{ statusMeta.label }}
       </span>
     </div>
   </li>
@@ -107,10 +108,10 @@ const description = computed(() => {
 }
 
 .desc {
+  overflow: hidden;
   font-size: var(--text-lg);
   font-weight: var(--weight-medium);
   color: var(--color-text);
-  overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -122,8 +123,8 @@ const description = computed(() => {
 }
 
 .right {
-  text-align: right;
   flex-shrink: 0;
+  text-align: right;
 }
 
 .amount {

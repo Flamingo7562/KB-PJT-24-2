@@ -3,7 +3,7 @@
  * [B] 사장 출금  ·  /owner/wallet/withdraw  ·  OWNER
  * 입금 은행·계좌번호·금액 지정. 가용 잔액 내에서만(초과 시 서버 409).
  * 연계 API: POST /wallet/withdrawal-requests  →  @/services/wallet
- * 공통: BankSelect(은행) · AppField(계좌) · WalletAmountField · isPositiveAmount
+ * 공통: BankSelect(은행) · AppField(계좌) · WalletAmountField · 승인 계좌/금액 검증
  */
 import { storeToRefs } from 'pinia'
 import { computed, onMounted, ref } from 'vue'
@@ -19,8 +19,8 @@ import { withdrawWallet } from '@/services/wallet'
 import { useUiStore } from '@/stores/ui'
 import { useWalletStore } from '@/stores/wallet'
 import { findBank } from '@/utils/constants'
-import { blockNonDigitKeydown, formatKRW, onlyDigits } from '@/utils/format'
-import { isPositiveAmount } from '@/utils/validators'
+import { formatKRW } from '@/utils/format'
+import { bankAccountRule, isWalletAmount, normalizeBankAccountNo } from '@/utils/validators'
 
 const router = useRouter()
 const ui = useUiStore()
@@ -42,23 +42,23 @@ onMounted(() => {
   walletStore.loadWallet()
 })
 
-/** 계좌번호: 숫자(하이픈 허용) 8자리 이상 */
-const accountCheck = computed(() => {
-  const digits = accountNo.value.replace(/-/g, '')
-  if (!digits) return { valid: false, message: '계좌번호를 입력해주세요.' }
-  if (!/^\d{8,}$/.test(digits)) return { valid: false, message: '계좌번호를 정확히 입력해주세요.' }
-  return { valid: true, message: '' }
-})
+const accountCheck = computed(() => bankAccountRule(accountNo.value))
 
 /** 금액: 양의 정수 + 가용 잔액 이내(서버가 최종 검증, 여기선 UX 가드) */
 const amountCheck = computed(() => {
-  const base = isPositiveAmount(amount.value)
+  const base = isWalletAmount(amount.value)
   if (!base.valid) return base
   if (Number(amount.value) > availableBalance.value) {
     return { valid: false, message: '가용 잔액을 초과했습니다.' }
   }
   return { valid: true, message: '' }
 })
+const accountFieldError = computed(() =>
+  accountNo.value && !accountCheck.value.valid ? accountCheck.value.message : accountError.value
+)
+const amountFieldError = computed(() =>
+  amount.value && !amountCheck.value.valid ? amountCheck.value.message : amountError.value
+)
 
 const canSubmit = computed(
   () => !!bankCode.value && accountCheck.value.valid && amountCheck.value.valid && !submitting.value
@@ -81,7 +81,7 @@ async function onSubmit() {
   try {
     await withdrawWallet({
       bankCode: bankCode.value,
-      accountNo: accountNo.value.replace(/-/g, ''),
+      accountNo: normalizeBankAccountNo(accountNo.value),
       amount: Number(amount.value)
     })
     await walletStore.loadWallet()
@@ -110,17 +110,16 @@ async function onSubmit() {
         :model-value="accountNo"
         label="계좌번호"
         type="tel"
-        placeholder="'-' 없이 숫자만 입력"
+        placeholder="계좌번호 10~14자리"
         maxlength="20"
-        :error="accountError"
-        @keydown="blockNonDigitKeydown"
-        @update:model-value="(v) => (accountNo = onlyDigits(v))"
+        :error="accountFieldError"
+        @update:model-value="(v) => (accountNo = v)"
       />
 
       <WalletAmountField
         v-model="amount"
         label="출금 금액"
-        :error="amountError"
+        :error="amountFieldError"
         :fill-amount="availableBalance"
         :max="availableBalance"
       />

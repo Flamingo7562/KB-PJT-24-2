@@ -23,6 +23,9 @@ export const PASSWORD_MAX_BYTES = 72
 /** 승인 계약의 이름 상한. 정규화(trim) 후 길이를 기준으로 한다. */
 export const NAME_MAX_LENGTH = 100
 
+/** 승인 지갑 계약의 단일 요청 금액 상한. */
+export const WALLET_AMOUNT_MAX = 100_000_000
+
 /** 아이디 정규화 — 앞뒤 공백 제거 후 소문자. 저장·비교·전송 모두 이 형태를 쓴다. */
 export function normalizeLoginId(value) {
   return String(value ?? '')
@@ -45,6 +48,11 @@ export function normalizeName(value) {
 /** 전화번호 정규화 — 공백·하이픈 등 구분 문자를 제거해 숫자만 남긴다. 표시 형식은 화면이 만든다. */
 export function normalizePhone(value) {
   return value == null ? '' : onlyDigits(value)
+}
+
+/** 계좌번호 정규화 — 서버와 동일하게 공백과 하이픈만 제거한다. */
+export function normalizeBankAccountNo(value) {
+  return String(value ?? '').replace(/[\s-]/g, '')
 }
 
 /** UTF-8 기준 byte 길이. 한글 1자는 3 byte 이므로 문자 수와 다르다. */
@@ -135,4 +143,22 @@ export function isPositiveAmount(value) {
   if (!Number.isFinite(n) || n <= 0) return fail('금액을 올바르게 입력해주세요.')
   if (!Number.isInteger(n)) return fail('금액은 원 단위 정수로 입력해주세요.')
   return ok
+}
+
+/** Mock 은행계좌 번호: 정규화 후 숫자 10~14자리. */
+export function bankAccountRule(value) {
+  const normalized = normalizeBankAccountNo(value)
+  if (!normalized) return fail('계좌번호를 입력해주세요.')
+  return /^\d{10,14}$/.test(normalized)
+    ? ok
+    : fail('계좌번호는 공백·하이픈을 제외한 숫자 10~14자리여야 합니다.')
+}
+
+/** 지갑 충전·출금 금액: 1원 이상 1억원 이하의 원 단위 정수. */
+export function isWalletAmount(value) {
+  const base = isPositiveAmount(value)
+  if (!base.valid) return base
+  return Number(value) <= WALLET_AMOUNT_MAX
+    ? ok
+    : fail(`금액은 ${WALLET_AMOUNT_MAX.toLocaleString('ko-KR')}원 이하여야 합니다.`)
 }

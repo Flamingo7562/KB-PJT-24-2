@@ -3,7 +3,7 @@
  * [B] 사장 충전  ·  /owner/wallet/charge  ·  OWNER
  * PortOne 모의 결제창 — 은행·계좌번호·금액 입력 후 충전(Mock 승인). 사장 전용.
  * 연계 API: POST /wallet/funding-orders  →  @/services/wallet
- * 공통: BankSelect(은행) · AppField(계좌) · WalletAmountField · isPositiveAmount
+ * 공통: BankSelect(은행) · AppField(계좌) · WalletAmountField · 승인 계좌/금액 검증
  */
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
@@ -16,8 +16,8 @@ import WalletAmountField from '@/components/wallet/WalletAmountField.vue'
 import { chargeWallet } from '@/services/wallet'
 import { useUiStore } from '@/stores/ui'
 import { useWalletStore } from '@/stores/wallet'
-import { blockNonDigitKeydown, formatKRW, onlyDigits } from '@/utils/format'
-import { isPositiveAmount } from '@/utils/validators'
+import { formatKRW } from '@/utils/format'
+import { bankAccountRule, isWalletAmount, normalizeBankAccountNo } from '@/utils/validators'
 
 const router = useRouter()
 const ui = useUiStore()
@@ -30,16 +30,15 @@ const accountError = ref('')
 const amountError = ref('')
 const submitting = ref(false)
 
-/** 계좌번호: 숫자(하이픈 허용) 8자리 이상 — 출금과 동일 규칙 */
-const accountCheck = computed(() => {
-  const digits = accountNo.value.replace(/-/g, '')
-  if (!digits) return { valid: false, message: '계좌번호를 입력해주세요.' }
-  if (!/^\d{8,}$/.test(digits)) return { valid: false, message: '계좌번호를 정확히 입력해주세요.' }
-  return { valid: true, message: '' }
-})
+const accountCheck = computed(() => bankAccountRule(accountNo.value))
 
-// 충전은 금액 상한이 없다(양의 정수만) — 음수·비숫자는 입력 단계에서 차단되고 여기서 재검증.
-const amountCheck = computed(() => isPositiveAmount(amount.value))
+const amountCheck = computed(() => isWalletAmount(amount.value))
+const accountFieldError = computed(() =>
+  accountNo.value && !accountCheck.value.valid ? accountCheck.value.message : accountError.value
+)
+const amountFieldError = computed(() =>
+  amount.value && !amountCheck.value.valid ? amountCheck.value.message : amountError.value
+)
 const canSubmit = computed(
   () => !!bankCode.value && accountCheck.value.valid && amountCheck.value.valid && !submitting.value
 )
@@ -58,7 +57,7 @@ async function onSubmit() {
     // 서버가 금액·계좌를 최종 재검증한다(프론트 값 불신 — 추후 PortOne 교체 지점).
     await chargeWallet({
       bankCode: bankCode.value,
-      accountNo: accountNo.value.replace(/-/g, ''),
+      accountNo: normalizeBankAccountNo(accountNo.value),
       amount: Number(amount.value)
     })
     await walletStore.loadWallet()
@@ -76,20 +75,19 @@ async function onSubmit() {
   <div class="sub-page">
     <AppBackHeader title="충전" />
     <main class="screen-body">
-      <BankSelect v-model="bankCode" label="출금 은행" />
+      <BankSelect v-model="bankCode" label="충전 계좌 은행" />
 
       <AppField
         :model-value="accountNo"
         label="계좌번호"
         type="tel"
-        placeholder="'-' 없이 숫자만 입력"
+        placeholder="계좌번호 10~14자리"
         maxlength="20"
-        :error="accountError"
-        @keydown="blockNonDigitKeydown"
-        @update:model-value="(v) => (accountNo = onlyDigits(v))"
+        :error="accountFieldError"
+        @update:model-value="(v) => (accountNo = v)"
       />
 
-      <WalletAmountField v-model="amount" label="충전 금액" :error="amountError" />
+      <WalletAmountField v-model="amount" label="충전 금액" :error="amountFieldError" />
 
       <BaseButton
         class="submit"

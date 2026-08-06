@@ -3,9 +3,9 @@
  * [F] 알바생 안심지갑 출금  ·  /worker/wallet/withdraw  ·  WORKER
  * 입금 계좌·금액 지정. 안심지갑 가용 잔액 내에서만(초과 시 서버 409).
  * 알바생 지갑은 출금 전용(자가 충전 없음). 사장 출금 화면과 동일한 별도 화면 흐름.
- * 연계 API: GET /worker/home(잔액) · POST /wallet/withdrawal-requests
- *   →  @/stores/workerHome (loadHome), @/services/wallet (withdrawWallet)
- * 공통: BankSelect(은행) · AppField(계좌) · WalletAmountField · isPositiveAmount
+ * 연계 API: GET /wallet(잔액) · POST /wallet/withdrawal-requests
+ *   →  @/stores/wallet (loadWallet), @/services/wallet (withdrawWallet)
+ * 공통: BankSelect(은행) · AppField(계좌) · WalletAmountField · 승인 계좌/금액 검증
  */
 import { storeToRefs } from 'pinia'
 import { computed, onMounted, ref } from 'vue'
@@ -19,15 +19,15 @@ import WalletAmountField from '@/components/wallet/WalletAmountField.vue'
 import WithdrawConfirmModal from '@/components/wallet/WithdrawConfirmModal.vue'
 import { withdrawWallet } from '@/services/wallet'
 import { useUiStore } from '@/stores/ui'
-import { useWorkerHomeStore } from '@/stores/workerHome'
+import { useWalletStore } from '@/stores/wallet'
 import { findBank } from '@/utils/constants'
-import { blockNonDigitKeydown, formatKRW, onlyDigits } from '@/utils/format'
-import { isPositiveAmount } from '@/utils/validators'
+import { formatKRW } from '@/utils/format'
+import { bankAccountRule, isWalletAmount, normalizeBankAccountNo } from '@/utils/validators'
 
 const router = useRouter()
 const ui = useUiStore()
-const homeStore = useWorkerHomeStore()
-const { availableBalance } = storeToRefs(homeStore)
+const walletStore = useWalletStore()
+const { availableBalance } = storeToRefs(walletStore)
 
 const bankCode = ref('')
 const accountNo = ref('')
@@ -40,27 +40,27 @@ const confirmOpen = ref(false)
 const bankName = computed(() => findBank(bankCode.value)?.name ?? '')
 
 onMounted(() => {
-  // 전액 버튼·잔액 초과 가드에 필요하므로 항상 최신 안심지갑 잔액을 로드한다.
-  homeStore.loadHome()
+  // OWNER와 같은 공용 지갑 원천을 써야 홈 Mock과 실제 지갑 잔액이 갈라지지 않는다.
+  walletStore.loadWallet()
 })
 
-/** 계좌번호: 숫자(하이픈 허용) 8자리 이상 */
-const accountCheck = computed(() => {
-  const digits = accountNo.value.replace(/-/g, '')
-  if (!digits) return { valid: false, message: '계좌번호를 입력해주세요.' }
-  if (!/^\d{8,}$/.test(digits)) return { valid: false, message: '계좌번호를 정확히 입력해주세요.' }
-  return { valid: true, message: '' }
-})
+const accountCheck = computed(() => bankAccountRule(accountNo.value))
 
 /** 금액: 양의 정수 + 가용 잔액 이내(서버가 최종 검증, 여기선 UX 가드) */
 const amountCheck = computed(() => {
-  const base = isPositiveAmount(amount.value)
+  const base = isWalletAmount(amount.value)
   if (!base.valid) return base
   if (Number(amount.value) > availableBalance.value) {
     return { valid: false, message: '가용 잔액을 초과했습니다.' }
   }
   return { valid: true, message: '' }
 })
+const accountFieldError = computed(() =>
+  accountNo.value && !accountCheck.value.valid ? accountCheck.value.message : accountError.value
+)
+const amountFieldError = computed(() =>
+  amount.value && !amountCheck.value.valid ? amountCheck.value.message : amountError.value
+)
 
 const canSubmit = computed(
   () => !!bankCode.value && accountCheck.value.valid && amountCheck.value.valid && !submitting.value
@@ -83,10 +83,10 @@ async function onSubmit() {
   try {
     await withdrawWallet({
       bankCode: bankCode.value,
-      accountNo: accountNo.value.replace(/-/g, ''),
+      accountNo: normalizeBankAccountNo(accountNo.value),
       amount: Number(amount.value)
     })
-    await homeStore.loadHome()
+    await walletStore.loadWallet()
     confirmOpen.value = false
     ui.toast(`${formatKRW(Number(amount.value))} 출금 신청이 완료되었습니다.`, { type: 'success' })
     router.back()
@@ -112,17 +112,16 @@ async function onSubmit() {
         :model-value="accountNo"
         label="계좌번호"
         type="tel"
-        placeholder="'-' 없이 숫자만 입력"
+        placeholder="계좌번호 10~14자리"
         maxlength="20"
-        :error="accountError"
-        @keydown="blockNonDigitKeydown"
-        @update:model-value="(v) => (accountNo = onlyDigits(v))"
+        :error="accountFieldError"
+        @update:model-value="(v) => (accountNo = v)"
       />
 
       <WalletAmountField
         v-model="amount"
         label="출금 금액"
-        :error="amountError"
+        :error="amountFieldError"
         :fill-amount="availableBalance"
         :max="availableBalance"
       />
