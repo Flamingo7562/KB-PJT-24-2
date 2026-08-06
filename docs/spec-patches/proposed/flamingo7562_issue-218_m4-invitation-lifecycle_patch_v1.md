@@ -1,7 +1,7 @@
 ---
 patch_id: SPEC-218-01
 author: flamingo7562
-status: proposed
+status: accepted
 issue: 218
 created_at: 2026-08-06
 base_spec_version: 3.0.1
@@ -372,8 +372,7 @@ applied_by_pr: null
 
 ## 미결 사항
 
-없음. 이 문서의 제품 방향 전체를 Controller가 승인하거나 거절한다. 승인 뒤 제품 의미를
-바꿔야 하면 같은 파일을 덮어쓰지 않고 새 Patch 리비전으로 재승인받는다.
+없음
 
 ## 관련 Issue·PR·의존 Patch
 
