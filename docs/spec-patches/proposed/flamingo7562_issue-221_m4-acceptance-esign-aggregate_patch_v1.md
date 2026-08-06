@@ -5,7 +5,7 @@ status: proposed
 issue: 221
 created_at: 2026-08-06
 base_spec_version: 3.0.1
-base_commit: "97f4a6c6a9959bc4bbce5562053d27e02905c28d"
+base_commit: "1ad5d6458361a8c5ec32afb53185e22ad475a016"
 change_type: breaking
 delivery_mode: spec_first
 targets:
@@ -52,9 +52,10 @@ Version·소유·공유, 파일과 DB Commit 사이의 보상, Settlement 초기
 Frontend는 Canvas 이미지를 Body로 보내고 `HOLD`를 소비하며, Backend의 임시 경로는
 클라이언트가 보낸 사용자·근무·금액을 신뢰하고 계약·문서·정산을 만들지 않는다.
 
-Flyway `202608051337`에는 사용자·Operation 범위의 `idempotency_requests`, Work Case당 하나의
-계약·에스크로·정산, 문서 Version·서명·공유와 필요한 Checksum 컬럼이 모두 존재한다. 따라서
-이 Patch는 새 Migration이나 DDL 없이 적용할 수 있다. 초대의 Bearer 당사자·만료·오류는
+Flyway `202608061428`에는 사용자·Operation 범위의 `idempotency_requests`, Work Case당
+하나의 계약·에스크로·정산, 문서 Version·서명·공유와 필요한 Checksum, 접근 감사의 문서
+Version·거부 사유 컬럼이 모두 존재한다. 따라서 이 Patch는 그 승인된 Schema 기준선 위에서
+추가 Migration이나 DDL 없이 적용할 수 있다. 초대의 Bearer 당사자·만료·오류는
 `SPEC-218-01`, Work Case 조건·응답과 상태 경계는 `SPEC-220-01`을 먼저 적용한 의미에
 의존한다.
 
@@ -86,8 +87,8 @@ Flyway `202608051337`에는 사용자·Operation 범위의 `idempotency_requests
 - Bearer Token, 인증·인가, 동의 증거, 문서 접근과 감사라는 보안·개인정보 경계를 닫는다.
 - OWNER의 가용·잠금 잔액과 불변 원장을 바꾸는 자금 정합성 결정이다.
 - 계약, 문서, 에스크로와 정산을 여러 구현 이슈가 공유하며 잘못 병합하면 되돌리기 어렵다.
-- 현재 스키마의 의미만 사용하므로 Migration·DDL·Backfill은 없지만 저장 데이터의 의미와
-  트랜잭션 경계는 바뀐다.
+- 승인된 Flyway `202608061428`을 기준으로 이 Patch PR 자체의 Migration·DDL·Backfill은
+  없지만 저장 데이터의 의미와 트랜잭션 경계는 바뀐다.
 
 Patch 전용 PR을 애플리케이션 코드, Flyway, DDL과 `docs/specs/**` 변경 없이 먼저 검토한다.
 Controller가 `SPEC-218-01` → `SPEC-220-01` → `SPEC-221-01` 순서로 정식 명세에 적용하기 전
@@ -348,14 +349,29 @@ Aggregate Transaction은 다음 순서로 처리한다. 검증 실패는 성공 
 `EMPLOYMENT_CONTRACT`에 한해 다음 규칙을 추가한다. 일반 문서 목록·Metadata Shape는
 `DEC-OPEN-DOCUMENT-RESPONSE-SHAPES`로 남긴다.
 
+- 최초 수락과 Replay 응답은 승인된 최소 Shape를 유지한다. 클라이언트는 응답의
+  `workCaseId`로 `SPEC-220-01`의 Work Case 상세를 다시 조회하고
+  `contract.documentId`를 얻어 이 Endpoint를 호출한다.
 - Work Case의 OWNER 또는 WORKER 당사자만 호출한다.
 - `mode=view|download`를 지원하고 두 모드 모두 최신 SIGNED Version 2의 같은 Bytes를
   반환한다. ORIGINAL Version을 일반 사용자에게 반환하지 않는다.
 - 최종 Object가 DB Checksum과 일치하면 사용한다. 없거나 불일치하면 결정적 `.pending`
   Object를 검사해 일치하는 Bytes를 반환하고 최종 승격을 재시도한다.
 - 둘 다 일치하지 않으면 Stream하지 않고 `500 INTERNAL_ERROR`를 반환한다.
-- 모든 허용·거부 결과를 `document_access_logs`에 남기되 Token, 저장 Key와 파일 내용을
-  감사 Payload나 일반 로그에 넣지 않는다.
+- 인증 뒤 기존 문서 행을 식별한 요청은 접근 결정마다 `document_access_logs` 한 행을 남긴다.
+  `actor_user_id`는 인증 사용자, `document_id`는 경로의 문서, `action`은 mode에 따라
+  `CONTRACT_FILE_VIEW` 또는 `CONTRACT_FILE_DOWNLOAD`, `result`는 `ALLOWED` 또는
+  `DENIED`, 시각은 서버 `created_at`이다.
+- `ALLOWED`는 반환할 SIGNED Version 2의 `document_version_id`를 필수로 기록하고
+  `denial_reason`은 `null`이다. 감사 행 Commit에 실패하면 응답 Header나 파일 Bytes를
+  보내지 않고 `500 INTERNAL_ERROR`와 같은 `traceId`의 보안 로그를 남긴다.
+- 문서 식별 뒤 `DENIED`는 SIGNED Version을 찾았으면 그 `document_version_id`를 기록하고,
+  Version을 확정할 수 없을 때만 `null`이다. `denial_reason`은
+  `PARTY_ACCESS_DENIED`, `DOCUMENT_UNAVAILABLE`, `SIGNED_VERSION_UNAVAILABLE`,
+  `FILE_UNAVAILABLE`, `CHECKSUM_MISMATCH` 중 하나를 반드시 기록한다.
+- 인증·Query 형식 검증에서 문서를 조회하기 전에 거부했거나 문서 행 자체가 없으면 FK를
+  만족하는 가짜 감사 행을 만들지 않는다. 이 경우 `document_access_logs` 대신 Token, 저장
+  Key와 파일 내용을 제외한 같은 `traceId`의 보안 로그를 남긴다.
 
 ### 4. 추적성
 
@@ -372,6 +388,8 @@ Aggregate Transaction은 다음 순서로 처리한다. 검증 실패는 성공 
 | DOC-002      | `POST /api/invitations/{token}/accept`, `GET /api/documents/{documentId}/file` | `work_contracts`, `documents`, `document_versions`                                             | `DEC-CONTRACT-AUTO-GENERATION`, `DEC-CONTRACT-FILE-COMMIT`                                                |
 | DOC-004      | `GET /api/documents/{documentId}/file`                                         | `work_contracts`, `document_versions`, `document_signatures`                                   | `DEC-E-SIGN-EVIDENCE`, `DEC-CONTRACT-FILE-COMMIT`                                                         |
 | DOC-009      | `GET /api/documents/{documentId}/file`                                         | `document_versions`, `document_shares`, `document_access_logs`, Checksum Fallback              | `DEC-DOCUMENT-STORAGE`, `DEC-CONTRACT-FILE-COMMIT`                                                        |
+| DOC-010      | `POST /api/invitations/{token}/accept`                                         | PDF 형식·Checksum 검증, `documents`, `document_versions`                                       | `DEC-CONTRACT-AUTO-GENERATION`, `DEC-DOCUMENT-STORAGE`, `DEC-CONTRACT-FILE-COMMIT`                        |
+| DOC-011      | `GET /api/documents/{documentId}/file`                                         | `document_access_logs.document_version_id`, `action`, `result`, `denial_reason`, `created_at`  | `DEC-DOCUMENT-STORAGE`, `DEC-CONTRACT-FILE-COMMIT`                                                        |
 
 ## 영향 분석
 
@@ -396,12 +414,17 @@ Aggregate Transaction은 다음 순서로 처리한다. 검증 실패는 성공 
 
 - `idempotency_requests`, `work_cases`, `work_invitations`, `work_contracts`, `wallets`,
   `wallet_transactions`, `escrows`, `settlements`, `documents`, `document_versions`,
-  `document_signatures`, `document_shares`, `document_access_logs`의 기존 컬럼·FK·UNIQUE를
-  사용한다.
+  `document_signatures`, `document_shares`, `document_access_logs`의 Flyway `202608061428`
+  컬럼·FK·UNIQUE·CHECK를 사용한다.
 - Work Case당 계약·에스크로·정산·EMPLOYMENT_CONTRACT 하나와 문서 Version·서명 UNIQUE를
   최후 방어선으로 사용한다.
+- 접근 감사의 `(document_id, document_version_id)` 복합 FK로 Version이 같은 문서에
+  속하는지 검증하고, `denial_reason` CHECK와 애플리케이션의 닫힌 Code 목록을 함께 적용한다.
+- 기존 감사 행은 Version·거부 사유를 안전하게 복원할 수 없어 두 상세 컬럼의 `null`을
+  유지한다. 호환 Backend는 이 Patch 적용 뒤 생성하는 새 접근 결정부터 위 규칙을 지킨다.
 - `settlements.scheduled_at`은 존재하지 않으므로 추적성을 실제 `due_at`으로 정정한다.
-- 새 Flyway Migration, DDL, Backfill, 기존 Migration 수정과 통합 Schema 변경은 없다.
+- 이 Patch PR에는 추가 Flyway Migration, DDL, Backfill, 기존 Migration 수정과 통합 Schema
+  변경이 없다.
 
 ### 보안
 
@@ -419,6 +442,8 @@ Aggregate Transaction은 다음 순서로 처리한다. 검증 실패는 성공 
 - 근무 조건·취소 제한 동의 확인은 화면의 명시적 Checkbox나 확인 단계로 남기되 요청 Body에
   값을 보내지 않는다. CTA는 `동의하고 근무 확정`처럼 실제 행위를 드러낸다.
 - 한 번의 사용자 수락 의도와 네트워크 결과가 불확실한 Replay에는 같은 Key를 유지한다.
+- 수락 성공 뒤 Work Case 상세를 다시 조회하고 `contract.documentId`로 계약 파일을 연다.
+  일반 문서 목록의 미승인 필드에 의존하지 않는다.
 - 상태·역할·멱등·잔액 오류를 Code로 분기하고 Token·Key·파일 내용을 Console과 Analytics에
   남기지 않는다.
 
@@ -447,6 +472,12 @@ Aggregate Transaction은 다음 순서로 처리한다. 검증 실패는 성공 
   초기값과 WORKER Wallet 불변을 대사한다.
 - ORIGINAL/SIGNED Bytes·Checksum·서명·공유가 일치하고 OWNER와 WORKER가 같은 SIGNED
   Bytes를 받는지 검증한다.
+- view·download 허용마다 정확한 action, SIGNED Version, `ALLOWED`, `denial_reason=null`의
+  감사 행이 하나씩 Commit된 뒤 Stream되는지 검증한다.
+- 당사자 아님·문서 상태·Version·파일·Checksum 거부가 닫힌 `denial_reason`과 `DENIED`로
+  기록되고, Version 존재 여부에 따른 `document_version_id` 규칙을 검증한다.
+- 인증·Query·미존재 문서처럼 문서 식별 전 실패에는 가짜 FK 감사 행이 없고 `traceId` 보안
+  로그만 남는지, 기존 감사 행의 nullable 상세가 읽기 호환되는지 검증한다.
 - 임시 파일 쓰기, 각 DB 변경, Commit 직전, Commit 뒤 승격에 실패를 주입해 Rollback·Claim
   삭제·200 Replay·Fallback·고아 정리를 검증한다.
 - Token, Key, 이름·파일·저장 Key가 응답과 일반 로그에 남지 않는지 검증한다.
@@ -454,7 +485,7 @@ Aggregate Transaction은 다음 순서로 처리한다. 검증 실패는 성공 
 ## 검증 가능한 수용 조건
 
 - [ ] Patch 기준이 Spec `3.0.1`, `origin/dev` Commit
-      `97f4a6c6a9959bc4bbce5562053d27e02905c28d`, Flyway `202608051337`과 일치한다.
+      `1ad5d6458361a8c5ec32afb53185e22ad475a016`, Flyway `202608061428`과 일치한다.
 - [ ] `SPEC-218-01`, `SPEC-220-01` 의존성과 적용 순서를 기록하고 범위를 중복하지 않는다.
 - [ ] 인증·역할·빈 Body·Token·Claim·잠금·상태·조건·잔액 검증 순서가 고정된다.
 - [ ] 수락 Fingerprint와 같은 Key Replay·재사용·처리 중·보존 만료 결과를 구현자가 추정하지
@@ -468,8 +499,13 @@ Aggregate Transaction은 다음 순서로 처리한다. 검증 실패는 성공 
 - [ ] 파일 저장·DB Rollback·Commit 뒤 승격 실패·다운로드 Fallback과 고아 정리가 결정된다.
 - [ ] Settlement는 `WAITING`, `due_at=null`이며 추적표가 실제 `settlements.due_at`을 가리킨다.
 - [ ] 수락 시 OWNER의 `ESCROW_HOLD`만 기록하고 WORKER 지갑·원장은 바뀌지 않는다.
-- [ ] 추가 Migration·DDL 없이 Flyway `202608051337`의 FK·UNIQUE·CHECK로 구현 가능하다.
+- [ ] 이 Patch PR의 추가 Migration·DDL 없이 Flyway `202608061428`의 FK·UNIQUE·CHECK로
+      구현 가능하고 기존 감사 행의 nullable 상세를 Backfill하지 않는다.
 - [ ] Frontend Canvas와 서명 Body 제거, `HELD` 소비와 같은 Key Replay 영향이 명시된다.
+- [ ] 수락 성공 뒤 `workCaseId`로 상세를 재조회해 `contract.documentId`를 얻는 파일 발견
+      경로가 고정된다.
+- [ ] 계약 파일 view·download의 허용·거부 감사에 사용자, 문서, Version, action, result,
+      시각, 닫힌 거부 사유와 문서 식별 전 실패의 보안 로그 경계가 고정된다.
 - [ ] 애플리케이션 코드, Flyway, DDL, `docs/specs/**`와 `SPEC_LOCK.json`은 이 Patch 브랜치에서
       변경되지 않는다.
 
