@@ -7,8 +7,8 @@
 | 항목                | 현재 기준                           |
 | ------------------- | ----------------------------------- |
 | 문서 상태           | 현재 기준                           |
-| Migration Head      | `202608051337`                      |
-| Versioned Migration | 11개                                |
+| Migration Head      | `202608061428`                      |
+| Versioned Migration | 12개                                |
 | 도메인 테이블       | 24개 (`flyway_schema_history` 제외) |
 | MySQL               | `mysql:8.4.10`                      |
 | Flyway CLI          | `flyway/flyway:12.9.0`              |
@@ -23,9 +23,9 @@
 | JDBC·MyBatis·트랜잭션 설정          | `backend/src/main/java/com/gighub/config/DatabaseConfig.java`                                          |
 | DB 라이브러리 버전과 검증 작업      | `backend/build.gradle`                                                                                 |
 | 스키마의 작업용 요약                | [`../agent/SCHEMA_OVERVIEW.md`](../agent/SCHEMA_OVERVIEW.md)                                           |
-| 사람이 읽는 통합 DDL                | [`../database/schema-snapshot-202608051337.sql`](../database/schema-snapshot-202608051337.sql), 참고용 |
+| 사람이 읽는 통합 DDL                | [`../database/schema-snapshot-202608061428.sql`](../database/schema-snapshot-202608061428.sql), 참고용 |
 
-`V202607311427`부터 `V202608051337`까지는 PM·관리자 승인을 거친 현재 정식
+`V202607311427`부터 `V202608061428`까지는 PM·관리자 승인을 거친 현재 정식
 Migration입니다. 통합 DDL은 같은 Head를 빈 DB에서 검토하기 위한 읽기용 Snapshot이며 기존
 DB 업그레이드에는 반드시 Flyway Migration을 사용합니다.
 
@@ -119,7 +119,7 @@ docker compose --profile tools run --rm flyway info
 npm.cmd run db:migrate
 ```
 
-현재 다음 열한 개 Migration이 순서대로 적용되어야 합니다.
+현재 다음 열두 개 Migration이 순서대로 적용되어야 합니다.
 
 | Version        | 파일                                                         |
 | -------------- | ------------------------------------------------------------ |
@@ -134,6 +134,7 @@ npm.cmd run db:migrate
 | `202608041138` | `V202608041138__remove_employer_profiles.sql`                |
 | `202608041614` | `V202608041614__add_idempotency_request_claims.sql`          |
 | `202608051337` | `V202608051337__replace_mock_bank_account_user_with_pin.sql` |
+| `202608061428` | `V202608061428__add_document_access_audit_details.sql`       |
 
 같은 명령을 다시 실행했을 때 `Schema ... is up to date. No migration necessary.`가 나오면 반복 실행도 정상입니다.
 
@@ -216,12 +217,35 @@ ORDER BY table_name, constraint_name;
 릴리스와 함께 적용해야 합니다. 이 저장소 작업에서는 격리된 Disposable DB만 업그레이드하며
 공유·Staging·Production DB에는 적용하지 않습니다.
 
+#### `202608061428` 적용 전·후 확인
+
+이 Migration은 `document_access_logs`에 문서 Version과 구조화된 거부 사유를 추가합니다.
+
+- `document_version_id`는 NULL을 허용하지만, 값이 있으면 `(document_id,
+document_version_id)` 복합 FK로 같은 문서의 Version만 참조할 수 있습니다.
+- `denial_reason`은 ASCII 대소문자를 구분하는 `VARCHAR(50)`이며, 값이 있으면 결과가
+  `DENIED`이고 빈 문자열이 아니어야 합니다.
+- 기존 감사 행은 당시 Version과 거부 사유를 안전하게 복원할 수 없으므로 Backfill하지
+  않습니다. 따라서 두 신규 컬럼의 기존 값이 NULL인 것은 정상입니다.
+- 호환 Backend는 새로 기록하는 허용 접근에 확정 Version을 저장하고, 문서를 찾은 뒤 거부한
+  접근에는 가능한 Version과 구조화된 거부 사유를 함께 저장해야 합니다.
+
+기존 Head 업그레이드 전후에는 감사 행 수가 같아야 합니다. 다음 조회의 `invalid_rows`는
+`0`이어야 합니다.
+
+```sql
+SELECT COUNT(*) AS invalid_rows
+FROM document_access_logs
+WHERE denial_reason IS NOT NULL
+  AND (result <> 'DENIED' OR CHAR_LENGTH(denial_reason) = 0);
+```
+
 #### 현재 DDL과 미결정 제품 Workflow
 
-Head `202608051337`은 사용자 귀속 없는 Mock 계좌와 Demo PIN 구조를 추가하며, 독립된 멱등
-요청 Claim 저장소, `employer_profiles` 제거와 `CHECK_OUT_MISSING` 상태·근로자 필수 제약도
-유지합니다. 이는 구조를 저장할 수 있다는 DDL 사실이며 각 Workflow의 Runtime 구현 완료를
-뜻하지 않습니다.
+Head `202608061428`은 문서 접근 감사에 Version과 거부 사유를 추가하며, 사용자 귀속 없는
+Mock 계좌와 Demo PIN 구조, 독립된 멱등 요청 Claim 저장소, `employer_profiles` 제거와
+`CHECK_OUT_MISSING` 상태·근로자 필수 제약도 유지합니다. 이는 구조를 저장할 수 있다는 DDL
+사실이며 각 Workflow의 Runtime 구현 완료를 뜻하지 않습니다.
 
 | 기능                 | 현재 DDL                                                                                      | 미결정·후속 사항                                                                                       |
 | -------------------- | --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
@@ -229,6 +253,7 @@ Head `202608051337`은 사용자 귀속 없는 Mock 계좌와 Demo PIN 구조를
 | 100m 고정 반경       | 반경 기본값은 100이지만 두 반경 CHECK는 모든 양수를 허용                                      | 애플리케이션 강제로 충분한지, DB CHECK도 정확히 100으로 바꿀지 결정                                    |
 | 시스템 생성 계약서   | `EMPLOYMENT_CONTRACT`도 `work_case_id=NULL` 허용                                              | 근무 건 필수 연결을 DB에서도 강제할지 결정                                                             |
 | 계약서 3년 자동 삭제 | `documents.status=DELETED`는 있으나 전용 보존 시각·Index 없음                                 | 기준일과 파일·Metadata·Checksum·감사 삭제 범위를 확정한 뒤 추적 컬럼과 Scheduler Index 필요 여부 결정  |
+| 문서 접근 감사       | 문서와 선택적 Version, 행위·결과·구조화된 거부 사유 저장. 기존 행의 신규 상세는 NULL          | 호환 Backend가 새 접근마다 Version과 거부 사유를 빠짐없이 기록하고 보관·조회 정책을 적용               |
 | 멱등 요청 Claim      | 사용자·Operation·Key 복합 UNIQUE, Fingerprint와 성공 응답 Snapshot 저장                       | Claim 선점·Replay·즉시 409·중단 복구·만료 정리는 후속 애플리케이션 구현                                |
 | 비귀속 Mock 계좌     | 사용자 FK 없이 숫자 네 자리 PIN 저장, 기존 주문·출금·은행 원장 계좌 참조 유지                 | 호환 Backend가 은행·계좌번호로 ACTIVE 계좌를 찾고 충전에만 PIN을 검증하도록 전환                       |
 
@@ -248,7 +273,7 @@ docker compose --profile tools run --rm flyway validate
 docker compose --profile tools run --rm flyway info
 ```
 
-현재 기준의 정상 결과는 열한 개 Migration의 검증 성공, Schema version `202608051337`, 모든
+현재 기준의 정상 결과는 열두 개 Migration의 검증 성공, Schema version `202608061428`, 모든
 항목의 `Success`입니다.
 
 ## Spring·MyBatis 연결 검증
@@ -260,6 +285,7 @@ docker compose --profile tools run --rm flyway info
 
 ```powershell
 .\backend\gradlew.bat -p backend "-Dgighub.database.config=C:/absolute/path/to/KB PJT/backend/config/database-local.properties" databaseTest --tests "com.gighub.bank.MockBankAccountPinSchemaDatabaseIntegrationTest"
+.\backend\gradlew.bat -p backend "-Dgighub.database.config=C:/absolute/path/to/KB PJT/backend/config/database-local.properties" databaseTest --tests "com.gighub.document.DocumentAccessAuditSchemaDatabaseIntegrationTest"
 ```
 
 호환 Mapper와 Service까지 같은 브랜치에 있으면 전체 DB 통합 테스트를 실행합니다.

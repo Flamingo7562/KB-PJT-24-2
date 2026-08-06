@@ -7,22 +7,23 @@ This is the compact database context for repository agents. Read it before chang
 | Item                   | Current baseline                                                                                               |
 | ---------------------- | -------------------------------------------------------------------------------------------------------------- |
 | Status                 | Current                                                                                                        |
-| Last verified          | 2026-08-05                                                                                                     |
+| Last verified          | 2026-08-06                                                                                                     |
 | Schema and DDL editor  | PM or Repository Administrator controlled; ordinary implementation agents have read-only access                |
 | Schema source of truth | Owner-authored or owner-adopted tracked `backend/src/main/resources/db/migration/V*.sql`                       |
-| Migration head         | `202608051337`                                                                                                 |
-| Versioned migrations   | 11                                                                                                             |
+| Migration head         | `202608061428`                                                                                                 |
+| Versioned migrations   | 12                                                                                                             |
 | Domain tables          | 24, excluding Flyway's `flyway_schema_history`                                                                 |
 | Runtime                | MySQL 8.4.10, InnoDB                                                                                           |
-| Readable DDL snapshot  | [`schema-snapshot-202608051337.sql`](../database/schema-snapshot-202608051337.sql), owner-maintained reference |
+| Readable DDL snapshot  | [`schema-snapshot-202608061428.sql`](../database/schema-snapshot-202608061428.sql), owner-maintained reference |
 
 When this summary and executable configuration disagree, inspect the owner-authored or
 owner-adopted migrations, Git tracking, `compose.yaml`, `DatabaseConfig.java`, and
-`backend/build.gradle`. Versions `202607311427` through `202608051337` are approved parts of the
+`backend/build.gradle`. Versions `202607311427` through `202608061428` are approved parts of the
 current schema. Version `202608041614` adds the independent idempotency Claim store, and version
 `202608051337` replaces Mock bank-account user ownership with a four-digit Demo PIN while preserving
-account IDs and finance references. Update this document when those authoritative sources prove the
-summary is stale.
+account IDs and finance references. Version `202608061428` adds document-Version and structured
+denial-reason detail to document access audit rows without rewriting historical rows. Update this
+document when those authoritative sources prove the summary is stale.
 If the executable schema itself needs correction, report the required change to the owner and do
 not edit or regenerate SQL.
 
@@ -52,6 +53,7 @@ not edit or regenerate SQL.
 | `202608041138` | `V202608041138__remove_employer_profiles.sql`                | Drop the unused employer profile table without renaming or copying its legacy contact data            |
 | `202608041614` | `V202608041614__add_idempotency_request_claims.sql`          | Add a user-and-operation-scoped Claim store for request fingerprints and successful response replay   |
 | `202608051337` | `V202608051337__replace_mock_bank_account_user_with_pin.sql` | Remove Mock account user ownership and add the four-digit ASCII Demo PIN without changing account IDs |
+| `202608061428` | `V202608061428__add_document_access_audit_details.sql`       | Link access audits to a version of the same document and store structured denial reasons              |
 
 Applied or shared versioned migrations are immutable. A newer `V*.sql` file or another DDL artifact may be created only in a scoped administrative release explicitly authorized by the human Project Manager or Repository Administrator.
 
@@ -124,6 +126,10 @@ Inspect the ordered migrations before relying on an exact column, key, index, ge
 - Document version numbers are unique within a document; storage keys are globally unique.
 - Composite signature foreign keys prove that the source and signed versions belong to the stated document, and the two versions must differ.
 - Generated active-slot uniqueness permits one equivalent active document share while retaining expired or revoked history.
+- A composite foreign key proves that a non-null `document_access_logs.document_version_id` belongs
+  to the same document. Historical rows and denials before version resolution may keep it null.
+- A non-null `document_access_logs.denial_reason` is non-empty and only valid for `DENIED`. Existing
+  rows remain null because their original reason cannot be reconstructed safely.
 
 ## Approved workflow and enforcement gaps
 
@@ -164,6 +170,8 @@ Database constraints do not replace application authorization or transaction rul
 - fixed-QR HMAC verification, revoked-token rejection, first/second scan selection, one applicable work case per worker/workplace, location checks, and transactional QR reissue;
 - idempotent no-show handling and, after product approval, missing-checkout detection, race handling, resolution, and settlement behavior;
 - system-only employment-contract generation, work-case linkage, contract access control, and the eventually approved three-year automatic-deletion policy;
+- complete document-access audit writes: resolved version when available, action, result, and a
+  structured reason for every new denial after document resolution;
 - password-reset token generation, hashing, delivery, expiry transition, single-use handling, and revocation of the prior active token;
 - wallet ledger arithmetic and balance conservation;
 - idempotent replay behavior under concurrency;
