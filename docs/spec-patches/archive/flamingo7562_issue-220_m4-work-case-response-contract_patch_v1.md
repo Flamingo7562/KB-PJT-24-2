@@ -1,13 +1,8 @@
 ---
 patch_id: SPEC-220-01
-author: flamingo7562
-status: applied
+status: accepted
 issue: 220
-created_at: 2026-08-06
 base_spec_version: 3.0.1
-base_commit: "1ad5d6458361a8c5ec32afb53185e22ad475a016"
-change_type: breaking
-delivery_mode: spec_first
 targets:
   - requirement: WORK-001
   - requirement: WORK-002
@@ -23,17 +18,11 @@ targets:
   - rest_operation: "GET /api/work-cases/{workCaseId}"
   - rest_operation: "PATCH /api/work-cases/{workCaseId}"
   - rest_operation: "DELETE /api/work-cases/{workCaseId}"
-depends_on:
-  - SPEC-218-01
-supersedes: null
-superseded_by: null
-applied_in_version: 4.0.0
-applied_by_pr: 235
 ---
 
 # SPEC-220-01: M4 Work Case 응답 계약 확정
 
-## 변경 요약과 필요성
+## 추가 사항
 
 OWNER의 Work Case 상태별 요약, 목록, 상세, 수정과 삭제에서 관찰되는 전체 API 계약을
 하나의 최소 승인 단위로 제안한다. 8개 상태의 요약 Key, 목록 Item과 상세 Aggregate의 닫힌
@@ -428,7 +417,7 @@ Snapshot은 다음 순서로 처리한다.
 - DELETE의 Hard Delete·`CANCELED` 분기와 동일한 204, 참조 이력 잠금을 검증한다.
 - 응답에 금지한 Capability, 별칭, 좌표와 민감 필드가 없는지 검증한다.
 
-## 검증 가능한 수용 조건
+## 완료 조건
 
 - [ ] Patch 기준이 Spec `3.0.1`, `origin/dev` Commit
       `1ad5d6458361a8c5ec32afb53185e22ad475a016`, Flyway `202608061428`과 일치한다.
