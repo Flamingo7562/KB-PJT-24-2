@@ -3,7 +3,7 @@ package com.gighub.auth.dto;
 import java.util.Locale;
 
 /** 인증 입력을 검증 전에 승인 형식으로 정규화합니다. */
-final class AuthNormalizer {
+public final class AuthNormalizer {
 
     private AuthNormalizer() {
     }
@@ -16,7 +16,7 @@ final class AuthNormalizer {
         return value == null ? null : value.trim();
     }
 
-    static String normalizePhone(String value) {
+    public static String normalizePhone(String value) {
         if (value == null) {
             return null;
         }
