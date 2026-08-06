@@ -4,6 +4,8 @@
  * 전화번호만 수정(아이디·이메일·이름 변경 불가).
  * 연계 API: GET /users/me · PATCH /users/me  →  @/services/users (getMe, updateMe)
  * 공통: AppField · BaseButton · formatPhoneInput/blockNonDigitKeydown(전화번호 양식)
+ *
+ * 실시간 검증(#238): 필드가 전화번호 하나뿐이라 useFieldValidation 의 errors 슬롯 하나로 충분하다.
  */
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
@@ -11,6 +13,7 @@ import { useRouter } from 'vue-router'
 import AppBackHeader from '@/components/common/AppBackHeader.vue'
 import AppField from '@/components/common/AppField.vue'
 import BaseButton from '@/components/common/BaseButton.vue'
+import { useFieldValidation } from '@/composables/useFieldValidation'
 import { getMe, updateMe } from '@/services/users'
 import { useUiStore } from '@/stores/ui'
 import { blockNonDigitKeydown, formatPhoneInput } from '@/utils/format'
@@ -24,7 +27,11 @@ const email = ref('')
 const name = ref('')
 const phone = ref('')
 
-const phoneError = ref('')
+// 형식 오류 전용. 규칙은 기존 validate() 가 쓰던 것을 그대로 옮겼다 — 규칙 자체는 불변.
+const { errors, handleBlur, validateAll } = useFieldValidation(() => ({ phone: phone.value }), {
+  phone: (v) => isPhone(v.phone, { required: true })
+})
+
 const submitting = ref(false)
 
 onMounted(async () => {
@@ -39,14 +46,8 @@ function onPhoneInput(v) {
   phone.value = formatPhoneInput(v)
 }
 
-function validate() {
-  const phoneCheck = isPhone(phone.value, { required: true })
-  phoneError.value = phoneCheck.valid ? '' : phoneCheck.message
-  return phoneCheck.valid
-}
-
 async function handleSubmit() {
-  if (!validate()) return
+  if (!validateAll()) return
 
   submitting.value = true
   try {
@@ -77,9 +78,10 @@ async function handleSubmit() {
           placeholder="010-0000-0000"
           maxlength="13"
           required
-          :error="phoneError"
+          :error="errors.phone"
           @keydown="blockNonDigitKeydown"
           @update:model-value="onPhoneInput"
+          @blur="handleBlur('phone')"
         />
 
         <BaseButton type="submit" variant="worker" block :disabled="submitting">저장</BaseButton>
