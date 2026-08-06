@@ -2,8 +2,10 @@
  * 회원가입 폼 실시간 검증 계약 테스트(#238).
  *
  * 손대지 않은 필드는 조용하고, 필드를 떠나면 형식 오류가 뜨고, 고치면 즉시 사라진다.
- * 아이디·이메일 중복확인은 형식 오류와 다른 슬롯(checkErrors)을 쓴다 — 성공은 필드 아래
- * success 문구로, 실패는 계속 필드 오류로 표시하고 토스트는 쓰지 않는다.
+ * 서버만 아는 답(중복확인·제출 실패 시 서버가 지목한 필드 오류)은 형식 오류와 다른
+ * 슬롯(serverErrors)을 쓴다 — 성공은 필드 아래 success 문구로, 실패는 계속 필드 오류로
+ * 표시하고 토스트는 쓰지 않는다. serverErrors 는 그 필드 자신의 값이 바뀔 때만 지워지므로,
+ * 관계없는 다른 필드를 고쳐도 서버 메시지는 남아 있어야 한다(Finding 1).
  *
  * 아래쪽 4개(중복확인·가입 실패 관련) 테스트는 #146 이 추가한, 서버 오류를 조용히
  * 삼키지 않고 토스트·필드로 표면화하는 계약을 그대로 이어받는다.
@@ -306,11 +308,11 @@ describe('AuthSignupForm', () => {
     )
   })
 
-  // Finding 1(리뷰): 화면은 errors.loginId || checkErrors.loginId 로 합쳐 보여주기 때문에
+  // Finding 1(리뷰): 화면은 errors.loginId || serverErrors.loginId 로 합쳐 보여주기 때문에
   // 메시지가 "보인다"는 것만으로는 어느 슬롯에 들어갔는지 증명하지 못한다 — errors 로
   // 잘못 들어가도 똑같이 보인다. 결과(consequence)로 검증한다: errors 에 잘못 들어갔다면
   // useFieldValidation 의 watcher 가 touched 된 다른 필드를 고칠 때 loginId 규칙도 함께
-  // 재평가되어 형식은 여전히 유효하므로 메시지가 지워진다. checkErrors 에 제대로 들어갔다면
+  // 재평가되어 형식은 여전히 유효하므로 메시지가 지워진다. serverErrors 에 제대로 들어갔다면
   // loginId 자신의 값을 건드리지 않는 한 절대 지워지지 않는다.
   it('가입 요청의 아이디 필드 오류는 다른 필드를 고쳐도 사라지지 않는다', async () => {
     const conflict = {
@@ -338,11 +340,11 @@ describe('AuthSignupForm', () => {
     expect(wrapper.text()).toContain('이미 사용 중인 아이디입니다.')
   })
 
-  // Finding 1 짝: 가용성(아이디·이메일)이 아닌 필드의 서버 거부는 그대로 errors 로 가야
-  // 한다(#146 이 도입한 동작 보존). password 필드는 애초에 :error="errors.password" 만
-  // 렌더링하고 checkErrors 는 loginId/email 키만 가지므로, 잘못 라우팅되면 메시지 자체가
-  // 어디에도 표시되지 않는다 — "다른 필드를 고친다" 절차 없이도 라우팅 실수를 잡아낸다.
-  it('가입 요청의 비밀번호 필드 오류는 errors 슬롯에 남아 표시된다', async () => {
+  // Finding 1: 가용성(아이디·이메일)이 아닌 필드의 서버 거부도 serverErrors 로 가야 한다.
+  // errors 에 쓰면 validateAll() 이 이미 모든 필드를 touched 로 올린 뒤라, 관계없는 다른
+  // 필드(name)를 고치는 순간 재검증 watcher 가 password 규칙(형식은 여전히 유효)을 다시
+  // 평가해 메시지를 지워버린다 — 비밀번호 변경 화면(F1)과 동일한 모양의 버그다.
+  it('가입 요청의 비밀번호 필드 오류는 다른 필드를 고쳐도 사라지지 않는다', async () => {
     const conflict = {
       response: {
         data: { fieldErrors: [{ field: 'password', reason: '유출된 비밀번호입니다.' }] }
@@ -359,8 +361,45 @@ describe('AuthSignupForm', () => {
     await flushPromises()
     await wrapper.find('form').trigger('submit')
     await flushPromises()
+    expect(wrapper.text()).toContain('유출된 비밀번호입니다.')
+
+    // password 가 아닌, 이미 touched 된 다른 필드(이름)를 고친다. password 자신의 값은
+    // 그대로다 — 그런데도 errors 슬롯에 잘못 들어갔다면 재검증 watcher 가 메시지를 지운다.
+    await getInput(wrapper, '이름').setValue('다른이름')
 
     expect(wrapper.text()).toContain('유출된 비밀번호입니다.')
+  })
+
+  // Finding 5: 중복확인을 통과해 '확인완료' 배지가 뜬 뒤, 제출 시점에 경합(다른 사용자가
+  // 먼저 같은 아이디로 가입)으로 서버가 그 필드를 거부하면 배지와 거부 메시지가 동시에
+  // 보이는 모순이 생긴다 — setServerError 가 이 경우 중복확인 완료 상태도 함께 지운다.
+  it('중복확인 완료 배지는 서버 거부 메시지와 동시에 표시되지 않는다', async () => {
+    const conflict = {
+      response: {
+        data: { fieldErrors: [{ field: 'loginId', reason: '이미 사용 중인 아이디입니다.' }] }
+      },
+      fieldErrors: [{ field: 'loginId', reason: '이미 사용 중인 아이디입니다.' }]
+    }
+    signup.mockRejectedValue(conflict)
+
+    const wrapper = factory()
+    await fillValidForm(wrapper)
+    await checkButtons(wrapper)[0].trigger('click')
+    await flushPromises()
+    await checkButtons(wrapper)[0].trigger('click')
+    await flushPromises()
+    // 아이디·이메일 모두 중복확인을 통과해 배지 두 개가 보이는 상태를 만든다.
+    expect(wrapper.findAll('.verified')).toHaveLength(2)
+
+    // 통과 뒤 실제 제출에서 경합으로 거부된다.
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('이미 사용 중인 아이디입니다.')
+    // 아이디의 확인완료 배지는 사라지고(이메일 배지 하나만 남고) 다시 '중복확인' 버튼이
+    // 보여야 한다 — 배지와 거부 메시지가 함께 보이면 사용자에게 모순된 신호를 준다.
+    expect(wrapper.findAll('.verified')).toHaveLength(1)
+    expect(checkButtons(wrapper)).toHaveLength(1)
   })
 
   it('가입 요청 실패에 매칭되는 필드가 없으면 토스트로 대체한다', async () => {
