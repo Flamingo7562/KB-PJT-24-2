@@ -42,6 +42,29 @@ class MockBankTransferGatewayTest {
     private MockBankTransferGateway gateway;
 
     @Test
+    @DisplayName("계좌 잠금은 상태·PIN을 검사하지 않고 X-lock만 선점한다")
+    void lockAccountTakesExclusiveLockWithoutStateCheck() {
+        // 상태가 BLOCKED여도 잠금 단계에서는 통과한다. 검증은 claim 선점 이후 preflight의 책임이다.
+        when(mockBankMapper.getAccountForUpdate(ACCOUNT_ID))
+                .thenReturn(account("BLOCKED", 1_000_000L, "1234"));
+
+        gateway.lockAccount(ACCOUNT_ID);
+
+        verify(mockBankMapper).getAccountForUpdate(ACCOUNT_ID);
+    }
+
+    @Test
+    @DisplayName("존재하지 않는 계좌 잠금은 구분 없는 승인 오류로 거부한다")
+    void lockAccountRejectsMissingAccount() {
+        when(mockBankMapper.getAccountForUpdate(ACCOUNT_ID)).thenReturn(null);
+
+        assertThrows(
+                BankAccountForbiddenException.class,
+                () -> gateway.lockAccount(ACCOUNT_ID)
+        );
+    }
+
+    @Test
     @DisplayName("게이트웨이의 모든 작업은 기존 자금 트랜잭션을 필수로 요구한다")
     void gatewayRequiresExistingTransaction() {
         Transactional annotation =
@@ -93,9 +116,9 @@ class MockBankTransferGatewayTest {
     }
 
     @Test
-    @DisplayName("출금은 계좌를 다시 잠그고 성공 은행 원장 결과를 반환한다")
-    void withdrawLocksAccountAndReturnsVerifiedResult() {
-        when(mockBankMapper.getAccountForUpdate(ACCOUNT_ID))
+    @DisplayName("출금은 lockAccount()가 잡은 X-lock을 재사용해 비잠금 조회로 원장 결과를 반환한다")
+    void withdrawReusesLockAndReturnsVerifiedResult() {
+        when(mockBankMapper.getAccountById(ACCOUNT_ID))
                 .thenReturn(account("ACTIVE", 1_000_000L, PIN));
         when(mockBankMapper.withdrawFromAccount(ACCOUNT_ID, AMOUNT)).thenReturn(1);
         when(mockBankMapper.insertBankTransaction(any())).thenAnswer(invocation -> {
@@ -124,7 +147,7 @@ class MockBankTransferGatewayTest {
     @Test
     @DisplayName("잠금 후 PIN이 일치하지 않으면 계좌와 원장을 변경하지 않는다")
     void withdrawRejectsPinMismatchAfterLock() {
-        when(mockBankMapper.getAccountForUpdate(ACCOUNT_ID))
+        when(mockBankMapper.getAccountById(ACCOUNT_ID))
                 .thenReturn(account("ACTIVE", 1_000_000L, PIN));
 
         assertThrows(
@@ -139,7 +162,7 @@ class MockBankTransferGatewayTest {
     @Test
     @DisplayName("잠금 후 계좌 잔액이 부족하면 계좌와 원장을 변경하지 않는다")
     void withdrawRejectsInsufficientBalance() {
-        when(mockBankMapper.getAccountForUpdate(ACCOUNT_ID))
+        when(mockBankMapper.getAccountById(ACCOUNT_ID))
                 .thenReturn(account("ACTIVE", AMOUNT - 1, PIN));
 
         assertThrows(
@@ -154,7 +177,7 @@ class MockBankTransferGatewayTest {
     @Test
     @DisplayName("은행 원장 INSERT 결과나 생성 ID가 없으면 성공 결과를 반환하지 않는다")
     void withdrawRejectsMissingLedgerIdentity() {
-        when(mockBankMapper.getAccountForUpdate(ACCOUNT_ID))
+        when(mockBankMapper.getAccountById(ACCOUNT_ID))
                 .thenReturn(account("ACTIVE", 1_000_000L, PIN));
         when(mockBankMapper.withdrawFromAccount(ACCOUNT_ID, AMOUNT)).thenReturn(1);
         when(mockBankMapper.insertBankTransaction(any())).thenReturn(1);
@@ -199,7 +222,7 @@ class MockBankTransferGatewayTest {
     @Test
     @DisplayName("잠금 계좌 UPDATE가 0건이면 잔액 부족이 아닌 서버 무결성 오류다")
     void withdrawRejectsUnexpectedUpdateCount() {
-        when(mockBankMapper.getAccountForUpdate(ACCOUNT_ID))
+        when(mockBankMapper.getAccountById(ACCOUNT_ID))
                 .thenReturn(account("ACTIVE", 1_000_000L, PIN));
         when(mockBankMapper.withdrawFromAccount(ACCOUNT_ID, AMOUNT)).thenReturn(0);
 
@@ -223,7 +246,7 @@ class MockBankTransferGatewayTest {
                 .availableAmount(1_000_001L)
                 .status("ACTIVE")
                 .build();
-        when(mockBankMapper.getAccountForUpdate(ACCOUNT_ID)).thenReturn(account);
+        when(mockBankMapper.getAccountById(ACCOUNT_ID)).thenReturn(account);
 
         assertThrows(
                 BankTransferIntegrityException.class,
@@ -236,7 +259,7 @@ class MockBankTransferGatewayTest {
     @Test
     @DisplayName("입금 후 잔액이 long 범위를 넘으면 계좌를 변경하지 않는다")
     void depositRejectsBalanceOverflow() {
-        when(mockBankMapper.getAccountForUpdate(ACCOUNT_ID))
+        when(mockBankMapper.getAccountById(ACCOUNT_ID))
                 .thenReturn(account("ACTIVE", Long.MAX_VALUE, PIN));
 
         assertThrows(

@@ -4,6 +4,7 @@ import com.gighub.auth.security.AuthPrincipal;
 import com.gighub.bank.exception.BankAccountForbiddenException;
 import com.gighub.bank.exception.InsufficientBankBalanceException;
 import com.gighub.common.exception.CommonExceptionHandler;
+import com.gighub.config.ApiJsonMapper;
 import com.gighub.member.domain.UserRole;
 import com.gighub.wallet.exception.IdempotencyKeyReusedException;
 import com.gighub.wallet.service.FundingService;
@@ -16,6 +17,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.MediaType;
+import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.test.web.servlet.MockMvc;
@@ -26,6 +28,7 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -53,13 +56,98 @@ class FundingControllerTest {
 
     @BeforeEach
     void setUp() {
+        // 운영 MessageConverter와 같은 JSON 경계 규칙으로 검증한다.
+        MappingJackson2HttpMessageConverter converter =
+                new MappingJackson2HttpMessageConverter(ApiJsonMapper.create());
         mockMvc = MockMvcBuilders
                 .standaloneSetup(new FundingController(fundingService))
                 .setControllerAdvice(new CommonExceptionHandler())
+                .setMessageConverters(converter)
                 .build();
 
         AuthPrincipal principal = new AuthPrincipal(EMPLOYER_ID, UserRole.OWNER, "김사장");
         authentication = new UsernamePasswordAuthenticationToken(principal, null, List.of());
+    }
+
+    /** 충전은 OWNER 전용 Operation이므로 WORKER는 서비스 호출 전에 차단한다. */
+    @Test
+    void rejectsWorkerWithForbiddenBeforeServiceCall() throws Exception {
+        AuthPrincipal worker = new AuthPrincipal(9L, UserRole.WORKER, "김알바");
+        Authentication workerAuthentication =
+                new UsernamePasswordAuthenticationToken(worker, null, List.of());
+
+        mockMvc.perform(post("/api/wallet/funding-orders")
+                        .principal(workerAuthentication)
+                        .header("Idempotency-Key", IDEMPOTENCY_KEY)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody()))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("FORBIDDEN"))
+                .andExpect(jsonPath("$.traceId").isString());
+
+        verifyNoInteractions(fundingService);
+    }
+
+    /** 소수 금액은 절단하지 않고 JSON 경계에서 400으로 거부한다. */
+    @Test
+    void rejectsFractionalAmountWithoutTruncation() throws Exception {
+        mockMvc.perform(post("/api/wallet/funding-orders")
+                        .principal(authentication)
+                        .header("Idempotency-Key", IDEMPOTENCY_KEY)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "bankCode": "004",
+                                  "accountNo": "1234567890",
+                                  "pin": "0000",
+                                  "amount": 100000.9
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+
+        verifyNoInteractions(fundingService);
+    }
+
+    /** 필수 필드 누락은 Bean Validation 경계에서 fieldErrors와 함께 거부한다. */
+    @Test
+    void rejectsMissingRequiredFields() throws Exception {
+        mockMvc.perform(post("/api/wallet/funding-orders")
+                        .principal(authentication)
+                        .header("Idempotency-Key", IDEMPOTENCY_KEY)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "amount": 100000
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.fieldErrors").isNotEmpty());
+
+        verifyNoInteractions(fundingService);
+    }
+
+    /** 명시적 null도 누락과 같은 400 VALIDATION_ERROR로 거부한다. */
+    @Test
+    void rejectsExplicitNullRequiredFields() throws Exception {
+        mockMvc.perform(post("/api/wallet/funding-orders")
+                        .principal(authentication)
+                        .header("Idempotency-Key", IDEMPOTENCY_KEY)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "bankCode": null,
+                                  "accountNo": null,
+                                  "pin": null,
+                                  "amount": 100000
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.fieldErrors").isNotEmpty());
+
+        verifyNoInteractions(fundingService);
     }
 
     @Test

@@ -81,6 +81,10 @@ public class FundingServiceImpl implements FundingService {
         Long linkedAccountId = bankTransferGateway.resolveAccountId(
                 command.getBankCode(), command.getAccountNo());
 
+        // 주문 INSERT의 계좌 FK가 S-lock을 잡기 전에 Adapter가 X-lock을 먼저 확보한다.
+        // 같은 Mock 계좌를 쓰는 요청이 겹쳐도 잠금 승격 교착이 생기지 않는다.
+        bankTransferGateway.lockAccount(linkedAccountId);
+
         FundingOrderParam order = FundingOrderParam.builder()
                 .employerId(command.getEmployerId())
                 .linkedAccountId(linkedAccountId)

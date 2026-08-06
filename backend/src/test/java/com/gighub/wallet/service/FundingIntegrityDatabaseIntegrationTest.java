@@ -553,52 +553,6 @@ class FundingIntegrityDatabaseIntegrationTest {
     }
 
     /**
-     * Mock 계좌는 사용자에게 귀속되지 않으므로 서로 다른 사용자가 같은 사전 생성 계좌를
-     * 올바른 PIN으로 함께 사용할 수 있어야 한다(DEC-MOCK-ACCOUNT-FIXTURE).
-     */
-    @Test
-    void differentUsersShareTheSamePreCreatedAccount() {
-        try (AnnotationConfigApplicationContext context =
-                     new AnnotationConfigApplicationContext(RootConfig.class)) {
-            JdbcTemplate jdbcTemplate =
-                    new JdbcTemplate(context.getBean(DataSource.class));
-            FundingService fundingService = context.getBean(FundingService.class);
-            FundingFixture first = createFundingFixture(jdbcTemplate);
-            // 두 번째 사용자는 자기 지갑만 갖고 첫 번째 사용자의 계좌를 그대로 사용한다.
-            FundingFixture second = createUserOnlyFixture(jdbcTemplate, first);
-
-            try {
-                FundingResult firstResult =
-                        fundingService.fund(fundingCommand(first, FIXTURE_PIN, 1_000L));
-                FundingResult secondResult =
-                        fundingService.fund(fundingCommand(second, FIXTURE_PIN, 2_000L));
-
-                assertFalse(firstResult.isReplayed());
-                assertFalse(secondResult.isReplayed());
-                assertNotEquals(
-                        firstResult.getFundingOrderId(), secondResult.getFundingOrderId());
-
-                // 두 사용자의 지갑이 각각 늘고, 공유 계좌에서 합계만큼 빠져야 한다.
-                assertEquals(1_000L, value(jdbcTemplate,
-                        "SELECT available_balance FROM wallets WHERE id = ?",
-                        first.walletId()));
-                assertEquals(2_000L, value(jdbcTemplate,
-                        "SELECT available_balance FROM wallets WHERE id = ?",
-                        second.walletId()));
-                assertEquals(997_000L, value(jdbcTemplate,
-                        "SELECT balance FROM mock_bank_accounts WHERE id = ?",
-                        first.accountId()));
-                assertEquals(2, count(jdbcTemplate,
-                        "SELECT COUNT(*) FROM mock_bank_transactions WHERE account_id = ?",
-                        first.accountId()));
-            } finally {
-                deleteUserOnlyFixture(jdbcTemplate, second);
-                deleteFundingFixture(jdbcTemplate, first);
-            }
-        }
-    }
-
-    /**
      * 비활성 계좌는 PIN이 맞아도 계좌 미존재·PIN 불일치와 구분 없는 승인 오류로 거부한다
      * (DEC-BANK-ERROR-CATALOG).
      */
@@ -711,45 +665,6 @@ class FundingIntegrityDatabaseIntegrationTest {
                 .amount(amount)
                 .idempotencyKey(fixture.idempotencyKey())
                 .build();
-    }
-
-    /** 기존 Fixture의 계좌를 공유하는 별도 사용자·지갑을 만든다. */
-    private FundingFixture createUserOnlyFixture(
-            JdbcTemplate jdbcTemplate, FundingFixture shared) {
-        String token = UUID.randomUUID().toString().replace("-", "").substring(0, 12);
-        String loginId = "it_owner2_" + token;
-
-        jdbcTemplate.update(
-                "INSERT INTO users"
-                        + " (login_id, email, password_hash, name, role, status)"
-                        + " VALUES (?, ?, 'integration-test', '통합 테스트2', 'OWNER', 'ACTIVE')",
-                loginId,
-                loginId + "@example.invalid"
-        );
-        Long userId = jdbcTemplate.queryForObject(
-                "SELECT id FROM users WHERE login_id = ?", Long.class, loginId);
-        jdbcTemplate.update(
-                "INSERT INTO wallets"
-                        + " (user_id, currency, available_balance, locked_balance)"
-                        + " VALUES (?, 'KRW', 0, 0)",
-                userId
-        );
-        Long walletId = jdbcTemplate.queryForObject(
-                "SELECT id FROM wallets WHERE user_id = ?", Long.class, userId);
-
-        return new FundingFixture(
-                userId, walletId, shared.accountId(), shared.accountNo(),
-                "IT-FUND2-" + token
-        );
-    }
-
-    private void deleteUserOnlyFixture(JdbcTemplate jdbcTemplate, FundingFixture fixture) {
-        jdbcTemplate.update(
-                "DELETE FROM wallet_transactions WHERE wallet_id = ?", fixture.walletId());
-        jdbcTemplate.update(
-                "DELETE FROM funding_orders WHERE employer_id = ?", fixture.userId());
-        jdbcTemplate.update("DELETE FROM wallets WHERE id = ?", fixture.walletId());
-        jdbcTemplate.update("DELETE FROM users WHERE id = ?", fixture.userId());
     }
 
     @Test

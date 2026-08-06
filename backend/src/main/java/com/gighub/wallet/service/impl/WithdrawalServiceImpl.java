@@ -88,6 +88,10 @@ public class WithdrawalServiceImpl implements WithdrawalService {
         Long linkedAccountId = bankTransferGateway.resolveAccountId(
                 command.getBankCode(), command.getAccountNo());
 
+        // 주문 INSERT의 계좌 FK가 S-lock을 잡기 전에 Adapter가 X-lock을 먼저 확보한다.
+        // 같은 Mock 계좌를 쓰는 요청이 겹쳐도 잠금 승격 교착이 생기지 않는다.
+        bankTransferGateway.lockAccount(linkedAccountId);
+
         // 지갑을 잡은 상태에서 요청을 선점해 계좌 FK 잠금이 순서를 뒤집지 않게 한다.
         WithdrawalOrderParam order = WithdrawalOrderParam.builder()
                 .userId(command.getUserId())

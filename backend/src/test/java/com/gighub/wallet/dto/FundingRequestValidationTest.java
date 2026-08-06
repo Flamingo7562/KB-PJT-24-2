@@ -93,6 +93,21 @@ class FundingRequestValidationTest {
     }
 
     @Test
+    void rejectsNullRequiredFields() {
+        // @Pattern은 null을 통과시키므로 @NotBlank가 없으면 서비스까지 null이 흘러간다.
+        assertViolates(request(null, ACCOUNT_NO, PIN, AMOUNT), "bankCode");
+        assertViolates(request(BANK_CODE, null, PIN, AMOUNT), "accountNo");
+        assertViolates(request(BANK_CODE, ACCOUNT_NO, null, AMOUNT), "pin");
+    }
+
+    @Test
+    void rejectsBlankRequiredFields() {
+        assertViolates(request("", ACCOUNT_NO, PIN, AMOUNT), "bankCode");
+        assertViolates(request(BANK_CODE, "", PIN, AMOUNT), "accountNo");
+        assertViolates(request(BANK_CODE, ACCOUNT_NO, "", AMOUNT), "pin");
+    }
+
+    @Test
     void rejectsNullAmount() {
         assertViolates(request(BANK_CODE, ACCOUNT_NO, PIN, null), "amount");
     }

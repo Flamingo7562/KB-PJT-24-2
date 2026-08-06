@@ -46,6 +46,17 @@ public class MockBankTransferGateway implements BankTransferGateway {
     }
 
     @Override
+    public void lockAccount(Long accountId) {
+        if (accountId == null || accountId <= 0) {
+            throw new BankTransferIntegrityException("은행 계좌 잠금 요청이 올바르지 않습니다.");
+        }
+        // 존재만 확인한다. 상태·PIN 검증은 claim 선점 이후 preflight의 책임이다.
+        if (mockBankMapper.getAccountForUpdate(accountId) == null) {
+            throw new BankAccountForbiddenException(ACCOUNT_UNUSABLE_MESSAGE);
+        }
+    }
+
+    @Override
     public void preflight(BankAccountPreflightCommand command) {
         validatePreflightCommand(command);
         validate(
@@ -85,10 +96,12 @@ public class MockBankTransferGateway implements BankTransferGateway {
                 account.getBalance(), balanceAfter);
     }
 
+    // lockAccount()가 같은 트랜잭션에서 이미 X-lock을 잡았으므로(BankTransferGateway 계약),
+    // 여기서는 FOR UPDATE를 반복하지 않고 비잠금 조회로 같은 잠긴 행을 읽는다.
     private MockBankAccount lockAndValidate(BankTransferCommand command) {
         validateTransferCommand(command);
         return validate(
-                mockBankMapper.getAccountForUpdate(command.getAccountId()),
+                mockBankMapper.getAccountById(command.getAccountId()),
                 command.getAccountId(),
                 command.getPin()
         );

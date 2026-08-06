@@ -36,6 +36,19 @@ class WithdrawalRequestValidationTest {
     }
 
     @Test
+    void rejectsNullRequiredFields() {
+        // @Pattern은 null을 통과시키므로 @NotBlank가 없으면 서비스까지 null이 흘러간다.
+        assertViolates(request(null, ACCOUNT_NO, AMOUNT), "bankCode");
+        assertViolates(request(BANK_CODE, null, AMOUNT), "accountNo");
+    }
+
+    @Test
+    void rejectsBlankRequiredFields() {
+        assertViolates(request("", ACCOUNT_NO, AMOUNT), "bankCode");
+        assertViolates(request(BANK_CODE, "", AMOUNT), "accountNo");
+    }
+
+    @Test
     void rejectsUnapprovedBankCode() {
         assertViolates(request("999", ACCOUNT_NO, AMOUNT), "bankCode");
     }

@@ -1,6 +1,5 @@
 package com.gighub.config;
 
-import com.fasterxml.jackson.databind.SerializationFeature;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.FilterType;
@@ -40,13 +39,10 @@ public class WebMvcConfig implements WebMvcConfigurer {
 
     @Override
     public void extendMessageConverters(List<HttpMessageConverter<?>> converters) {
-        // Instant가 epoch 숫자가 아닌 사람이 읽을 수 있는 UTC ISO-8601 문자열로 노출되도록 고정합니다.
         converters.stream()
                 .filter(MappingJackson2HttpMessageConverter.class::isInstance)
                 .map(MappingJackson2HttpMessageConverter.class::cast)
-                .forEach(converter -> converter.getObjectMapper().disable(
-                        SerializationFeature.WRITE_DATES_AS_TIMESTAMPS
-                ));
+                .forEach(converter -> ApiJsonMapper.configure(converter.getObjectMapper()));
     }
 
     @Override
