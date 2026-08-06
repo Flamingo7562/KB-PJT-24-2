@@ -8,8 +8,9 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+const push = vi.fn()
 vi.mock('vue-router', () => ({
-  useRouter: () => ({ push: vi.fn() }),
+  useRouter: () => ({ push }),
   RouterLink: { props: ['to'], template: '<a><slot /></a>' }
 }))
 
@@ -20,6 +21,8 @@ vi.mock('@/services/users', () => ({
 }))
 
 import { getBadge, getMe } from '@/services/users'
+import { useAuthStore } from '@/stores/auth'
+import { useUiStore } from '@/stores/ui'
 import WorkerMyPageView from '@/views/worker/WorkerMyPageView.vue'
 
 const ME = { loginId: 'worker01', email: 'worker@test.com', name: '이알바', role: 'WORKER' }
@@ -32,11 +35,28 @@ const BADGE = {
   criterionDesc: '*성실근로란? 무단 결근·지각 없이 근무 완료'
 }
 
+/** Teleport 를 stub 해 탈퇴 Modal 내용을 wrapper 안에서 찾을 수 있게 한다. */
+function mountView() {
+  return mount(WorkerMyPageView, { global: { stubs: { teleport: true } } })
+}
+
+function findByText(wrapper, selector, text) {
+  const found = wrapper.findAll(selector).find((el) => el.text().trim() === text)
+  if (!found) throw new Error(`'${text}' ${selector} 를 찾지 못했습니다`)
+  return found
+}
+
 describe('WorkerMyPageView', () => {
+  let logout
+  let toastSpy
+
   beforeEach(() => {
     setActivePinia(createPinia())
+    push.mockClear()
     getMe.mockReset()
     getBadge.mockReset()
+    logout = vi.spyOn(useAuthStore(), 'logout').mockResolvedValue()
+    toastSpy = vi.spyOn(useUiStore(), 'toast')
   })
 
   it('뱃지 조회가 실패해도 프로필 카드는 뱃지 없이 그대로 보여준다', async () => {
@@ -60,5 +80,42 @@ describe('WorkerMyPageView', () => {
 
     expect(wrapper.find('.badge-slot').exists()).toBe(true)
     expect(wrapper.text()).toContain('성실근로')
+  })
+
+  it('로그아웃을 누르면 세션을 정리하고 온보딩으로 이동한다', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+
+    await findByText(wrapper, 'button', '로그아웃').trigger('click')
+    await flushPromises()
+
+    expect(logout).toHaveBeenCalledTimes(1)
+    expect(push).toHaveBeenCalledWith('/')
+  })
+
+  it('로그아웃 서버 호출이 실패해도 온보딩으로 이동하고 실패를 알린다', async () => {
+    // authStore.logout() 은 실패해도 로컬 상태를 이미 비운 뒤라 화면에 남으면 상태와 어긋난다.
+    logout.mockRejectedValue({ response: { data: { message: '로그아웃에 실패했습니다.' } } })
+    const wrapper = mountView()
+    await flushPromises()
+
+    await findByText(wrapper, 'button', '로그아웃').trigger('click')
+    await flushPromises()
+
+    expect(push).toHaveBeenCalledWith('/')
+    expect(toastSpy).toHaveBeenCalledWith(
+      '로그아웃에 실패했습니다.',
+      expect.objectContaining({ type: 'danger' })
+    )
+  })
+
+  it('회원 탈퇴 링크는 그대로 동작한다', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+
+    await findByText(wrapper, 'button', '회원 탈퇴').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('탈퇴하면 되돌릴 수 없어요')
   })
 })

@@ -1,7 +1,8 @@
 <script setup>
 /**
  * [H] 알바생 마이페이지  ·  /worker/mypage  ·  WORKER
- * 성실근로자 뱃지 카드(등급 + 성실근로 N건 남음 + 정의 소자) + 회원정보/비밀번호 변경 진입 + 회원 탈퇴.
+ * 성실근로자 뱃지 카드(등급 + 성실근로 N건 남음 + 정의 소자) + 회원정보/비밀번호 변경 진입
+ * + 로그아웃 + 회원 탈퇴.
  * 연계 API: GET /users/me · GET /users/me/badge · DELETE /users/me
  *   →  @/services/users (getMe, getBadge, deleteMe)
  * 진입: /worker/mypage/{profile,password}. 공통: TrustBadge(role='worker').
@@ -47,6 +48,7 @@ const withdrawOpen = ref(false)
 const withdrawPassword = ref('')
 const withdrawError = ref('')
 const withdrawing = ref(false)
+const loggingOut = ref(false)
 
 // getMe·getBadge 는 서로 독립된 요청이다. 뱃지 Endpoint(#182) 하나가 404 를 내도
 // 프로필 카드 자체는 보여줘야 하므로 Promise.all 로 묶어 함께 실패시키지 않는다.
@@ -62,6 +64,26 @@ onMounted(async () => {
     // 뱃지 없이도 나머지 프로필 정보는 그대로 보여준다.
   }
 })
+
+/**
+ * 로그아웃. authStore.logout() 은 서버 호출 결과와 무관하게 로컬 상태를 비우므로,
+ * 이 호출이 끝난 시점에 앱은 이미 로그아웃 상태다. 실패해도 화면에 남으면 상태와
+ * 어긋나고 다음 이동에서 G1 가드가 어차피 튕겨낸다 — 그래서 이동은 finally 에서 한다.
+ * 다만 서버 세션이 살아있을 가능성은 숨기지 않고 오류로 알린다.
+ */
+async function handleLogout() {
+  loggingOut.value = true
+  try {
+    await authStore.logout()
+  } catch (err) {
+    ui.toast(err?.response?.data?.message || '로그아웃 요청이 서버에 전달되지 않았어요.', {
+      type: 'danger'
+    })
+  } finally {
+    loggingOut.value = false
+    router.push('/')
+  }
+}
 
 function openWithdraw() {
   withdrawPassword.value = ''
@@ -144,7 +166,12 @@ async function confirmWithdraw() {
         </RouterLink>
       </nav>
 
-      <button type="button" class="withdraw-link" @click="openWithdraw">회원 탈퇴</button>
+      <section class="account-actions">
+        <BaseButton variant="secondary" block :disabled="loggingOut" @click="handleLogout">
+          로그아웃
+        </BaseButton>
+        <button type="button" class="withdraw-link" @click="openWithdraw">회원 탈퇴</button>
+      </section>
     </main>
 
     <BaseModal :open="withdrawOpen" title="회원 탈퇴" @close="withdrawOpen = false">
@@ -271,10 +298,17 @@ async function confirmWithdraw() {
   color: var(--color-text-sub);
 }
 
+.account-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-md);
+  margin-top: var(--space-lg);
+}
+
 .withdraw-link {
   display: block;
   width: 100%;
-  margin-top: var(--space-xl);
   padding: var(--space-sm) 0;
   font-size: var(--text-sm);
   color: var(--color-text-sub);
