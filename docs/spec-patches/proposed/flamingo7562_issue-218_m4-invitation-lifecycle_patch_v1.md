@@ -1,7 +1,7 @@
 ---
 patch_id: SPEC-218-01
 author: flamingo7562
-status: draft
+status: proposed
 issue: 218
 created_at: 2026-08-06
 base_spec_version: 3.0.1
@@ -83,7 +83,7 @@ applied_by_pr: null
 
 #### `INVITE-002` 교체
 
-> 비로그인 사용자가 초대 웹 경로에 접근하면 `/worker/login?redirect=<초대 경로>`로 보내고
+> 비로그인 사용자가 초대 웹 경로에 접근하면 `/worker/login?redirect={encodedInvitationPath}`로 보내고
 > 로그인 성공 뒤 원래 경로로 복귀한다. API는 비인증 요청에 `401 AUTH_REQUIRED`, WORKER가
 > 아닌 인증 사용자에게 `403 ROLE_MISMATCH`를 반환한다. 로그인 뒤에는 특정 사전 대상이
 > 아니라 인증 사용자의 WORKER 역할과 Token의 상태·만료·조건 Version을 다시 검증한다.
