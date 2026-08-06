@@ -101,6 +101,29 @@ describe('useFieldValidation', () => {
     expect(validateAll()).toBe(true)
   })
 
+  it('validateAll 은 앞쪽 필드가 유효해도 뒤쪽 필드가 무효면 false 를 준다', () => {
+    const { form, validateAll } = setup()
+    form.password = 'abcdefgh'
+    form.passwordConfirm = 'zzz'
+
+    expect(validateAll()).toBe(false)
+  })
+
+  it('validateAll 은 손대지 않았던 필드도 touched 로 표시해 이후 입력마다 재검증한다', async () => {
+    const { form, errors, validateAll } = setup()
+    form.password = 'abc'
+
+    // 아무 필드도 blur 하지 않은 채 제출을 시도한다.
+    validateAll()
+    expect(errors.password).toBe('8자 이상 입력하세요')
+
+    // 제출 실패 후에는 건드리지 않았던 필드도 입력마다 실시간으로 재검증되어야 한다.
+    form.password = 'abcdefgh'
+    await nextTick()
+
+    expect(errors.password).toBe('')
+  })
+
   it('reset 은 오류와 touched 를 모두 비운다', async () => {
     const { form, errors, handleBlur, reset } = setup()
     form.password = 'abc'

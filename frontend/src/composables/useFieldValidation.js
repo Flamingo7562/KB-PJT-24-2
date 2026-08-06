@@ -11,6 +11,11 @@ import { reactive, watch } from 'vue'
  * 규칙이 있기 때문이다. 값이 바뀌면 touched 된 필드를 모두 다시 검증하므로, 비밀번호를
  * 고치면 확인란의 불일치 오류가 자동으로 사라진다 — 필드 간 의존을 따로 선언하지 않는다.
  *
+ * 주의: 컴포넌트 setup() 안에서 동기적으로 호출해야 한다. 내부 watch 는 정지 핸들이
+ * 없어 setup() 스코프의 자동 정리(unmount 시 watch 중단)에 의존한다. 최상위·await
+ * 이후·스토어 등 setup() 밖에서 호출하면 Vue 가 경고 없이 watch 를 계속 살려 두어
+ * 조용히 leak 된다.
+ *
  * @param {() => object} getValues 현재 값 전체를 돌려주는 getter
  * @param {Record<string, (values: object) => {valid: boolean, message: string}>} rules
  */
