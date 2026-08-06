@@ -98,7 +98,7 @@ class CommonExceptionHandlerTest {
         String otherOwnerMessage = new BankAccountForbiddenException("타인 소유 계좌입니다.")
                 .getMessage();
 
-        assertEquals("계좌에 접근할 수 없습니다.", missingMessage);
+        assertEquals("계좌를 사용할 수 없습니다.", missingMessage);
         assertEquals(missingMessage, otherOwnerMessage);
     }
 

@@ -1,5 +1,6 @@
 package com.gighub.wallet.service;
 
+import com.gighub.bank.exception.BankAccountForbiddenException;
 import com.gighub.bank.service.BankAccountPreflightCommand;
 import com.gighub.bank.service.BankTransferGateway;
 import com.gighub.config.RootConfig;
@@ -55,7 +56,9 @@ class FundingIntegrityDatabaseIntegrationTest {
             CountDownLatch start = new CountDownLatch(1);
             FundingCommand command = FundingCommand.builder()
                     .employerId(fixture.userId())
-                    .linkedAccountId(fixture.accountId())
+                    .bankCode(FIXTURE_BANK_CODE)
+                    .accountNo(fixture.accountNo())
+                    .pin(FIXTURE_PIN)
                     .amount(1_000L)
                     .idempotencyKey(fixture.idempotencyKey())
                     .build();
@@ -132,13 +135,17 @@ class FundingIntegrityDatabaseIntegrationTest {
             CountDownLatch start = new CountDownLatch(1);
             FundingCommand first = FundingCommand.builder()
                     .employerId(fixture.userId())
-                    .linkedAccountId(fixture.accountId())
+                    .bankCode(FIXTURE_BANK_CODE)
+                    .accountNo(fixture.accountNo())
+                    .pin(FIXTURE_PIN)
                     .amount(1_000L)
                     .idempotencyKey(fixture.idempotencyKey() + "-A")
                     .build();
             FundingCommand second = FundingCommand.builder()
                     .employerId(fixture.userId())
-                    .linkedAccountId(fixture.accountId())
+                    .bankCode(FIXTURE_BANK_CODE)
+                    .accountNo(fixture.accountNo())
+                    .pin(FIXTURE_PIN)
                     .amount(1_000L)
                     .idempotencyKey(fixture.idempotencyKey() + "-B")
                     .build();
@@ -201,13 +208,16 @@ class FundingIntegrityDatabaseIntegrationTest {
             CountDownLatch start = new CountDownLatch(1);
             FundingCommand funding = FundingCommand.builder()
                     .employerId(fixture.userId())
-                    .linkedAccountId(fixture.accountId())
+                    .bankCode(FIXTURE_BANK_CODE)
+                    .accountNo(fixture.accountNo())
+                    .pin(FIXTURE_PIN)
                     .amount(3_000L)
                     .idempotencyKey(fixture.idempotencyKey() + "-F")
                     .build();
             WithdrawalCommand withdrawal = WithdrawalCommand.builder()
                     .userId(fixture.userId())
-                    .linkedAccountId(fixture.accountId())
+                    .bankCode(FIXTURE_BANK_CODE)
+                    .accountNo(fixture.accountNo())
                     .amount(2_000L)
                     .idempotencyKey(fixture.idempotencyKey() + "-W")
                     .build();
@@ -359,7 +369,9 @@ class FundingIntegrityDatabaseIntegrationTest {
             CountDownLatch waitersStarted = new CountDownLatch(2);
             FundingCommand command = FundingCommand.builder()
                     .employerId(fixture.userId())
-                    .linkedAccountId(fixture.accountId())
+                    .bankCode(FIXTURE_BANK_CODE)
+                    .accountNo(fixture.accountNo())
+                    .pin(FIXTURE_PIN)
                     .amount(1_000L)
                     .idempotencyKey(fixture.idempotencyKey())
                     .build();
@@ -456,7 +468,9 @@ class FundingIntegrityDatabaseIntegrationTest {
                 );
                 FundingCommand command = FundingCommand.builder()
                         .employerId(fixture.userId())
-                        .linkedAccountId(fixture.accountId())
+                        .bankCode(FIXTURE_BANK_CODE)
+                        .accountNo(fixture.accountNo())
+                        .pin(FIXTURE_PIN)
                         .amount(1_000L)
                         .idempotencyKey(fixture.idempotencyKey())
                         .build();
@@ -487,6 +501,172 @@ class FundingIntegrityDatabaseIntegrationTest {
         }
     }
 
+    /**
+     * 잘못된 PIN은 자금 이동 전 실패이므로 멱등 키를 소모하지 않고, 같은 키로 PIN만 고쳐
+     * 재시도할 수 있어야 한다(DEC-IDEMPOTENCY-STORAGE).
+     */
+    @Test
+    void wrongPinDoesNotConsumeIdempotencyKeyAndAllowsRetry() {
+        try (AnnotationConfigApplicationContext context =
+                     new AnnotationConfigApplicationContext(RootConfig.class)) {
+            JdbcTemplate jdbcTemplate =
+                    new JdbcTemplate(context.getBean(DataSource.class));
+            FundingService fundingService = context.getBean(FundingService.class);
+            FundingFixture fixture = createFundingFixture(jdbcTemplate);
+
+            try {
+                assertThrows(
+                        BankAccountForbiddenException.class,
+                        () -> fundingService.fund(fundingCommand(fixture, "9999", 1_000L))
+                );
+
+                // 검증 실패는 claim으로 저장되지 않아야 하고 자금도 움직이지 않아야 한다.
+                assertEquals(0, count(jdbcTemplate,
+                        "SELECT COUNT(*) FROM funding_orders WHERE idempotency_key = ?",
+                        fixture.idempotencyKey()));
+                assertEquals(0, count(jdbcTemplate,
+                        "SELECT COUNT(*) FROM mock_bank_transactions WHERE account_id = ?",
+                        fixture.accountId()));
+                assertEquals(1_000_000L, value(jdbcTemplate,
+                        "SELECT balance FROM mock_bank_accounts WHERE id = ?",
+                        fixture.accountId()));
+                assertEquals(0L, value(jdbcTemplate,
+                        "SELECT available_balance FROM wallets WHERE id = ?",
+                        fixture.walletId()));
+
+                // 같은 멱등 키로 올바른 PIN 재시도가 성공해야 한다.
+                FundingResult retried =
+                        fundingService.fund(fundingCommand(fixture, FIXTURE_PIN, 1_000L));
+
+                assertFalse(retried.isReplayed());
+                assertEquals("COMPLETED", retried.getStatus());
+                assertEquals(1_000L, value(jdbcTemplate,
+                        "SELECT available_balance FROM wallets WHERE id = ?",
+                        fixture.walletId()));
+                assertEquals(999_000L, value(jdbcTemplate,
+                        "SELECT balance FROM mock_bank_accounts WHERE id = ?",
+                        fixture.accountId()));
+            } finally {
+                deleteFundingFixture(jdbcTemplate, fixture);
+            }
+        }
+    }
+
+    /**
+     * 비활성 계좌는 PIN이 맞아도 계좌 미존재·PIN 불일치와 구분 없는 승인 오류로 거부한다
+     * (DEC-BANK-ERROR-CATALOG).
+     */
+    @Test
+    void inactiveAccountRejectsFundingWithoutRevealingState() {
+        try (AnnotationConfigApplicationContext context =
+                     new AnnotationConfigApplicationContext(RootConfig.class)) {
+            JdbcTemplate jdbcTemplate =
+                    new JdbcTemplate(context.getBean(DataSource.class));
+            FundingService fundingService = context.getBean(FundingService.class);
+            FundingFixture fixture = createFundingFixture(jdbcTemplate);
+
+            try {
+                for (String status : new String[]{"BLOCKED", "CLOSED"}) {
+                    jdbcTemplate.update(
+                            "UPDATE mock_bank_accounts SET status = ? WHERE id = ?",
+                            status, fixture.accountId());
+
+                    BankAccountForbiddenException blocked = assertThrows(
+                            BankAccountForbiddenException.class,
+                            () -> fundingService.fund(
+                                    fundingCommand(fixture, FIXTURE_PIN, 1_000L))
+                    );
+                    // 미존재·PIN 불일치와 같은 문구여야 상태를 추론할 수 없다.
+                    assertEquals("계좌를 사용할 수 없습니다.", blocked.getMessage());
+
+                    assertEquals(0, count(jdbcTemplate,
+                            "SELECT COUNT(*) FROM funding_orders WHERE idempotency_key = ?",
+                            fixture.idempotencyKey()));
+                    assertEquals(1_000_000L, value(jdbcTemplate,
+                            "SELECT balance FROM mock_bank_accounts WHERE id = ?",
+                            fixture.accountId()));
+                    assertEquals(0L, value(jdbcTemplate,
+                            "SELECT available_balance FROM wallets WHERE id = ?",
+                            fixture.walletId()));
+                }
+
+                // 존재하지 않는 계좌번호도 같은 오류로 거부한다.
+                BankAccountForbiddenException missing = assertThrows(
+                        BankAccountForbiddenException.class,
+                        () -> fundingService.fund(FundingCommand.builder()
+                                .employerId(fixture.userId())
+                                .bankCode(FIXTURE_BANK_CODE)
+                                .accountNo("00000000000000")
+                                .pin(FIXTURE_PIN)
+                                .amount(1_000L)
+                                .idempotencyKey(fixture.idempotencyKey() + "-X")
+                                .build())
+                );
+                assertEquals("계좌를 사용할 수 없습니다.", missing.getMessage());
+            } finally {
+                jdbcTemplate.update(
+                        "UPDATE mock_bank_accounts SET status = 'ACTIVE' WHERE id = ?",
+                        fixture.accountId());
+                deleteFundingFixture(jdbcTemplate, fixture);
+            }
+        }
+    }
+
+    /**
+     * 완료된 충전의 Replay는 이후 계좌가 비활성으로 바뀌어도 저장 결과를 그대로 반환한다
+     * (DEC-IDEMPOTENCY-STORAGE).
+     */
+    @Test
+    void completedFundingReplayIgnoresLaterBlockedAccount() {
+        try (AnnotationConfigApplicationContext context =
+                     new AnnotationConfigApplicationContext(RootConfig.class)) {
+            JdbcTemplate jdbcTemplate =
+                    new JdbcTemplate(context.getBean(DataSource.class));
+            FundingService fundingService = context.getBean(FundingService.class);
+            FundingFixture fixture = createFundingFixture(jdbcTemplate);
+
+            try {
+                FundingResult original =
+                        fundingService.fund(fundingCommand(fixture, FIXTURE_PIN, 1_000L));
+                assertFalse(original.isReplayed());
+
+                jdbcTemplate.update(
+                        "UPDATE mock_bank_accounts SET status = 'BLOCKED' WHERE id = ?",
+                        fixture.accountId());
+
+                FundingResult replayed =
+                        fundingService.fund(fundingCommand(fixture, FIXTURE_PIN, 1_000L));
+
+                assertTrue(replayed.isReplayed());
+                assertEquals(original.getFundingOrderId(), replayed.getFundingOrderId());
+                assertEquals(
+                        original.getBankTransactionId(), replayed.getBankTransactionId());
+                assertEquals(1, count(jdbcTemplate,
+                        "SELECT COUNT(*) FROM mock_bank_transactions WHERE account_id = ?",
+                        fixture.accountId()));
+                assertEquals(1_000L, value(jdbcTemplate,
+                        "SELECT available_balance FROM wallets WHERE id = ?",
+                        fixture.walletId()));
+            } finally {
+                jdbcTemplate.update(
+                        "UPDATE mock_bank_accounts SET status = 'ACTIVE' WHERE id = ?",
+                        fixture.accountId());
+                deleteFundingFixture(jdbcTemplate, fixture);
+            }
+        }
+    }
+
+    private FundingCommand fundingCommand(FundingFixture fixture, String pin, long amount) {
+        return FundingCommand.builder()
+                .employerId(fixture.userId())
+                .bankCode(FIXTURE_BANK_CODE)
+                .accountNo(fixture.accountNo())
+                .pin(pin)
+                .amount(amount)
+                .idempotencyKey(fixture.idempotencyKey())
+                .build();
+    }
+
     @Test
     void snapshotMappingAndMandatoryGatewayContractWorkOnMySql() {
         try (AnnotationConfigApplicationContext context =
@@ -505,7 +685,7 @@ class FundingIntegrityDatabaseIntegrationTest {
                         IllegalTransactionStateException.class,
                         () -> gateway.preflight(BankAccountPreflightCommand.builder()
                                 .accountId(fixture.accountId())
-                                .userId(fixture.userId())
+                                .pin(FIXTURE_PIN)
                                 .build())
                 );
 
@@ -514,7 +694,7 @@ class FundingIntegrityDatabaseIntegrationTest {
                             walletMapper.getWalletSnapshotForUpdate(fixture.userId());
                     gateway.preflight(BankAccountPreflightCommand.builder()
                             .accountId(fixture.accountId())
-                            .userId(fixture.userId())
+                            .pin(FIXTURE_PIN)
                             .build());
                     status.setRollbackOnly();
                     return locked;
@@ -587,7 +767,7 @@ class FundingIntegrityDatabaseIntegrationTest {
                 fintechUseNumber
         );
         return new FundingFixture(
-                userId, walletId, accountId, idempotencyKey
+                userId, walletId, accountId, accountNumber, idempotencyKey
         );
     }
 
@@ -647,10 +827,14 @@ class FundingIntegrityDatabaseIntegrationTest {
         }
     }
 
+    private static final String FIXTURE_BANK_CODE = "999";
+    private static final String FIXTURE_PIN = "0000";
+
     private record FundingFixture(
             Long userId,
             Long walletId,
             Long accountId,
+            String accountNo,
             String idempotencyKey) {
     }
 }

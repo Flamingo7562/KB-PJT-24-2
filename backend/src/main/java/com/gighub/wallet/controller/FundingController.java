@@ -1,7 +1,10 @@
 package com.gighub.wallet.controller;
 
+import com.gighub.auth.security.AuthPrincipal;
 import com.gighub.auth.security.AuthPrincipals;
 import com.gighub.common.api.ApiResponse;
+import com.gighub.common.exception.ForbiddenException;
+import com.gighub.member.domain.UserRole;
 import com.gighub.wallet.service.FundingService;
 import com.gighub.wallet.service.command.FundingCommand;
 import com.gighub.wallet.service.result.FundingResult;
@@ -29,11 +32,17 @@ public class FundingController {
             @RequestHeader("Idempotency-Key") String idempotencyKey,
             @Valid @RequestBody FundingRequest request,
             Authentication authentication) {
-        Long loginUserId = AuthPrincipals.resolve(authentication).getUserId();
+        AuthPrincipal principal = AuthPrincipals.resolve(authentication);
+        // 은행 계좌 인증과 별개로 충전은 GigHub의 OWNER 전용 Operation이다.
+        if (principal.getRole() != UserRole.OWNER) {
+            throw new ForbiddenException("사장님 계정만 지갑을 충전할 수 있습니다.");
+        }
 
         FundingResult result = fundingService.fund(FundingCommand.builder()
-                .employerId(loginUserId)
-                .linkedAccountId(request.getBankAccountId())
+                .employerId(principal.getUserId())
+                .bankCode(request.getBankCode())
+                .accountNo(request.getAccountNo())
+                .pin(request.getPin())
                 .amount(request.getAmount())
                 .idempotencyKey(idempotencyKey)
                 .build());
