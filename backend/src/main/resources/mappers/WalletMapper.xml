@@ -4,6 +4,35 @@
 
 <mapper namespace="com.gighub.wallet.mapper.WalletMapper">
 
+    <!-- DTO가 setter를 갖지 않으므로 생성자 인자로 매핑한다. 인자 순서는 필드 선언 순서를 따른다 -->
+    <resultMap id="walletBalanceSnapshotResult"
+               type="com.gighub.wallet.dto.WalletBalanceSnapshot">
+        <constructor>
+            <idArg column="walletId" javaType="java.lang.Long"/>
+            <arg column="userId" javaType="java.lang.Long"/>
+            <arg column="availableBalance" javaType="java.lang.Long"/>
+            <arg column="lockedBalance" javaType="java.lang.Long"/>
+        </constructor>
+    </resultMap>
+
+    <resultMap id="walletTransactionSnapshotResult"
+               type="com.gighub.wallet.dto.WalletTransactionSnapshot">
+        <constructor>
+            <idArg column="id" javaType="java.lang.Long"/>
+            <arg column="walletId" javaType="java.lang.Long"/>
+            <arg column="walletUserId" javaType="java.lang.Long"/>
+            <arg column="workCaseId" javaType="java.lang.Long"/>
+            <arg column="transactionType" javaType="java.lang.String"/>
+            <arg column="amount" javaType="java.lang.Long"/>
+            <arg column="availableBefore" javaType="java.lang.Long"/>
+            <arg column="availableAfter" javaType="java.lang.Long"/>
+            <arg column="lockedBefore" javaType="java.lang.Long"/>
+            <arg column="lockedAfter" javaType="java.lang.Long"/>
+            <arg column="referenceType" javaType="java.lang.String"/>
+            <arg column="referenceId" javaType="java.lang.Long"/>
+        </constructor>
+    </resultMap>
+
     <!-- ================= 1. 기본 지갑(Wallet) ================= -->
 
     <insert id="insertKrwWallet">
@@ -39,7 +68,7 @@
 
     <!-- 지갑 잔액 스냅샷 조회 및 행 잠금 -->
     <select id="getWalletSnapshotForUpdate"
-            resultType="com.gighub.wallet.dto.WalletBalanceSnapshot">
+            resultMap="walletBalanceSnapshotResult">
         SELECT id                AS walletId,
                user_id           AS userId,
                available_balance AS availableBalance,
@@ -157,7 +186,7 @@
     </sql>
 
     <select id="findTransactionByIdempotencyKey"
-            resultType="com.gighub.wallet.dto.WalletTransactionSnapshot">
+            resultMap="walletTransactionSnapshotResult">
         SELECT <include refid="transactionSnapshotColumns"/>
         FROM wallet_transactions wt
         JOIN wallets w ON w.id = wt.wallet_id
@@ -166,7 +195,7 @@
     </select>
 
     <select id="findFundingTransactionSnapshot"
-            resultType="com.gighub.wallet.dto.WalletTransactionSnapshot">
+            resultMap="walletTransactionSnapshotResult">
         SELECT <include refid="transactionSnapshotColumns"/>
         FROM wallet_transactions wt
         JOIN wallets w ON w.id = wt.wallet_id
@@ -180,7 +209,7 @@
     </select>
 
     <select id="findEscrowHoldTransactionSnapshot"
-            resultType="com.gighub.wallet.dto.WalletTransactionSnapshot">
+            resultMap="walletTransactionSnapshotResult">
         SELECT <include refid="transactionSnapshotColumns"/>
         FROM wallet_transactions wt
         JOIN wallets w ON w.id = wt.wallet_id
