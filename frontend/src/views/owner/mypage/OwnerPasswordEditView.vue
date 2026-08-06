@@ -4,6 +4,12 @@
  * 현재 비밀번호 확인 후 새 비밀번호 설정(불일치 시 400).
  * 연계 API: PATCH /users/me/password  →  @/services/users (changePassword)
  * 공통: AppField · BaseButton · @/utils/validators (passwordRule, passwordsMatch)
+ *
+ * 실시간 검증(#238): useFieldValidation 이 형식 오류(errors)를 담당한다. 이 화면은 중복확인이
+ * 없어 별도 슬롯이 필요 없다. passwordsMatch 는 새 비밀번호와 확인란을 함께 보는 교차 필드
+ * 규칙이라 새 비밀번호를 고치면 확인란의 불일치 오류도 자동으로 재검증된다.
+ * 제출 실패 시 서버가 지목한 필드 오류도 같은 errors 슬롯에 담는다 — handleSubmit 이
+ * validateAll() 로 모든 필드를 이미 touched 로 올린 뒤라 이후 값을 고치면 정상적으로 지워진다.
  */
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
@@ -12,6 +18,7 @@ import AppBackHeader from '@/components/common/AppBackHeader.vue'
 import AppField from '@/components/common/AppField.vue'
 import BaseButton from '@/components/common/BaseButton.vue'
 import { PENDING_FEATURES } from '@/constants/pendingFeatures'
+import { useFieldValidation } from '@/composables/useFieldValidation'
 import { fieldErrorMap } from '@/services/http'
 import { changePassword } from '@/services/users'
 import { useUiStore } from '@/stores/ui'
@@ -28,25 +35,24 @@ const currentPassword = ref('')
 const newPassword = ref('')
 const newPasswordConfirm = ref('')
 
-const currentPasswordError = ref('')
-const newPasswordError = ref('')
-const confirmError = ref('')
+// 형식 오류 전용. 규칙은 기존 validate() 가 쓰던 것을 그대로 옮겼다 — 규칙 자체는 불변.
+const { errors, handleBlur, validateAll } = useFieldValidation(
+  () => ({
+    currentPassword: currentPassword.value,
+    newPassword: newPassword.value,
+    newPasswordConfirm: newPasswordConfirm.value
+  }),
+  {
+    currentPassword: (v) => isRequired(v.currentPassword, '현재 비밀번호'),
+    newPassword: (v) => passwordRule(v.newPassword),
+    newPasswordConfirm: (v) => passwordsMatch(v.newPassword, v.newPasswordConfirm)
+  }
+)
+
 const submitting = ref(false)
 
-function validate() {
-  const currentCheck = isRequired(currentPassword.value, '현재 비밀번호')
-  const newCheck = passwordRule(newPassword.value)
-  const confirmCheck = passwordsMatch(newPassword.value, newPasswordConfirm.value)
-
-  currentPasswordError.value = currentCheck.valid ? '' : currentCheck.message
-  newPasswordError.value = newCheck.valid ? '' : newCheck.message
-  confirmError.value = confirmCheck.valid ? '' : confirmCheck.message
-
-  return currentCheck.valid && newCheck.valid && confirmCheck.valid
-}
-
 async function handleSubmit() {
-  if (!validate()) return
+  if (!validateAll()) return
 
   submitting.value = true
   try {
@@ -59,11 +65,11 @@ async function handleSubmit() {
   } catch (err) {
     // 서버가 실제로 지목한 필드에만 사유를 붙인다 — Endpoint 부재·네트워크 오류·5xx 를
     // '현재 비밀번호가 일치하지 않아요' 로 단정하지 않는다(#187 이전에도 지켜야 하는 계약).
-    const errors = fieldErrorMap(err)
-    if (errors.currentPassword) {
-      currentPasswordError.value = errors.currentPassword
-    } else if (errors.newPassword) {
-      newPasswordError.value = errors.newPassword
+    const fieldErrors = fieldErrorMap(err)
+    if (fieldErrors.currentPassword) {
+      errors.currentPassword = fieldErrors.currentPassword
+    } else if (fieldErrors.newPassword) {
+      errors.newPassword = fieldErrors.newPassword
     } else if (err?.response?.data?.message) {
       ui.toast(err.response.data.message, { type: 'danger' })
     } else {
@@ -87,7 +93,8 @@ async function handleSubmit() {
           type="password"
           placeholder="현재 비밀번호를 입력하세요"
           required
-          :error="currentPasswordError"
+          :error="errors.currentPassword"
+          @blur="handleBlur('currentPassword')"
         />
         <AppField
           v-model="newPassword"
@@ -95,7 +102,8 @@ async function handleSubmit() {
           type="password"
           placeholder="영문+숫자 포함 8자 이상"
           required
-          :error="newPasswordError"
+          :error="errors.newPassword"
+          @blur="handleBlur('newPassword')"
         />
         <AppField
           v-model="newPasswordConfirm"
@@ -103,7 +111,8 @@ async function handleSubmit() {
           type="password"
           placeholder="새 비밀번호를 다시 입력하세요"
           required
-          :error="confirmError"
+          :error="errors.newPasswordConfirm"
+          @blur="handleBlur('newPasswordConfirm')"
         />
 
         <BaseButton
