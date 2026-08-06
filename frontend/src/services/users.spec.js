@@ -3,48 +3,70 @@
  * PATCH /api/users/me 는 phone 외 필드를 무시하지 않고 400 으로 거부하므로,
  * 서비스가 승인 Body 만 만들어 보내는지 확인한다.
  */
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+vi.mock('@/services/http', () => ({
+  default: { get: vi.fn(), patch: vi.fn() }
+}))
+
+import http from '@/services/http'
 import { getMe, updateMe } from '@/services/users'
 
-const APPROVED_PROFILE_FIELDS = ['loginId', 'email', 'name', 'phone', 'role', 'status']
+const serverProfile = {
+  loginId: 'owner01',
+  email: 'owner@test.com',
+  name: '김사장',
+  phone: '01012345678',
+  role: 'OWNER',
+  status: 'ACTIVE'
+}
 
 describe('getMe', () => {
-  it('승인 응답 필드만 반환한다', async () => {
-    const me = await getMe()
-    expect(Object.keys(me).sort()).toEqual([...APPROVED_PROFILE_FIELDS].sort())
+  beforeEach(() => {
+    http.get.mockReset()
+    http.patch.mockReset()
   })
 
-  it('미승인 필드를 포함하지 않는다', async () => {
-    const me = await getMe()
-    expect(me).not.toHaveProperty('profileImageUrl')
-    expect(me).not.toHaveProperty('passwordHash')
-  })
+  it('사용자 ID 없이 내 프로필만 조회한다', async () => {
+    http.get.mockResolvedValue({ data: serverProfile })
 
-  it('전화번호를 구분 문자 없는 정규화 형식으로 반환한다', async () => {
     const me = await getMe()
-    expect(me.phone).toMatch(/^\d+$/)
+
+    expect(http.get).toHaveBeenCalledWith('/users/me')
+    expect(me).toEqual(serverProfile)
   })
 })
 
 describe('updateMe', () => {
-  it('전화번호를 정규화해 반영한다', async () => {
-    const updated = await updateMe({ phone: '010-9999-8888' })
-    expect(updated.phone).toBe('01099998888')
+  beforeEach(() => {
+    http.get.mockReset()
+    http.patch.mockReset()
+    http.patch.mockResolvedValue({ data: serverProfile })
   })
 
-  it('불변 필드는 요청과 무관하게 유지된다', async () => {
-    const before = await getMe()
-    const updated = await updateMe({ phone: '01055554444' })
-    expect(updated.loginId).toBe(before.loginId)
-    expect(updated.email).toBe(before.email)
-    expect(updated.name).toBe(before.name)
-    expect(updated.role).toBe(before.role)
-    expect(updated.status).toBe(before.status)
+  it('Body 에 phone 만 담아 보낸다', async () => {
+    await updateMe({ phone: '010-9999-8888' })
+
+    const [url, body] = http.patch.mock.calls[0]
+    expect(url).toBe('/users/me')
+    expect(Object.keys(body)).toEqual(['phone'])
   })
 
-  it('응답에도 승인 필드만 남는다', async () => {
-    const updated = await updateMe({ phone: '01012345678' })
-    expect(Object.keys(updated).sort()).toEqual([...APPROVED_PROFILE_FIELDS].sort())
+  it('전화번호를 구분 문자 없는 숫자로 정규화해 보낸다', async () => {
+    await updateMe({ phone: '010-9999-8888' })
+
+    expect(http.patch.mock.calls[0][1].phone).toBe('01099998888')
+  })
+
+  it('금지 필드를 함께 받아도 요청에 싣지 않는다', async () => {
+    await updateMe({
+      phone: '01012345678',
+      name: '바꾸려는 이름',
+      email: 'new@test.com',
+      role: 'WORKER',
+      profileImageUrl: 'https://example.com/a.png'
+    })
+
+    expect(Object.keys(http.patch.mock.calls[0][1])).toEqual(['phone'])
   })
 })

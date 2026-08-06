@@ -27,7 +27,7 @@ const isOwner = computed(() => props.role === 'OWNER')
 const isOwnerHome = computed(() => isOwner.value && route.path === '/owner/home')
 
 const workplace = useWorkplaceStore()
-const { workplaces, selectedId } = storeToRefs(workplace)
+const { activeWorkplaces, selectedId } = storeToRefs(workplace)
 
 const notifications = useNotificationsStore()
 const { unreadCount } = storeToRefs(notifications)
@@ -62,12 +62,12 @@ function goMyPage() {
     <div class="right">
       <span v-if="isOwnerHome" class="branch branch--all">전체지점</span>
       <select
-        v-else-if="isOwner && workplaces.length"
+        v-else-if="isOwner && activeWorkplaces.length"
         v-model="branch"
         class="branch"
         aria-label="지점 선택"
       >
-        <option v-for="w in workplaces" :key="w.workplaceId" :value="w.workplaceId">
+        <option v-for="w in activeWorkplaces" :key="w.workplaceId" :value="w.workplaceId">
           {{ w.name }}
         </option>
       </select>
