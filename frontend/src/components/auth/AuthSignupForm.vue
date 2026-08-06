@@ -156,31 +156,38 @@ async function onCheckEmail() {
 /**
  * 중복확인 완료 여부를 제출 시점에 확인한다. loginIdCheck/emailCheck 는
  * useFieldValidation 의 규칙표가 모르는, 이 컴포넌트만 가진 상태라 규칙에 넣지 않고
- * 여기서 따로 얹는다. 형식이 이미 무효여도 이 함수는 그대로 checkErrors 를 채우지만,
- * 화면은 항상 `errors.x || checkErrors.x` 로 errors 를 우선 보여주므로 형식 오류가
- * 있는 동안은 이 메시지가 가려진다.
+ * 여기서 따로 얹는다.
+ *
+ * 형식이 이미 무효(errors.x 가 채워진 상태)면 checkErrors.x 를 건드리지 않는다 — 호출
+ * 순서에 기대지 않기 위해서다. 지금은 onSubmit 이 validateAll() 직후에만 이 함수를
+ * 부르지만, 그 순서가 이 함수의 정확성 조건이 되면 안 된다. 다른 폼이 이 패턴을
+ * 베낄 때(Task 4) 호출 순서가 달라져도 이 함수 자체가 스스로를 지켜야 한다.
  */
 function checkAvailabilityBeforeSubmit() {
   let ok = true
 
-  if (!loginIdCheck.done) {
-    checkErrors.loginId = '아이디 중복확인을 해주세요.'
-    ok = false
-  } else if (!loginIdCheck.available) {
-    checkErrors.loginId = '이미 사용 중인 아이디입니다.'
-    ok = false
-  } else {
-    checkErrors.loginId = ''
+  if (!errors.loginId) {
+    if (!loginIdCheck.done) {
+      checkErrors.loginId = '아이디 중복확인을 해주세요.'
+      ok = false
+    } else if (!loginIdCheck.available) {
+      checkErrors.loginId = '이미 사용 중인 아이디입니다.'
+      ok = false
+    } else {
+      checkErrors.loginId = ''
+    }
   }
 
-  if (!emailCheck.done) {
-    checkErrors.email = '이메일 중복확인을 해주세요.'
-    ok = false
-  } else if (!emailCheck.available) {
-    checkErrors.email = '이미 사용 중인 이메일입니다.'
-    ok = false
-  } else {
-    checkErrors.email = ''
+  if (!errors.email) {
+    if (!emailCheck.done) {
+      checkErrors.email = '이메일 중복확인을 해주세요.'
+      ok = false
+    } else if (!emailCheck.available) {
+      checkErrors.email = '이미 사용 중인 이메일입니다.'
+      ok = false
+    } else {
+      checkErrors.email = ''
+    }
   }
 
   return ok

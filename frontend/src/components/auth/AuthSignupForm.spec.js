@@ -174,17 +174,79 @@ describe('AuthSignupForm', () => {
     expect(checkButtons(wrapper).some((b) => b.text().includes('중복확인'))).toBe(true)
   })
 
-  // Minor 3: errors 와 checkErrors 가 동시에 채워질 수 있는 상태(빈 폼을 그대로 제출)에서
-  // 어느 쪽이 이기는지 고정한다. 형식조차 안 맞는데 "중복확인을 해주세요" 를 보여주는 건
-  // 사용자에게 엉뚱한 다음 행동을 시키는 것이라 형식 오류가 항상 먼저 보여야 한다.
-  it('형식 오류가 중복확인 안내보다 먼저 보인다', async () => {
+  // Important 1(리뷰): 성공 응답뿐 아니라 실패(거부) 응답도 같은 방식으로 무시해야 한다.
+  // checkAvailabilityBeforeSubmit 의 가드(아래)와는 다른 지점이다 — 이건 응답이 오는
+  // '동안' 값이 바뀐 경우를 막는다. onCheckLoginId/onCheckEmail 은 구조가 동일해서(캡처한
+  // 값과 비교하는 가드가 성공·실패 분기에 각각 하나씩) loginId 쪽만 검증하고 email 은
+  // 같은 코드 경로를 그대로 복제한 것이므로 생략한다.
+  it('중복확인이 실패로 응답하기 전에 값이 바뀌면 그 응답도 무시한다', async () => {
+    let rejectCheck
+    checkLoginId.mockImplementation(
+      () =>
+        new Promise((_resolve, reject) => {
+          rejectCheck = reject
+        })
+    )
     const wrapper = factory()
+    const loginIdInput = getInput(wrapper, '4~20자 영문·숫자')
 
-    await wrapper.find('form').trigger('submit')
+    await loginIdInput.setValue('checked1')
+    await checkButtons(wrapper)[0].trigger('click') // 'checked1' 로 요청 시작, 아직 응답 없음
+
+    await loginIdInput.setValue('changed2') // 실패 응답이 오기 전에 값을 바꿈
+
+    rejectCheck({
+      response: {
+        data: { fieldErrors: [{ field: 'loginId', reason: '이미 사용 중인 아이디입니다.' }] }
+      },
+      fieldErrors: [{ field: 'loginId', reason: '이미 사용 중인 아이디입니다.' }]
+    })
     await flushPromises()
 
+    // 서버는 'checked1' 에 대해 거부했을 뿐 'changed2' 에는 아무 말도 하지 않았다.
+    expect(wrapper.text()).not.toContain('이미 사용 중인 아이디입니다.')
+  })
+
+  // Minor 3(리뷰): errors 와 checkErrors 가 동시에 채워지는 상태를 만들어 우선순위를
+  // 고정한다. checkAvailabilityBeforeSubmit 은 형식이 무효면 checkErrors 를 건드리지
+  // 않도록 가드를 두므로(호출 순서에 기대지 않기 위해), 그 함수만으로는 두 슬롯을 동시에
+  // 채울 수 없다. 대신 실제로 있을 수 있는 경합을 쓴다: 제출(signup) 응답이 오는 동안
+  // 사용자가 이미 통과했던 아이디를 지워 형식을 깨고, 그 뒤에 서버가 그 필드에 대한
+  // 거부(fieldErrors)로 응답한다 — onSubmit 의 catch 라우팅에는 이 가드가 없어서
+  // (Finding 1 에서 고친 라우팅 자체와는 별개로) 두 슬롯이 실제로 동시에 채워진다.
+  it('형식 오류가 중복확인 관련 서버 메시지보다 먼저 보인다', async () => {
+    let rejectSignup
+    signup.mockImplementation(
+      () =>
+        new Promise((_resolve, reject) => {
+          rejectSignup = reject
+        })
+    )
+    const wrapper = factory()
+    await fillValidForm(wrapper)
+    await checkButtons(wrapper)[0].trigger('click')
+    await flushPromises()
+    await checkButtons(wrapper)[0].trigger('click')
+    await flushPromises()
+
+    await wrapper.find('form').trigger('submit') // signup() 호출, 아직 응답 없음
+
+    // 응답이 오기 전에 아이디를 지워 형식을 깨뜨린다 — errors.loginId 가 채워진다.
+    await getInput(wrapper, '4~20자 영문·숫자').setValue('')
+
+    rejectSignup({
+      response: {
+        data: { fieldErrors: [{ field: 'loginId', reason: '이미 사용 중인 아이디입니다.' }] }
+      },
+      fieldErrors: [{ field: 'loginId', reason: '이미 사용 중인 아이디입니다.' }]
+    })
+    await flushPromises()
+
+    // 지금 errors.loginId(형식 오류)와 checkErrors.loginId(서버 거부)가 동시에 채워졌다.
+    // 이미 지워버린 값에 대해 "이미 사용 중"이라고 말하는 건 사용자를 혼란시키므로
+    // 형식 오류가 항상 먼저 보여야 한다.
     expect(wrapper.text()).toContain('아이디를 입력해주세요.')
-    expect(wrapper.text()).not.toContain('아이디 중복확인을 해주세요.')
+    expect(wrapper.text()).not.toContain('이미 사용 중인 아이디입니다.')
   })
 
   it('아이디 중복확인이 실패하면 서버 메시지를 토스트로 보여준다', async () => {
@@ -242,6 +304,63 @@ describe('AuthSignupForm', () => {
       expect.anything(),
       expect.objectContaining({ type: 'danger' })
     )
+  })
+
+  // Finding 1(리뷰): 화면은 errors.loginId || checkErrors.loginId 로 합쳐 보여주기 때문에
+  // 메시지가 "보인다"는 것만으로는 어느 슬롯에 들어갔는지 증명하지 못한다 — errors 로
+  // 잘못 들어가도 똑같이 보인다. 결과(consequence)로 검증한다: errors 에 잘못 들어갔다면
+  // useFieldValidation 의 watcher 가 touched 된 다른 필드를 고칠 때 loginId 규칙도 함께
+  // 재평가되어 형식은 여전히 유효하므로 메시지가 지워진다. checkErrors 에 제대로 들어갔다면
+  // loginId 자신의 값을 건드리지 않는 한 절대 지워지지 않는다.
+  it('가입 요청의 아이디 필드 오류는 다른 필드를 고쳐도 사라지지 않는다', async () => {
+    const conflict = {
+      response: {
+        data: { fieldErrors: [{ field: 'loginId', reason: '이미 사용 중인 아이디입니다.' }] }
+      },
+      fieldErrors: [{ field: 'loginId', reason: '이미 사용 중인 아이디입니다.' }]
+    }
+    signup.mockRejectedValue(conflict)
+
+    const wrapper = factory()
+    await fillValidForm(wrapper)
+    await checkButtons(wrapper)[0].trigger('click')
+    await flushPromises()
+    await checkButtons(wrapper)[0].trigger('click')
+    await flushPromises()
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+    expect(wrapper.text()).toContain('이미 사용 중인 아이디입니다.')
+
+    // loginId 가 아닌, 이미 touched 된 다른 필드(비밀번호)를 고친다. loginId 자신의 값은
+    // 그대로다 — 그런데도 잘못된 슬롯이면 재검증 watcher 가 메시지를 지운다.
+    await getInput(wrapper, `${PASSWORD_MIN_LENGTH}~${PASSWORD_MAX_LENGTH}자`).setValue('newpass1')
+
+    expect(wrapper.text()).toContain('이미 사용 중인 아이디입니다.')
+  })
+
+  // Finding 1 짝: 가용성(아이디·이메일)이 아닌 필드의 서버 거부는 그대로 errors 로 가야
+  // 한다(#146 이 도입한 동작 보존). password 필드는 애초에 :error="errors.password" 만
+  // 렌더링하고 checkErrors 는 loginId/email 키만 가지므로, 잘못 라우팅되면 메시지 자체가
+  // 어디에도 표시되지 않는다 — "다른 필드를 고친다" 절차 없이도 라우팅 실수를 잡아낸다.
+  it('가입 요청의 비밀번호 필드 오류는 errors 슬롯에 남아 표시된다', async () => {
+    const conflict = {
+      response: {
+        data: { fieldErrors: [{ field: 'password', reason: '유출된 비밀번호입니다.' }] }
+      },
+      fieldErrors: [{ field: 'password', reason: '유출된 비밀번호입니다.' }]
+    }
+    signup.mockRejectedValue(conflict)
+
+    const wrapper = factory()
+    await fillValidForm(wrapper)
+    await checkButtons(wrapper)[0].trigger('click')
+    await flushPromises()
+    await checkButtons(wrapper)[0].trigger('click')
+    await flushPromises()
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('유출된 비밀번호입니다.')
   })
 
   it('가입 요청 실패에 매칭되는 필드가 없으면 토스트로 대체한다', async () => {
