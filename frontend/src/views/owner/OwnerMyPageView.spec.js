@@ -20,7 +20,7 @@ vi.mock('@/services/users', () => ({
   deleteMe: vi.fn()
 }))
 
-import { getBadge, getMe } from '@/services/users'
+import { deleteMe, getBadge, getMe } from '@/services/users'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
 import OwnerMyPageView from '@/views/owner/OwnerMyPageView.vue'
@@ -55,6 +55,7 @@ describe('OwnerMyPageView', () => {
     push.mockClear()
     getMe.mockReset()
     getBadge.mockReset()
+    deleteMe.mockReset()
     logout = vi.spyOn(useAuthStore(), 'logout').mockResolvedValue()
     toastSpy = vi.spyOn(useUiStore(), 'toast')
   })
@@ -169,5 +170,59 @@ describe('OwnerMyPageView', () => {
     await flushPromises()
 
     expect(findByText(wrapper, 'button', '로그아웃').attributes('disabled')).toBeUndefined()
+  })
+
+  describe('회원 탈퇴 오류 귀속', () => {
+    async function openModalAndFillPassword(wrapper, password = 'current-pw1') {
+      await findByText(wrapper, 'button', '회원 탈퇴').trigger('click')
+      await flushPromises()
+      await wrapper.find('input[type="password"]').setValue(password)
+    }
+
+    it('필드를 지목하지 않은 실패는 비밀번호 오류로 표시하지 않는다', async () => {
+      deleteMe.mockRejectedValue({ response: { status: 500, data: {} } })
+
+      const wrapper = mountView()
+      await flushPromises()
+      await openModalAndFillPassword(wrapper)
+      await findByText(wrapper, 'button', '탈퇴하기').trigger('click')
+      await flushPromises()
+
+      expect(wrapper.find('.msg.error').exists()).toBe(false)
+      expect(toastSpy).toHaveBeenCalledWith('탈퇴 처리 중 오류가 발생했어요.', { type: 'danger' })
+    })
+
+    it('서버가 비밀번호 필드를 지목하면 그 필드 아래에 표시한다', async () => {
+      const fieldError = { field: 'password', reason: '비밀번호가 올바르지 않습니다.' }
+      deleteMe.mockRejectedValue({
+        response: { status: 400, data: { fieldErrors: [fieldError] } },
+        fieldErrors: [fieldError]
+      })
+
+      const wrapper = mountView()
+      await flushPromises()
+      await openModalAndFillPassword(wrapper)
+      await findByText(wrapper, 'button', '탈퇴하기').trigger('click')
+      await flushPromises()
+
+      expect(wrapper.find('.msg.error').text()).toBe('비밀번호가 올바르지 않습니다.')
+    })
+
+    it('fieldErrors 없이 message 만 있으면 필드가 아니라 폼 레벨 토스트로 보여준다', async () => {
+      deleteMe.mockRejectedValue({
+        response: { status: 409, data: { message: '진행 중인 근무가 있어 탈퇴할 수 없어요.' } }
+      })
+
+      const wrapper = mountView()
+      await flushPromises()
+      await openModalAndFillPassword(wrapper)
+      await findByText(wrapper, 'button', '탈퇴하기').trigger('click')
+      await flushPromises()
+
+      expect(wrapper.find('.msg.error').exists()).toBe(false)
+      expect(toastSpy).toHaveBeenCalledWith('진행 중인 근무가 있어 탈퇴할 수 없어요.', {
+        type: 'danger'
+      })
+    })
   })
 })

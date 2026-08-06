@@ -11,6 +11,7 @@ import { useRouter } from 'vue-router'
 import AppBackHeader from '@/components/common/AppBackHeader.vue'
 import AppField from '@/components/common/AppField.vue'
 import BaseButton from '@/components/common/BaseButton.vue'
+import { fieldErrorMap } from '@/services/http'
 import { changePassword } from '@/services/users'
 import { useUiStore } from '@/stores/ui'
 import { isRequired, passwordRule, passwordsMatch } from '@/utils/validators'
@@ -52,7 +53,18 @@ async function handleSubmit() {
     ui.toast('비밀번호가 변경됐어요.', { type: 'success' })
     router.back()
   } catch (err) {
-    currentPasswordError.value = err?.response?.data?.message || '현재 비밀번호가 일치하지 않아요.'
+    // 서버가 실제로 지목한 필드에만 사유를 붙인다 — Endpoint 부재·네트워크 오류·5xx 를
+    // '현재 비밀번호가 일치하지 않아요' 로 단정하지 않는다(#187 이전에도 지켜야 하는 계약).
+    const errors = fieldErrorMap(err)
+    if (errors.currentPassword) {
+      currentPasswordError.value = errors.currentPassword
+    } else if (errors.newPassword) {
+      newPasswordError.value = errors.newPassword
+    } else if (err?.response?.data?.message) {
+      ui.toast(err.response.data.message, { type: 'danger' })
+    } else {
+      ui.toast('비밀번호 변경에 실패했어요.', { type: 'danger' })
+    }
   } finally {
     submitting.value = false
   }

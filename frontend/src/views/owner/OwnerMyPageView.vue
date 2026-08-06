@@ -16,6 +16,7 @@ import AppField from '@/components/common/AppField.vue'
 import BaseButton from '@/components/common/BaseButton.vue'
 import BaseModal from '@/components/common/BaseModal.vue'
 import TrustBadge from '@/components/common/TrustBadge.vue'
+import { fieldErrorMap } from '@/services/http'
 import { deleteMe, getBadge, getMe } from '@/services/users'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
@@ -113,7 +114,16 @@ async function confirmWithdraw() {
     await authStore.logout()
     router.push('/')
   } catch (err) {
-    withdrawError.value = err?.response?.data?.message || '탈퇴 처리 중 오류가 발생했어요.'
+    // 서버가 실제로 지목한 필드에만 사유를 붙인다 — 잔액·진행 근무 등 무관한 사유를
+    // 비밀번호 필드 아래 지어내 보여주지 않는다.
+    const errors = fieldErrorMap(err)
+    if (errors.password) {
+      withdrawError.value = errors.password
+    } else if (err?.response?.data?.message) {
+      ui.toast(err.response.data.message, { type: 'danger' })
+    } else {
+      ui.toast('탈퇴 처리 중 오류가 발생했어요.', { type: 'danger' })
+    }
   } finally {
     withdrawing.value = false
   }
