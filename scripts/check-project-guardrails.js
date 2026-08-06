@@ -21,67 +21,24 @@ const PATCH_ROOT = "docs/spec-patches";
 const PATCH_README_PATH = `${PATCH_ROOT}/README.md`;
 const PATCH_TEMPLATE_PATH = `${PATCH_ROOT}/TEMPLATE.md`;
 const PATCH_KEEP_PATHS = new Set([
-  `${PATCH_ROOT}/proposed/.gitkeep`,
+  `${PATCH_ROOT}/draft/.gitkeep`,
   `${PATCH_ROOT}/archive/.gitkeep`,
 ]);
 const PATCH_REQUIRED_METADATA = [
   "patch_id",
-  "author",
   "status",
   "issue",
-  "created_at",
   "base_spec_version",
-  "base_commit",
-  "change_type",
   "targets",
-  "depends_on",
-  "supersedes",
-  "superseded_by",
-  "applied_in_version",
-  "applied_by_pr",
 ];
-const PATCH_OPTIONAL_METADATA = ["delivery_mode"];
-const PATCH_SUPPORTED_METADATA = new Set([
-  ...PATCH_REQUIRED_METADATA,
-  ...PATCH_OPTIONAL_METADATA,
-]);
-const PATCH_REQUIRED_SECTIONS = [
-  "변경 요약과 필요성",
-  "현재 명세와 문제",
-  "제안할 최종 규범 문장 또는 Before/After",
-  "영향 분석",
-  "검증 가능한 수용 조건",
-  "미결 사항",
-  "관련 Issue·PR·의존 Patch",
-];
-const PATCH_REQUIRED_IMPACT_SECTIONS = [
-  "요구사항",
-  "API",
-  "데이터 및 Migration",
-  "보안",
-  "Frontend",
-  "Backend",
-  "테스트",
-];
-const PATCH_STATUSES = new Set([
-  "draft",
-  "proposed",
-  "accepted",
-  "applied",
-  "rejected",
-  "superseded",
-]);
-const PATCH_ACTIVE_STATUSES = new Set(["draft", "proposed", "accepted"]);
-const PATCH_ARCHIVED_STATUSES = new Set(["applied", "rejected", "superseded"]);
-const PATCH_CHANGE_TYPES = new Set(["additive", "clarification", "breaking"]);
-const PATCH_DELIVERY_MODES = new Set(["implementation_bundled", "spec_first"]);
+const PATCH_SUPPORTED_METADATA = new Set(PATCH_REQUIRED_METADATA);
+const PATCH_REQUIRED_SECTIONS = ["추가 사항", "완료 조건"];
+const PATCH_STATUSES = new Set(["draft", "accepted"]);
+const PATCH_ACTIVE_STATUSES = new Set(["draft"]);
+const PATCH_ARCHIVED_STATUSES = new Set(["accepted"]);
 const PATCH_ALLOWED_TRANSITIONS = new Map([
-  ["draft", new Set(["proposed"])],
-  ["proposed", new Set(["accepted", "rejected", "superseded"])],
-  ["accepted", new Set(["applied", "superseded"])],
-  ["applied", new Set()],
-  ["rejected", new Set()],
-  ["superseded", new Set()],
+  ["draft", new Set(["accepted"])],
+  ["accepted", new Set()],
 ]);
 const PATCH_TARGET_SPEC_PATHS = new Map([
   ["requirement", `${SPEC_ROOT}/REQUIREMENTS.md`],
@@ -93,14 +50,13 @@ const PATCH_TARGET_SPEC_PATHS = new Map([
   ["traceability", `${SPEC_ROOT}/SPEC_TRACEABILITY.md`],
 ]);
 const PATCH_FILE_PATTERN = new RegExp(
-  `^${PATCH_ROOT}/(proposed|archive)/` +
+  `^${PATCH_ROOT}/(draft|archive)/` +
     "([a-z0-9]+(?:-[a-z0-9]+)*)_" +
     "issue-([1-9][0-9]*)_" +
     "([a-z0-9]+(?:-[a-z0-9]+)*)_patch_v([1-9][0-9]*)\\.md$",
 );
 const PATCH_ID_PATTERN = /^SPEC-([1-9][0-9]*)-(?!00$)([0-9]{2})$/;
 const SEMVER_PATTERN = /^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$/;
-const FULL_GIT_COMMIT_PATTERN = /^[0-9a-f]{40}$/;
 
 function git(args, options = {}) {
   return execFileSync("git", args, {
@@ -745,7 +701,7 @@ function parsePatchFrontMatter(content, file) {
         continue;
       }
 
-      if (rawValue === "" && ["targets", "depends_on"].includes(key)) {
+      if (rawValue === "" && key === "targets") {
         metadata[key] = [];
         collection = key;
       } else if (rawValue === "") {
@@ -764,16 +720,6 @@ function parsePatchFrontMatter(content, file) {
       if (target) {
         const value = parsePatchScalar(target[2], label, errors);
         metadata.targets.push({ [target[1]]: value });
-        continue;
-      }
-    }
-
-    if (collection === "depends_on") {
-      const dependency = /^  -\s+(.+)$/.exec(line);
-      if (dependency) {
-        metadata.depends_on.push(
-          parsePatchScalar(dependency[1], label, errors),
-        );
         continue;
       }
     }
@@ -805,21 +751,7 @@ function getMarkdownSection(body, title, level) {
   return remainder.slice(0, sectionEnd).trim();
 }
 
-function isValidCalendarDate(value) {
-  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-    return false;
-  }
-  const parsed = new Date(`${value}T00:00:00.000Z`);
-  return (
-    !Number.isNaN(parsed.valueOf()) && parsed.toISOString().startsWith(value)
-  );
-}
-
-function isValidPatchReference(value) {
-  return typeof value === "string" && PATCH_ID_PATTERN.test(value);
-}
-
-function hasAcceptedPlaceholder(content) {
+function hasPatchPlaceholder(content) {
   return /<[^>\n]+>|\b(?:TODO|TBD|FIXME)\b|작성\s*필요|추후\s*결정|미정/i.test(
     content,
   );
@@ -828,26 +760,13 @@ function hasAcceptedPlaceholder(content) {
 function hasTemplateSentinel(metadata, body, targets) {
   return (
     metadata.base_spec_version === "0.0.0" ||
-    metadata.base_commit === "0".repeat(40) ||
     targets.some((target) =>
       /^(?:REQUIREMENT-ID|DECISION-ID|REST-OPERATION)$/i.test(target.value),
     ) ||
-    /^#\s+SPEC-000-01(?::|\s|$)|^#\s+.*명세 Patch 제목\s*$|수용 조건을 작성한다|최소 계약 변경을 제안한다|현재 계약의 공백을 설명한다|최종 규범 문장을 제시한다|implementation_bundled 또는 spec_first 선택 이유를 적는다/im.test(
+    /^#\s+SPEC-000-01(?::|\s|$)|^#\s+.*명세 Patch 제목\s*$|추가 사항을 작성한다|완료 조건을 작성한다/im.test(
       body,
     )
   );
-}
-
-function hasResolvedOpenQuestions(body) {
-  const section = getMarkdownSection(body, "미결 사항", 2);
-  if (section === null) return false;
-  const normalized = section
-    .replace(/<!--[\s\S]*?-->/g, "")
-    .trim()
-    .replace(/^[-*]\s+/, "")
-    .replace(/^`|`$/g, "")
-    .trim();
-  return /^(?:없음|해당 없음|none)[.!。]?$/i.test(normalized);
 }
 
 function parsePatchDocument(file, content) {
@@ -855,7 +774,7 @@ function parsePatchDocument(file, content) {
   if (!pathInfo) {
     return {
       errors: [
-        `${file} must match ${PATCH_ROOT}/proposed|archive/<github-id>_issue-<number>_<kebab-summary>_patch_v<revision>.md.`,
+        `${file} must match ${PATCH_ROOT}/draft|archive/<github-id>_issue-<number>_<kebab-summary>_patch_v<revision>.md.`,
       ],
       patch: null,
     };
@@ -886,9 +805,6 @@ function parsePatchDocument(file, content) {
     errors.push(`${file} patch_id issue must match the issue metadata.`);
   }
 
-  if (metadata.author !== pathInfo.author) {
-    errors.push(`${file} author metadata must match the filename GitHub ID.`);
-  }
   if (metadata.issue !== pathInfo.issue) {
     errors.push(`${file} issue metadata must match the filename issue number.`);
   }
@@ -900,39 +816,11 @@ function parsePatchDocument(file, content) {
   if (!Number.isInteger(metadata.issue) || metadata.issue <= 0) {
     errors.push(`${file} issue must be a positive integer.`);
   }
-  if (!isValidCalendarDate(metadata.created_at)) {
-    errors.push(`${file} created_at must be a valid YYYY-MM-DD date.`);
-  }
   if (
     typeof metadata.base_spec_version !== "string" ||
     !SEMVER_PATTERN.test(metadata.base_spec_version)
   ) {
     errors.push(`${file} base_spec_version must be a complete SemVer value.`);
-  }
-  if (
-    typeof metadata.base_commit !== "string" ||
-    !FULL_GIT_COMMIT_PATTERN.test(metadata.base_commit)
-  ) {
-    errors.push(`${file} base_commit must be a lowercase full 40-hex Git SHA.`);
-  }
-  if (!PATCH_CHANGE_TYPES.has(metadata.change_type)) {
-    errors.push(
-      `${file} change_type must be one of: ${[...PATCH_CHANGE_TYPES].join(", ")}.`,
-    );
-  }
-
-  // 정책 변경 전에 만든 Patch는 기존의 보수적인 spec-first 흐름을 그대로 따른다.
-  const deliveryMode = metadata.delivery_mode ?? "spec_first";
-  if (!PATCH_DELIVERY_MODES.has(deliveryMode)) {
-    errors.push(
-      `${file} delivery_mode must be one of: ${[...PATCH_DELIVERY_MODES].join(", ")}.`,
-    );
-  }
-  if (
-    deliveryMode === "implementation_bundled" &&
-    metadata.change_type === "breaking"
-  ) {
-    errors.push(`${file} breaking Patch must use spec_first delivery_mode.`);
   }
 
   const targets = [];
@@ -972,72 +860,17 @@ function parsePatchDocument(file, content) {
     });
   }
 
-  if (!Array.isArray(metadata.depends_on)) {
-    errors.push(`${file} depends_on must be a list (use [] when empty).`);
-  } else {
-    const seenDependencies = new Set();
-    metadata.depends_on.forEach((dependency, index) => {
-      if (!isValidPatchReference(dependency)) {
-        errors.push(`${file} depends_on[${index}] must be a Patch ID.`);
-      } else if (seenDependencies.has(dependency)) {
-        errors.push(`${file} lists dependency ${dependency} more than once.`);
-      }
-      seenDependencies.add(dependency);
-    });
-  }
-
-  for (const key of ["supersedes", "superseded_by"]) {
-    if (metadata[key] !== null && !isValidPatchReference(metadata[key])) {
-      errors.push(`${file} ${key} must be null or a Patch ID.`);
-    }
-    if (metadata[key] === metadata.patch_id) {
-      errors.push(`${file} ${key} must not reference the Patch itself.`);
-    }
-  }
-
-  if (metadata.status === "superseded") {
-    if (!isValidPatchReference(metadata.superseded_by)) {
-      errors.push(`${file} superseded status requires superseded_by.`);
-    }
-  } else if (metadata.superseded_by !== null) {
-    errors.push(
-      `${file} superseded_by must be null until status is superseded.`,
-    );
-  }
-
-  if (metadata.status === "applied") {
-    if (
-      typeof metadata.applied_in_version !== "string" ||
-      !SEMVER_PATTERN.test(metadata.applied_in_version)
-    ) {
-      errors.push(`${file} applied status requires applied_in_version SemVer.`);
-    }
-    if (
-      !Number.isInteger(metadata.applied_by_pr) ||
-      metadata.applied_by_pr <= 0
-    ) {
-      errors.push(`${file} applied status requires a positive applied_by_pr.`);
-    }
-  } else if (
-    metadata.applied_in_version !== null ||
-    metadata.applied_by_pr !== null
-  ) {
-    errors.push(
-      `${file} applied_in_version and applied_by_pr must stay null before applied status.`,
-    );
-  }
-
   if (
     PATCH_ACTIVE_STATUSES.has(metadata.status) &&
-    pathInfo.directory !== "proposed"
+    pathInfo.directory !== "draft"
   ) {
-    errors.push(`${file} active Patch status must be stored under proposed/.`);
+    errors.push(`${file} draft Patch status must be stored under draft/.`);
   }
   if (
     PATCH_ARCHIVED_STATUSES.has(metadata.status) &&
     pathInfo.directory !== "archive"
   ) {
-    errors.push(`${file} terminal Patch status must be stored under archive/.`);
+    errors.push(`${file} accepted Patch status must be stored under archive/.`);
   }
 
   for (const title of PATCH_REQUIRED_SECTIONS) {
@@ -1046,44 +879,12 @@ function parsePatchDocument(file, content) {
       errors.push(`${file} requires a non-empty "## ${title}" section.`);
     }
   }
-  if (metadataKeys.has("delivery_mode")) {
-    const deliverySection = getMarkdownSection(
-      body,
-      "전달 방식과 위험 판정",
-      2,
-    );
-    if (deliverySection === null || deliverySection === "") {
-      errors.push(
-        `${file} with delivery_mode requires a non-empty "## 전달 방식과 위험 판정" section.`,
-      );
-    }
+  // draft도 구현 기준으로 사용되므로 빈 초안이나 미결정 Placeholder를 허용하지 않는다.
+  if (hasPatchPlaceholder(`${JSON.stringify(metadata)}\n${body}`)) {
+    errors.push(`${file} Patch must not contain placeholders.`);
   }
-  const impact = getMarkdownSection(body, "영향 분석", 2);
-  if (impact !== null) {
-    for (const title of PATCH_REQUIRED_IMPACT_SECTIONS) {
-      const section = getMarkdownSection(impact, title, 3);
-      if (section === null || section === "") {
-        errors.push(
-          `${file} requires a non-empty "### ${title}" impact section.`,
-        );
-      }
-    }
-  }
-
-  if (["accepted", "applied"].includes(metadata.status)) {
-    if (hasAcceptedPlaceholder(`${JSON.stringify(metadata)}\n${body}`)) {
-      errors.push(`${file} accepted Patch must not contain placeholders.`);
-    }
-    if (!hasResolvedOpenQuestions(body)) {
-      errors.push(
-        `${file} accepted Patch must resolve "미결 사항" explicitly as 없음.`,
-      );
-    }
-    if (hasTemplateSentinel(metadata, body, targets)) {
-      errors.push(
-        `${file} accepted Patch must replace every TEMPLATE sentinel with reviewed content.`,
-      );
-    }
+  if (hasTemplateSentinel(metadata, body, targets)) {
+    errors.push(`${file} Patch must replace every TEMPLATE sentinel.`);
   }
 
   return {
@@ -1091,7 +892,6 @@ function parsePatchDocument(file, content) {
     patch: {
       body,
       content: normalizeSpecContent(content),
-      deliveryMode,
       file,
       metadata,
       pathInfo,
@@ -1226,16 +1026,9 @@ function isPatchContentChanged(previous, current) {
   );
 }
 
-function getAcceptedTransitionContent(patch) {
+function getPatchTransitionContent(patch) {
   const metadata = { ...patch.metadata };
-  for (const key of [
-    "status",
-    "superseded_by",
-    "applied_in_version",
-    "applied_by_pr",
-  ]) {
-    delete metadata[key];
-  }
+  delete metadata.status;
   return JSON.stringify({ body: patch.body, metadata });
 }
 
@@ -1247,17 +1040,17 @@ function verifyPatchLifecycle(previousById, currentById) {
     const previous = previousById.get(id);
     const current = currentById.get(id);
     if (previous && !current) {
-      errors.push(
-        `Patch audit record must not be deleted: ${id} (${previous.file}).`,
-      );
+      if (previous.metadata.status === "accepted") {
+        errors.push(
+          `Accepted Patch audit record must not be deleted: ${id} (${previous.file}).`,
+        );
+      }
       continue;
     }
     if (!current || !isPatchContentChanged(previous, current)) continue;
     if (!previous) {
-      if (!["draft", "proposed"].includes(current.metadata.status)) {
-        errors.push(
-          `${current.file} new Patch must start in draft or proposed status.`,
-        );
+      if (current.metadata.status !== "draft") {
+        errors.push(`${current.file} new Patch must start in draft status.`);
       }
       continue;
     }
@@ -1265,7 +1058,7 @@ function verifyPatchLifecycle(previousById, currentById) {
     const previousStatus = previous.metadata.status;
     const currentStatus = current.metadata.status;
     if (previousStatus === currentStatus) {
-      if (!["draft", "proposed"].includes(currentStatus)) {
+      if (currentStatus !== "draft") {
         errors.push(
           `${current.file} ${currentStatus} Patch is immutable; create a new revision instead.`,
         );
@@ -1273,24 +1066,34 @@ function verifyPatchLifecycle(previousById, currentById) {
       continue;
     }
 
+    // #236 전환에서 과거 applied 감사 기록을 동일 의미의 accepted로 한 번 이관한다.
+    if (
+      previousStatus === "applied" &&
+      currentStatus === "accepted" &&
+      previous.pathInfo.directory === "archive" &&
+      current.pathInfo.directory === "archive"
+    ) {
+      continue;
+    }
+
     if (!PATCH_ALLOWED_TRANSITIONS.get(previousStatus)?.has(currentStatus)) {
       errors.push(
         `${current.file} disallows Patch status transition ${previousStatus} -> ${currentStatus}.`,
       );
-    } else if (previousStatus === "accepted") {
+    } else if (previousStatus === "draft") {
       if (
         path.posix.basename(previous.file) !== path.posix.basename(current.file)
       ) {
         errors.push(
-          `${current.file} accepted Patch filename and revision are immutable; only its lifecycle directory may change.`,
+          `${current.file} accepted transition must preserve the draft filename and revision.`,
         );
       }
       if (
-        getAcceptedTransitionContent(previous) !==
-        getAcceptedTransitionContent(current)
+        getPatchTransitionContent(previous) !==
+        getPatchTransitionContent(current)
       ) {
         errors.push(
-          `${current.file} accepted Patch content is immutable; only lifecycle metadata may change.`,
+          `${current.file} accepted transition may change only status and lifecycle directory.`,
         );
       }
     }
@@ -1320,10 +1123,8 @@ function verifyPatchSnapshot({
   previousFiles,
   changedFiles,
   canonicalSpecVersion = null,
-  currentDevCommit = null,
   previousCanonicalSpecVersion = null,
-  requireBundledAcceptance = false,
-  requireBundledApplied = false,
+  requireDraftAcceptance = false,
   validateLifecycle = true,
 }) {
   const errors = [];
@@ -1370,37 +1171,6 @@ function verifyPatchSnapshot({
     }
   }
 
-  for (const [id, current] of currentById) {
-    const supersedes = current.metadata.supersedes;
-    if (supersedes === null || !isValidPatchReference(supersedes)) continue;
-    const previousRevision = currentById.get(supersedes);
-    if (!previousRevision) {
-      errors.push(`${current.file} supersedes missing Patch ${supersedes}.`);
-    } else if (
-      previousRevision.metadata.status !== "superseded" ||
-      previousRevision.metadata.superseded_by !== id
-    ) {
-      errors.push(
-        `${current.file} and ${previousRevision.file} must keep bidirectional supersession references.`,
-      );
-    }
-  }
-
-  for (const [id, current] of currentById) {
-    if (current.metadata.status !== "superseded") continue;
-    const successorId = current.metadata.superseded_by;
-    const successor = currentById.get(successorId);
-    if (!successor) {
-      errors.push(
-        `${current.file} superseded_by references missing Patch ${successorId}.`,
-      );
-    } else if (successor.metadata.supersedes !== id) {
-      errors.push(
-        `${current.file} and ${successor.file} must keep bidirectional supersession references.`,
-      );
-    }
-  }
-
   if (validateLifecycle) {
     errors.push(...verifyPatchLifecycle(previousById, currentById));
   }
@@ -1414,11 +1184,6 @@ function verifyPatchSnapshot({
     ) {
       warnings.push(
         `Active Patch ${patch.metadata.patch_id} uses stale base_spec_version ${patch.metadata.base_spec_version}; current release is ${canonicalSpecVersion}.`,
-      );
-    }
-    if (currentDevCommit && patch.metadata.base_commit !== currentDevCommit) {
-      warnings.push(
-        `Active Patch ${patch.metadata.patch_id} uses stale base_commit ${patch.metadata.base_commit}; current origin/dev is ${currentDevCommit}.`,
       );
     }
     for (const target of patch.targets) {
@@ -1452,32 +1217,11 @@ function verifyPatchSnapshot({
     }
 
     if (mixedApplication.length > 0) {
-      // 코드 혼합은 모든 변경 Patch가 구현 동반형일 때만 허용해 서로 다른 계약의 오염을 막는다.
-      const specFirstPatches = scopeCurrentPatches.filter(
-        (patch) => patch.deliveryMode !== "implementation_bundled",
-      );
-      for (const patch of specFirstPatches) {
-        errors.push(
-          `${patch.file} spec_first Patch must not include application code in the same change.`,
-        );
-      }
-
-      const bundledPatches = scopeCurrentPatches.filter(
-        (patch) => patch.deliveryMode === "implementation_bundled",
-      );
-      if (requireBundledAcceptance) {
-        for (const patch of bundledPatches) {
-          if (patch.metadata.status !== "accepted") {
-            errors.push(
-              `${patch.file} implementation_bundled Patch must be accepted before its application change can merge.`,
-            );
-          }
-        }
-      }
+      // draft는 구현과 함께 dev로 가지만 accepted 전환은 정식 명세 릴리스만 담는다.
       for (const patch of scopeCurrentPatches) {
-        if (patch.metadata.status === "applied") {
+        if (patch.metadata.status === "accepted") {
           errors.push(
-            `${patch.file} Controller release must not include application code.`,
+            `${patch.file} accepted transition must not include application code.`,
           );
         }
       }
@@ -1489,7 +1233,7 @@ function verifyPatchSnapshot({
     if (protectedSpecChanges.length > 0) {
       const isControllerRelease =
         scopeCurrentPatches.some(
-          (patch) => patch.metadata.status === "applied",
+          (patch) => patch.metadata.status === "accepted",
         ) &&
         scopeCurrentPatches.every((patch) =>
           PATCH_ARCHIVED_STATUSES.has(patch.metadata.status),
@@ -1497,7 +1241,7 @@ function verifyPatchSnapshot({
       if (!isControllerRelease) {
         for (const file of protectedSpecChanges) {
           errors.push(
-            `Patch proposal must not include protected spec changes: ${file}`,
+            `Draft Patch change must not include protected spec changes: ${file}`,
           );
         }
       }
@@ -1513,30 +1257,19 @@ function verifyPatchSnapshot({
     }
   }
 
-  if (requireBundledApplied) {
+  if (requireDraftAcceptance) {
     for (const patch of currentPatches) {
-      if (
-        patch.deliveryMode === "implementation_bundled" &&
-        patch.metadata.status === "accepted"
-      ) {
+      if (patch.metadata.status === "draft") {
         errors.push(
-          `Approved release is blocked by accepted, unapplied implementation_bundled Patch ${patch.metadata.patch_id} (${patch.file}).`,
+          `Approved release is blocked by draft Patch ${patch.metadata.patch_id} (${patch.file}); accept it into the canonical SPEC or remove its implementation from the release.`,
         );
       }
     }
   }
 
   for (const current of scopeCurrentPatches) {
-    if (current.metadata.status !== "applied") continue;
+    if (current.metadata.status !== "accepted") continue;
 
-    if (
-      canonicalSpecVersion &&
-      current.metadata.applied_in_version !== canonicalSpecVersion
-    ) {
-      errors.push(
-        `${current.file} applied_in_version ${current.metadata.applied_in_version} must match canonical release ${canonicalSpecVersion}.`,
-      );
-    }
     if (
       canonicalSpecVersion &&
       previousCanonicalSpecVersion &&
@@ -1546,7 +1279,7 @@ function verifyPatchSnapshot({
       ) <= 0
     ) {
       errors.push(
-        `${current.file} applied transition must advance the canonical release beyond ${previousCanonicalSpecVersion}.`,
+        `${current.file} accepted transition must advance the canonical release beyond ${previousCanonicalSpecVersion}.`,
       );
     }
 
@@ -1558,7 +1291,7 @@ function verifyPatchSnapshot({
       const specPath = PATCH_TARGET_SPEC_PATHS.get(target.type);
       if (!specPath) {
         errors.push(
-          `${current.file} applied target type has no canonical spec mapping: ${target.type}.`,
+          `${current.file} accepted target type has no canonical spec mapping: ${target.type}.`,
         );
       } else {
         requiredReleasePaths.add(specPath);
@@ -1567,7 +1300,7 @@ function verifyPatchSnapshot({
     for (const requiredPath of requiredReleasePaths) {
       if (!changedFiles.has(requiredPath)) {
         errors.push(
-          `${current.file} applied transition must atomically update ${requiredPath}.`,
+          `${current.file} accepted transition must atomically update ${requiredPath}.`,
         );
       }
     }
@@ -1597,13 +1330,6 @@ function getPreviousCanonicalSpecVersion(mode) {
   return readme === null ? null : extractSpecReleaseVersion(readme);
 }
 
-function getOriginDevCommit() {
-  return (
-    gitOptional(["rev-parse", "--verify", "refs/remotes/origin/dev"])?.trim() ||
-    null
-  );
-}
-
 function validatePatchGovernance(mode) {
   try {
     const currentFiles =
@@ -1614,11 +1340,9 @@ function validatePatchGovernance(mode) {
       canonicalSpecVersion: getCandidateSpecVersion(mode),
       changedFiles: getChangedFiles(mode),
       currentFiles,
-      currentDevCommit: getOriginDevCommit(),
       previousCanonicalSpecVersion: getPreviousCanonicalSpecVersion(mode),
       previousFiles: collectPreviousPatchSnapshot(mode),
-      requireBundledAcceptance: mode !== "staged",
-      requireBundledApplied: mode === "release",
+      requireDraftAcceptance: mode === "release",
       validateLifecycle: mode === "staged",
     });
     if (mode !== "staged") {
@@ -1670,7 +1394,7 @@ function printPatchGovernanceErrors(errors) {
     console.error(`- ${error}`);
   }
   console.error(
-    "\nPatch proposals and Controller releases must follow the documented lifecycle and atomic scope.\n",
+    "\nDraft Patch changes and Controller acceptance must follow the documented two-state lifecycle and atomic scope.\n",
   );
 }
 
@@ -1736,9 +1460,6 @@ if (require.main === module) {
 
 module.exports = {
   CANONICAL_SPEC_MARKDOWN_PATHS,
-  FULL_GIT_COMMIT_PATTERN,
-  PATCH_CHANGE_TYPES,
-  PATCH_DELIVERY_MODES,
   PATCH_FILE_PATTERN,
   PATCH_ID_PATTERN,
   PATCH_ROOT,

@@ -11,22 +11,38 @@ import { listWorkplaces } from '@/services/workplaces'
  * 사업장은 사장 전 기능의 전제 컨텍스트다(라우팅 G7).
  */
 export const useWorkplaceStore = defineStore('workplace', () => {
-  const workplaces = ref([]) // [{ workplaceId, name, address }]
+  const workplaces = ref([]) // [{ workplaceId, name, status }] — selection 로직은 status 를 본다
   const selectedId = ref(null)
   const loaded = ref(false)
 
   const selected = computed(
     () => workplaces.value.find((w) => w.workplaceId === selectedId.value) ?? null
   )
+
+  /** 전역 작업 Context 로 선택할 수 있는 사업장은 ACTIVE 뿐이다(API_SPEC.md:366). */
+  const activeWorkplaces = computed(() => workplaces.value.filter((w) => w.status === 'ACTIVE'))
+
+  /** 목록 존재 여부. 사업장 관리 화면은 INACTIVE 도 보여줘야 하므로 전체 기준이다. */
   const hasWorkplace = computed(() => workplaces.value.length > 0)
 
-  /** 사업장 목록 로드(최초 1회). 선택값이 없으면 첫 지점 선택 */
+  /** 지점 기준 기능(QR·근태·문서함)이 동작 가능한지. 선택 가능한 사업장이 있어야 한다. */
+  const hasActiveWorkplace = computed(() => activeWorkplaces.value.length > 0)
+
+  /**
+   * 사업장 목록 로드(최초 1회, force 시 재조회). 승인 Page Envelope 의 content 를 목록으로 쓴다.
+   * 선택값이 없거나 더 이상 ACTIVE 를 가리키지 않으면 첫 ACTIVE 사업장으로 다시 고른다 —
+   * INACTIVE 를 선택 상태로 두면 이후 지점 기준 조회(QR·근태·문서함)가 전부 잘못된
+   * 사업장으로 나간다. 이미 ACTIVE 를 가리키는 선택값은 그대로 둔다 — 매 refresh 마다
+   * 사용자의 명시적 선택을 되돌리면 안 된다.
+   */
   async function load({ force = false } = {}) {
     if (loaded.value && !force) return
-    workplaces.value = await listWorkplaces()
+    const { content } = await listWorkplaces()
+    workplaces.value = content
     loaded.value = true
-    if (selectedId.value == null && workplaces.value.length > 0) {
-      selectedId.value = workplaces.value[0].workplaceId
+    const selectionIsActive = activeWorkplaces.value.some((w) => w.workplaceId === selectedId.value)
+    if (!selectionIsActive) {
+      selectedId.value = activeWorkplaces.value[0]?.workplaceId ?? null
     }
   }
 
@@ -35,5 +51,23 @@ export const useWorkplaceStore = defineStore('workplace', () => {
     selectedId.value = workplaceId
   }
 
-  return { workplaces, selectedId, loaded, selected, hasWorkplace, load, select }
+  /** 로그아웃 시 Context 를 비운다. Pinia setup store 에는 $reset 이 없다. */
+  function reset() {
+    workplaces.value = []
+    selectedId.value = null
+    loaded.value = false
+  }
+
+  return {
+    workplaces,
+    selectedId,
+    loaded,
+    selected,
+    activeWorkplaces,
+    hasWorkplace,
+    hasActiveWorkplace,
+    load,
+    select,
+    reset
+  }
 })

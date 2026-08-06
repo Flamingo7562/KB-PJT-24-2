@@ -22,7 +22,7 @@ const {
 const PATCH_SCAFFOLD = {
   "docs/spec-patches/README.md": "# Specification Patch governance\n",
   "docs/spec-patches/TEMPLATE.md": "# Specification Patch template\n",
-  "docs/spec-patches/proposed/.gitkeep": "",
+  "docs/spec-patches/draft/.gitkeep": "",
   "docs/spec-patches/archive/.gitkeep": "",
 };
 
@@ -97,20 +97,10 @@ function formatPatchScalar(value) {
 function createPatchDocument(overrides = {}, options = {}) {
   const metadata = {
     patch_id: "SPEC-205-01",
-    author: "flamingo7562",
-    status: "proposed",
+    status: "draft",
     issue: 205,
-    created_at: "2026-08-05",
     base_spec_version: "3.0.0",
-    base_commit: "a".repeat(40),
-    change_type: "additive",
-    delivery_mode: "spec_first",
     targets: [{ requirement: "WALLET-003" }],
-    depends_on: [],
-    supersedes: null,
-    superseded_by: null,
-    applied_in_version: null,
-    applied_by_pr: null,
     ...overrides,
   };
   const omitted = new Set(options.omit ?? []);
@@ -124,15 +114,6 @@ function createPatchDocument(overrides = {}, options = {}) {
         const [type, targetValue] = Object.entries(target)[0];
         lines.push(`  - ${type}: ${formatPatchScalar(targetValue)}`);
       }
-    } else if (key === "depends_on") {
-      if (value.length === 0) {
-        lines.push("depends_on: []");
-      } else {
-        lines.push("depends_on:");
-        for (const dependency of value) {
-          lines.push(`  - ${formatPatchScalar(dependency)}`);
-        }
-      }
     } else {
       lines.push(`${key}: ${formatPatchScalar(value)}`);
     }
@@ -141,56 +122,13 @@ function createPatchDocument(overrides = {}, options = {}) {
   lines.push(
     "---",
     "",
-    "## 변경 요약과 필요성",
-    "",
-    "지갑 계약의 명세 추적 조건을 명확히 기록한다.",
-    "",
-    "## 현재 명세와 문제",
-    "",
-    "현재 계약은 추적 대상과 검증 조건을 함께 확인해야 한다.",
-    "",
-    "## 전달 방식과 위험 판정",
-    "",
-    "하위 호환성과 보안·데이터·외부 소비자 영향을 검토해 전달 방식을 선택했다.",
-    "",
-    "## 제안할 최종 규범 문장 또는 Before/After",
+    "## 추가 사항",
     "",
     "지갑 계약의 변경은 관련 요구사항과 검증 조건을 함께 추적한다.",
     "",
-    "## 영향 분석",
-    "",
-    "### 요구사항",
-    "영향을 기록한다.",
-    "",
-    "### API",
-    "영향 없음.",
-    "",
-    "### 데이터 및 Migration",
-    "영향 없음.",
-    "",
-    "### 보안",
-    "영향 없음.",
-    "",
-    "### Frontend",
-    "영향 없음.",
-    "",
-    "### Backend",
-    "영향 없음.",
-    "",
-    "### 테스트",
-    "수용 조건을 검증한다.",
-    "",
-    "## 검증 가능한 수용 조건",
+    "## 완료 조건",
     "",
     "- 지갑 계약과 검증 조건의 연결을 확인할 수 있다.",
-    "",
-    "## 미결 사항",
-    "",
-    options.openQuestions ?? "- 없음",
-    "",
-    "## 관련 Issue·PR·의존 Patch",
-    "",
-    "- Issue #205",
     "",
   );
 
@@ -202,7 +140,7 @@ function createPatchSnapshot(documents = {}) {
   return new Map(Object.entries({ ...PATCH_SCAFFOLD, ...documents }));
 }
 
-function patchPath(summary, directory = "proposed", revision = 1) {
+function patchPath(summary, directory = "draft", revision = 1) {
   return `docs/spec-patches/${directory}/flamingo7562_issue-205_${summary}_patch_v${revision}.md`;
 }
 
@@ -318,7 +256,7 @@ test("requires canonical spec Markdown release metadata to stay aligned", () => 
   );
 });
 
-test("validates Patch paths, metadata, enums, and duplicate IDs", () => {
+test("validates lightweight Patch paths, metadata, sections, and duplicate IDs", () => {
   const validPath = patchPath("wallet-contract");
   assert.deepEqual(
     parsePatchDocument(validPath, createPatchDocument()).errors,
@@ -334,41 +272,26 @@ test("validates Patch paths, metadata, enums, and duplicate IDs", () => {
   );
 
   const invalidMetadata = createPatchDocument(
-    {
-      status: "reviewing",
-      change_type: "rewrite",
-      delivery_mode: "fast",
-    },
-    { omit: ["base_spec_version", "base_commit"] },
+    { status: "proposed", author: "flamingo7562" },
+    { omit: ["base_spec_version"] },
   );
   const metadataErrors = parsePatchDocument(
     validPath,
     invalidMetadata,
   ).errors.join("\n");
   assert.match(metadataErrors, /missing required metadata: base_spec_version/);
-  assert.match(metadataErrors, /missing required metadata: base_commit/);
-  assert.match(metadataErrors, /status must be one of/);
-  assert.match(metadataErrors, /change_type must be one of/);
-  assert.match(metadataErrors, /delivery_mode must be one of/);
+  assert.match(metadataErrors, /unsupported metadata: author/);
+  assert.match(metadataErrors, /status must be one of: draft, accepted/);
 
-  const missingDeliveryRationale = createPatchDocument().replace(
-    /## 전달 방식과 위험 판정\n\n[^\n]+\n\n/,
-    "",
-  );
-  assert.match(
-    parsePatchDocument(validPath, missingDeliveryRationale).errors.join("\n"),
-    /requires a non-empty "## 전달 방식과 위험 판정" section/,
-  );
-
-  const legacyDocument = createPatchDocument({}, { omit: ["delivery_mode"] });
-  assert.deepEqual(parsePatchDocument(validPath, legacyDocument).errors, []);
-
-  const missingAppliedMetadata = parsePatchDocument(
-    patchPath("wallet-contract", "archive"),
-    createPatchDocument({ status: "applied" }),
+  const missingSections = createPatchDocument()
+    .replace(/## 추가 사항[\s\S]*?## 완료 조건/, "## 완료 조건")
+    .replace("- 지갑 계약과 검증 조건의 연결을 확인할 수 있다.", "");
+  const sectionErrors = parsePatchDocument(
+    validPath,
+    missingSections,
   ).errors.join("\n");
-  assert.match(missingAppliedMetadata, /requires applied_in_version SemVer/);
-  assert.match(missingAppliedMetadata, /requires a positive applied_by_pr/);
+  assert.match(sectionErrors, /requires a non-empty "## 추가 사항" section/);
+  assert.match(sectionErrors, /requires a non-empty "## 완료 조건" section/);
 
   const secondPath = patchPath("wallet-contract-followup");
   const duplicateResult = verifyPatchSnapshot({
@@ -382,36 +305,67 @@ test("validates Patch paths, metadata, enums, and duplicate IDs", () => {
   assert.match(duplicateResult.errors.join("\n"), /Patch ID is duplicated/);
 });
 
-test("blocks invalid Patch transitions and accepted or terminal rewrites", () => {
+test("requires complete draft content without template placeholders", () => {
   const file = patchPath("wallet-contract");
-  const previousProposed = createPatchSnapshot({
-    [file]: createPatchDocument({ status: "proposed" }),
-  });
-  const currentDraft = createPatchSnapshot({
-    [file]: createPatchDocument({ status: "draft" }),
-  });
-  const backwards = verifyPatchSnapshot({
-    changedFiles: new Set([file]),
-    currentFiles: currentDraft,
-    previousFiles: previousProposed,
-  });
-  assert.match(
-    backwards.errors.join("\n"),
-    /disallows Patch status transition proposed -> draft/,
+  const placeholder = createPatchDocument(
+    {
+      base_spec_version: "0.0.0",
+      targets: [{ requirement: "REQUIREMENT-ID" }],
+    },
+    { bodySuffix: "TODO: replace <stable-id>." },
   );
+  const errors = parsePatchDocument(file, placeholder).errors.join("\n");
+  assert.match(errors, /must not contain placeholders/);
+  assert.match(errors, /must replace every TEMPLATE sentinel/);
+});
 
+test("keeps draft mutable and accepted immutable in a two-state lifecycle", () => {
+  const draftPath = patchPath("wallet-contract");
+  const archivePath = patchPath("wallet-contract", "archive");
+  const draftDocument = createPatchDocument();
   const acceptedDocument = createPatchDocument({ status: "accepted" });
-  const acceptedRewrite = verifyPatchSnapshot({
-    changedFiles: new Set([file]),
+
+  const editedDraft = verifyPatchSnapshot({
+    changedFiles: new Set([draftPath]),
     currentFiles: createPatchSnapshot({
-      [file]: `${acceptedDocument}\nEditorial rewrite.\n`,
+      [draftPath]: `${draftDocument}\n추가 설명.\n`,
     }),
-    previousFiles: createPatchSnapshot({ [file]: acceptedDocument }),
+    previousFiles: createPatchSnapshot({ [draftPath]: draftDocument }),
+  });
+  assert.deepEqual(editedDraft.errors, []);
+
+  const deletedDraft = verifyPatchSnapshot({
+    changedFiles: new Set([draftPath]),
+    currentFiles: createPatchSnapshot(),
+    previousFiles: createPatchSnapshot({ [draftPath]: draftDocument }),
+  });
+  assert.deepEqual(deletedDraft.errors, []);
+
+  const newAccepted = verifyPatchSnapshot({
+    changedFiles: new Set([archivePath]),
+    currentFiles: createPatchSnapshot({ [archivePath]: acceptedDocument }),
+    previousFiles: createPatchSnapshot(),
+  });
+  assert.match(newAccepted.errors.join("\n"), /new Patch must start in draft/);
+
+  const rewrittenAccepted = verifyPatchSnapshot({
+    changedFiles: new Set([archivePath]),
+    currentFiles: createPatchSnapshot({
+      [archivePath]: `${acceptedDocument}\nEditorial rewrite.\n`,
+    }),
+    previousFiles: createPatchSnapshot({ [archivePath]: acceptedDocument }),
   });
   assert.match(
-    acceptedRewrite.errors.join("\n"),
+    rewrittenAccepted.errors.join("\n"),
     /accepted Patch is immutable/,
   );
+
+  const deletedAccepted = verifyPatchSnapshot({
+    changedFiles: new Set([archivePath]),
+    currentFiles: createPatchSnapshot(),
+    previousFiles: createPatchSnapshot({ [archivePath]: acceptedDocument }),
+  });
+  assert.match(deletedAccepted.errors.join("\n"), /must not be deleted/);
 });
 
 test("requires the Patch governance scaffold even when every file is deleted", () => {
@@ -429,164 +383,85 @@ test("requires the Patch governance scaffold even when every file is deleted", (
   }
 });
 
-test("requires both sides of a superseded Patch relationship to exist", () => {
-  const proposedPath = patchPath("wallet-contract");
-  const archivePath = patchPath("wallet-contract", "archive");
-  const result = verifyPatchSnapshot({
-    changedFiles: new Set([proposedPath, archivePath]),
-    currentFiles: createPatchSnapshot({
-      [archivePath]: createPatchDocument({
-        status: "superseded",
-        superseded_by: "SPEC-205-02",
-      }),
-    }),
-    previousFiles: createPatchSnapshot({
-      [proposedPath]: createPatchDocument({ status: "accepted" }),
-    }),
+test("allows draft with application code but isolates DDL and protected specs", () => {
+  const draftPath = patchPath("wallet-contract");
+  const applicationPath = "frontend/src/services/wallet.js";
+  const currentFiles = createPatchSnapshot({
+    [draftPath]: createPatchDocument(),
   });
 
-  assert.match(
-    result.errors.join("\n"),
-    /superseded_by references missing Patch SPEC-205-02/,
-  );
-});
+  const implementation = verifyPatchSnapshot({
+    changedFiles: new Set([draftPath, applicationPath]),
+    currentFiles,
+    previousFiles: createPatchSnapshot(),
+  });
+  assert.deepEqual(implementation.errors, []);
 
-test("blocks placeholders and unresolved questions in accepted Patches", () => {
-  const file = patchPath("wallet-contract");
-  const document = createPatchDocument(
-    { status: "accepted" },
-    { bodySuffix: "TODO: replace <stable-id>.", openQuestions: "- 미정" },
-  );
-  const result = parsePatchDocument(file, document);
-
-  assert.match(result.errors.join("\n"), /must not contain placeholders/);
-  assert.match(result.errors.join("\n"), /must resolve "미결 사항"/);
-
-  const templateSentinels = createPatchDocument({
-    status: "accepted",
-    base_spec_version: "0.0.0",
-    base_commit: "0".repeat(40),
-    targets: [{ requirement: "REQUIREMENT-ID" }],
-  })
-    .replace(
-      "지갑 계약의 명세 추적 조건을 명확히 기록한다.",
-      "최소 계약 변경을 제안한다.",
-    )
-    .replace(
-      "- 지갑 계약과 검증 조건의 연결을 확인할 수 있다.",
-      "- [ ] 수용 조건을 작성한다.",
-    );
-  assert.match(
-    parsePatchDocument(file, templateSentinels).errors.join("\n"),
-    /must replace every TEMPLATE sentinel/,
-  );
-
-  const templateHeading = createPatchDocument(
-    { status: "accepted" },
-    { bodySuffix: "# SPEC-000-01: 명세 Patch 제목" },
-  );
-  assert.match(
-    parsePatchDocument(file, templateHeading).errors.join("\n"),
-    /must replace every TEMPLATE sentinel/,
-  );
-});
-
-test("blocks mixed Patch proposal scope but permits an atomic Controller release", () => {
-  const proposedPath = patchPath("wallet-contract");
-  const proposal = verifyPatchSnapshot({
+  const forbidden = verifyPatchSnapshot({
     changedFiles: new Set([
-      proposedPath,
-      "frontend/src/wallet.js",
+      draftPath,
+      applicationPath,
       "backend/src/main/resources/db/migration/V1__wallet.sql",
       "docs/specs/REQUIREMENTS.md",
     ]),
-    currentFiles: createPatchSnapshot({
-      [proposedPath]: createPatchDocument(),
-    }),
-    previousFiles: new Map(),
+    currentFiles,
+    previousFiles: createPatchSnapshot(),
   });
-  const proposalErrors = proposal.errors.join("\n");
   assert.match(
-    proposalErrors,
-    /spec_first Patch must not include application code/,
+    forbidden.errors.join("\n"),
+    /must not include Migration or DDL/,
   );
-  assert.match(proposalErrors, /must not include Migration or DDL/);
-  assert.match(proposalErrors, /must not include protected spec changes/);
+  assert.match(
+    forbidden.errors.join("\n"),
+    /Draft Patch change must not include protected spec changes/,
+  );
+});
 
+test("accepts a draft only with an atomic canonical SPEC release", () => {
+  const draftPath = patchPath("wallet-contract");
   const archivePath = patchPath("wallet-contract", "archive");
-  const appliedTargets = [
+  const targets = [
     { requirement: "WALLET-003" },
     { decision: "DEC-WALLET" },
     { operation: "POST /api/wallet/charge" },
     { traceability: "WALLET-003" },
   ];
-  const appliedDocument = createPatchDocument({
-    status: "applied",
-    applied_in_version: "3.0.1",
-    applied_by_pr: 209,
-    targets: appliedTargets,
-  });
-  const previousFiles = createPatchSnapshot({
-    [proposedPath]: createPatchDocument({
-      status: "accepted",
-      targets: appliedTargets,
-    }),
-  });
-  const currentFiles = createPatchSnapshot({ [archivePath]: appliedDocument });
+  const draftDocument = createPatchDocument({ targets });
+  const acceptedDocument = createPatchDocument({ status: "accepted", targets });
+  const previousFiles = createPatchSnapshot({ [draftPath]: draftDocument });
+  const currentFiles = createPatchSnapshot({ [archivePath]: acceptedDocument });
+
   const incompleteRelease = verifyPatchSnapshot({
-    changedFiles: new Set([proposedPath, archivePath]),
+    changedFiles: new Set([draftPath, archivePath]),
     currentFiles,
     previousFiles,
   });
-  assert.match(
-    incompleteRelease.errors.join("\n"),
-    /atomically update docs\/specs\/SPEC_LOCK\.json/,
-  );
-  assert.match(
-    incompleteRelease.errors.join("\n"),
-    /atomically update docs\/specs\/README\.md/,
-  );
-  assert.match(
-    incompleteRelease.errors.join("\n"),
-    /atomically update docs\/specs\/REQUIREMENTS\.md/,
-  );
-  assert.match(
-    incompleteRelease.errors.join("\n"),
-    /atomically update docs\/specs\/DECISIONS\.md/,
-  );
-  assert.match(
-    incompleteRelease.errors.join("\n"),
-    /atomically update docs\/specs\/API_SPEC\.md/,
-  );
-  assert.match(
-    incompleteRelease.errors.join("\n"),
-    /atomically update docs\/specs\/SPEC_TRACEABILITY\.md/,
-  );
+  for (const file of [
+    "docs/specs/SPEC_LOCK.json",
+    "docs/specs/README.md",
+    "docs/specs/REQUIREMENTS.md",
+    "docs/specs/DECISIONS.md",
+    "docs/specs/API_SPEC.md",
+    "docs/specs/SPEC_TRACEABILITY.md",
+  ]) {
+    assert.match(
+      incompleteRelease.errors.join("\n"),
+      new RegExp(`atomically update ${file.replaceAll(".", "\\.")}`),
+    );
+  }
 
-  const renamedArchivePath = patchPath("wallet-contract-renamed", "archive", 2);
-  const renamedRelease = verifyPatchSnapshot({
-    changedFiles: new Set([proposedPath, renamedArchivePath]),
-    currentFiles: createPatchSnapshot({
-      [renamedArchivePath]: appliedDocument,
-    }),
-    previousFiles,
-  });
-  assert.match(
-    renamedRelease.errors.join("\n"),
-    /accepted Patch filename and revision are immutable/,
-  );
-
+  const releasePaths = new Set([
+    draftPath,
+    archivePath,
+    "docs/specs/SPEC_LOCK.json",
+    "docs/specs/README.md",
+    "docs/specs/REQUIREMENTS.md",
+    "docs/specs/DECISIONS.md",
+    "docs/specs/API_SPEC.md",
+    "docs/specs/SPEC_TRACEABILITY.md",
+  ]);
   const completeRelease = verifyPatchSnapshot({
-    changedFiles: new Set([
-      proposedPath,
-      archivePath,
-      "docs/specs/SPEC_LOCK.json",
-      "docs/specs/README.md",
-      "docs/specs/REQUIREMENTS.md",
-      "docs/specs/DECISIONS.md",
-      "docs/specs/API_SPEC.md",
-      "docs/specs/SPEC_TRACEABILITY.md",
-    ]),
+    changedFiles: releasePaths,
     canonicalSpecVersion: "3.0.1",
     previousCanonicalSpecVersion: "3.0.0",
     currentFiles,
@@ -595,16 +470,7 @@ test("blocks mixed Patch proposal scope but permits an atomic Controller release
   assert.deepEqual(completeRelease.errors, []);
 
   const unchangedRelease = verifyPatchSnapshot({
-    changedFiles: new Set([
-      proposedPath,
-      archivePath,
-      "docs/specs/SPEC_LOCK.json",
-      "docs/specs/README.md",
-      "docs/specs/REQUIREMENTS.md",
-      "docs/specs/DECISIONS.md",
-      "docs/specs/API_SPEC.md",
-      "docs/specs/SPEC_TRACEABILITY.md",
-    ]),
+    changedFiles: releasePaths,
     canonicalSpecVersion: "3.0.1",
     previousCanonicalSpecVersion: "3.0.1",
     currentFiles,
@@ -614,77 +480,43 @@ test("blocks mixed Patch proposal scope but permits an atomic Controller release
     unchangedRelease.errors.join("\n"),
     /must advance the canonical release beyond 3\.0\.1/,
   );
+
+  const changedContent = verifyPatchSnapshot({
+    changedFiles: releasePaths,
+    canonicalSpecVersion: "3.0.1",
+    previousCanonicalSpecVersion: "3.0.0",
+    currentFiles: createPatchSnapshot({
+      [archivePath]: `${acceptedDocument}\nChanged during acceptance.\n`,
+    }),
+    previousFiles,
+  });
+  assert.match(
+    changedContent.errors.join("\n"),
+    /accepted transition may change only status/,
+  );
+
+  const mixedApplication = verifyPatchSnapshot({
+    changedFiles: new Set([...releasePaths, "frontend/src/services/wallet.js"]),
+    canonicalSpecVersion: "3.0.1",
+    previousCanonicalSpecVersion: "3.0.0",
+    currentFiles,
+    previousFiles,
+  });
+  assert.match(
+    mixedApplication.errors.join("\n"),
+    /accepted transition must not include application code/,
+  );
 });
 
-test("allows accepted bundled implementation but keeps compatibility and release gates", () => {
+test("blocks approved releases while any draft Patch remains", () => {
   const file = patchPath("wallet-contract");
-  const applicationPath =
-    "backend/src/main/java/com/gighub/wallet/controller/WalletController.java";
-  const proposedDocument = createPatchDocument({
-    delivery_mode: "implementation_bundled",
-    status: "proposed",
-  });
-  const acceptedDocument = createPatchDocument({
-    delivery_mode: "implementation_bundled",
-    status: "accepted",
-  });
-
-  const awaitingApproval = verifyPatchSnapshot({
-    changedFiles: new Set([file, applicationPath]),
-    currentFiles: createPatchSnapshot({ [file]: proposedDocument }),
-    previousFiles: createPatchSnapshot(),
-    requireBundledAcceptance: true,
-  });
-  assert.match(
-    awaitingApproval.errors.join("\n"),
-    /must be accepted before its application change can merge/,
-  );
-
-  const accepted = verifyPatchSnapshot({
-    changedFiles: new Set([file, applicationPath]),
-    currentFiles: createPatchSnapshot({ [file]: acceptedDocument }),
-    previousFiles: createPatchSnapshot({ [file]: proposedDocument }),
-    requireBundledAcceptance: true,
-  });
-  assert.deepEqual(accepted.errors, []);
-
-  const breaking = parsePatchDocument(
-    file,
-    createPatchDocument({
-      change_type: "breaking",
-      delivery_mode: "implementation_bundled",
-    }),
-  );
-  assert.match(
-    breaking.errors.join("\n"),
-    /breaking Patch must use spec_first delivery_mode/,
-  );
-
-  const migration = verifyPatchSnapshot({
-    changedFiles: new Set([
-      file,
-      applicationPath,
-      "backend/src/main/resources/db/migration/V1__wallet.sql",
-    ]),
-    currentFiles: createPatchSnapshot({ [file]: acceptedDocument }),
-    previousFiles: createPatchSnapshot({ [file]: proposedDocument }),
-    requireBundledAcceptance: true,
-  });
-  assert.match(
-    migration.errors.join("\n"),
-    /must not include Migration or DDL/,
-  );
-
   const release = verifyPatchSnapshot({
     changedFiles: new Set(),
-    currentFiles: createPatchSnapshot({ [file]: acceptedDocument }),
-    previousFiles: createPatchSnapshot({ [file]: acceptedDocument }),
-    requireBundledApplied: true,
+    currentFiles: createPatchSnapshot({ [file]: createPatchDocument() }),
+    previousFiles: createPatchSnapshot({ [file]: createPatchDocument() }),
+    requireDraftAcceptance: true,
   });
-  assert.match(
-    release.errors.join("\n"),
-    /release is blocked by accepted, unapplied implementation_bundled Patch/,
-  );
+  assert.match(release.errors.join("\n"), /release is blocked by draft Patch/);
 });
 
 test("warns when API boundary code changes without a Patch", () => {
@@ -704,92 +536,12 @@ test("warns when API boundary code changes without a Patch", () => {
   );
 });
 
-test("dry-runs the team-authored Issue #153 proposal through the full Patch lifecycle", () => {
-  const proposedPath =
-    "docs/spec-patches/proposed/donnyeonglee_issue-153_work-case-invitation-contract_patch_v1.md";
-  const archivePath =
-    "docs/spec-patches/archive/donnyeonglee_issue-153_work-case-invitation-contract_patch_v1.md";
-  const sourceComment =
-    "https://github.com/Flamingo7562/KB-PJT-24-2/issues/153#issuecomment-5176096637";
-  const createTeamFixture = (overrides = {}) =>
-    createPatchDocument({
-      patch_id: "SPEC-153-01",
-      author: "donnyeonglee",
-      issue: 153,
-      base_commit: "d01d307dae26ce816aa386f3fcf9f7ec514475fc",
-      change_type: "clarification",
-      targets: [{ decision: "DEC-OPEN-WORK-CASE-RESPONSE-SHAPES" }],
-      ...overrides,
-    })
-      .replace(
-        "지갑 계약의 명세 추적 조건을 명확히 기록한다.",
-        "Issue #153 팀원 제안을 축약해 Patch 상태 기록 형식만 검증한다.",
-      )
-      .replace(
-        "현재 계약은 추적 대상과 검증 조건을 함께 확인해야 한다.",
-        "원문 제안은 GitHub 댓글에 있으며 이 fixture는 제품 의미를 승인하지 않는다.",
-      )
-      .replace(
-        "지갑 계약의 변경은 관련 요구사항과 검증 조건을 함께 추적한다.",
-        "제품 문장을 적용하지 않고 Guardrail 상태 전이만 검증한다.",
-      )
-      .replace("- Issue #205", `- Source: ${sourceComment}`);
-
-  // 실제 제품 승인과 분리한 구조 시뮬레이션으로 세 상태의 저장 위치와 원자 적용만 확인한다.
-  const proposedDocument = createTeamFixture({ status: "proposed" });
-  const proposed = verifyPatchSnapshot({
-    changedFiles: new Set([proposedPath]),
-    currentFiles: createPatchSnapshot({
-      [proposedPath]: proposedDocument,
-    }),
-    previousFiles: createPatchSnapshot(),
-  });
-  assert.deepEqual(proposed, { errors: [], warnings: [] });
-
-  const acceptedDocument = createTeamFixture({ status: "accepted" });
-  const accepted = verifyPatchSnapshot({
-    changedFiles: new Set([proposedPath]),
-    currentFiles: createPatchSnapshot({
-      [proposedPath]: acceptedDocument,
-    }),
-    previousFiles: createPatchSnapshot({
-      [proposedPath]: proposedDocument,
-    }),
-  });
-  assert.deepEqual(accepted, { errors: [], warnings: [] });
-
-  const appliedDocument = createTeamFixture({
-    status: "applied",
-    applied_in_version: "3.0.1",
-    applied_by_pr: 999,
-  });
-  const applied = verifyPatchSnapshot({
-    canonicalSpecVersion: "3.0.1",
-    previousCanonicalSpecVersion: "3.0.0",
-    changedFiles: new Set([
-      proposedPath,
-      archivePath,
-      "docs/specs/DECISIONS.md",
-      "docs/specs/README.md",
-      "docs/specs/SPEC_LOCK.json",
-    ]),
-    currentFiles: createPatchSnapshot({
-      [archivePath]: appliedDocument,
-    }),
-    previousFiles: createPatchSnapshot({
-      [proposedPath]: acceptedDocument,
-    }),
-  });
-  assert.deepEqual(applied, { errors: [], warnings: [] });
-});
-
-test("warns about stale active bases and shared active targets", () => {
+test("warns about stale draft bases and shared draft targets", () => {
   const firstPath = patchPath("wallet-contract");
-  const secondPath = patchPath("wallet-contract-followup", "proposed", 2);
+  const secondPath = patchPath("wallet-contract-followup", "draft", 2);
   const result = verifyPatchSnapshot({
     canonicalSpecVersion: "3.0.1",
     changedFiles: new Set([firstPath, secondPath]),
-    currentDevCommit: "b".repeat(40),
     currentFiles: createPatchSnapshot({
       [firstPath]: createPatchDocument({
         targets: [{ operation: "POST /api/wallet/charge" }],
@@ -804,11 +556,10 @@ test("warns about stale active bases and shared active targets", () => {
 
   assert.equal(result.errors.length, 0);
   assert.match(result.warnings.join("\n"), /stale base_spec_version/);
-  assert.match(result.warnings.join("\n"), /stale base_commit/);
   assert.match(result.warnings.join("\n"), /target conflict/);
 });
 
-test("all mode checks committed Patch PR scope from the origin/dev merge base", () => {
+test("all mode allows a committed draft Patch with its implementation", () => {
   const temporaryRepository = fs.mkdtempSync(
     path.join(os.tmpdir(), "gighub-patch-pr-scope-"),
   );
@@ -855,11 +606,7 @@ test("all mode checks committed Patch PR scope from the origin/dev merge base", 
     });
 
     const file = patchPath("wallet-contract");
-    writeRepositoryFile(
-      temporaryRepository,
-      file,
-      createPatchDocument({ base_commit: baseCommit }),
-    );
+    writeRepositoryFile(temporaryRepository, file, createPatchDocument());
     writeRepositoryFile(
       temporaryRepository,
       "frontend/src/wallet.js",
@@ -878,19 +625,15 @@ test("all mode checks committed Patch PR scope from the origin/dev merge base", 
       cwd: temporaryRepository,
       encoding: "utf8",
     });
-    assert.equal(result.status, 1);
-    assert.match(
-      result.stderr,
-      /spec_first Patch must not include application code in the same change/,
-    );
+    assert.equal(result.status, 0, result.stderr);
   } finally {
     fs.rmSync(temporaryRepository, { recursive: true, force: true });
   }
 });
 
-test("all mode accepts an approved bundled implementation and release mode blocks it until applied", () => {
+test("release mode blocks a committed draft Patch until SPEC acceptance", () => {
   const temporaryRepository = fs.mkdtempSync(
-    path.join(os.tmpdir(), "gighub-bundled-patch-scope-"),
+    path.join(os.tmpdir(), "gighub-draft-patch-scope-"),
   );
   const script = path.resolve(__dirname, "check-project-guardrails.js");
 
@@ -929,66 +672,33 @@ test("all mode accepts an approved bundled implementation and release mode block
     });
 
     const file = patchPath("wallet-contract");
-    writeRepositoryFile(
-      temporaryRepository,
-      file,
-      createPatchDocument({
-        base_commit: baseCommit,
-        delivery_mode: "implementation_bundled",
-        status: "proposed",
-      }),
-    );
+    writeRepositoryFile(temporaryRepository, file, createPatchDocument());
     writeRepositoryFile(
       temporaryRepository,
       "frontend/src/services/wallet.js",
-      "export const wallet = 'bundled';\n",
+      "export const wallet = 'draft';\n",
     );
     execFileSync("git", ["add", "."], {
       cwd: temporaryRepository,
       stdio: "ignore",
     });
-    execFileSync("git", ["commit", "--quiet", "-m", "propose bundled patch"], {
+    execFileSync("git", ["commit", "--quiet", "-m", "add draft patch"], {
       cwd: temporaryRepository,
       stdio: "ignore",
     });
 
-    const proposed = spawnSync(process.execPath, [script, "--all"], {
+    const draft = spawnSync(process.execPath, [script, "--all"], {
       cwd: temporaryRepository,
       encoding: "utf8",
     });
-    assert.equal(proposed.status, 1);
-    assert.match(proposed.stderr, /must be accepted before.*can merge/);
-
-    writeRepositoryFile(
-      temporaryRepository,
-      file,
-      createPatchDocument({
-        base_commit: baseCommit,
-        delivery_mode: "implementation_bundled",
-        status: "accepted",
-      }),
-    );
-    execFileSync("git", ["add", "."], {
-      cwd: temporaryRepository,
-      stdio: "ignore",
-    });
-    execFileSync("git", ["commit", "--quiet", "-m", "accept bundled patch"], {
-      cwd: temporaryRepository,
-      stdio: "ignore",
-    });
-
-    const accepted = spawnSync(process.execPath, [script, "--all"], {
-      cwd: temporaryRepository,
-      encoding: "utf8",
-    });
-    assert.equal(accepted.status, 0, accepted.stderr);
+    assert.equal(draft.status, 0, draft.stderr);
 
     const release = spawnSync(process.execPath, [script, "--release"], {
       cwd: temporaryRepository,
       encoding: "utf8",
     });
     assert.equal(release.status, 1);
-    assert.match(release.stderr, /release is blocked by accepted, unapplied/);
+    assert.match(release.stderr, /release is blocked by draft Patch/);
   } finally {
     fs.rmSync(temporaryRepository, { recursive: true, force: true });
   }
@@ -1050,7 +760,7 @@ test("all mode fails closed after Patch governance was deleted from HEAD", () =>
   }
 });
 
-test("all mode accepts proposed then accepted commits but rejects a skipped proposal", () => {
+test("all mode rejects a Patch committed directly as accepted", () => {
   const temporaryRepository = fs.mkdtempSync(
     path.join(os.tmpdir(), "gighub-patch-lifecycle-"),
   );
@@ -1090,56 +800,20 @@ test("all mode accepts proposed then accepted commits but rejects a skipped prop
       stdio: "ignore",
     });
 
-    const file = patchPath("wallet-contract");
-    writeRepositoryFile(
-      temporaryRepository,
-      file,
-      createPatchDocument({ status: "proposed", base_commit: baseCommit }),
-    );
-    execFileSync("git", ["add", "."], {
-      cwd: temporaryRepository,
-      stdio: "ignore",
-    });
-    execFileSync("git", ["commit", "--quiet", "-m", "propose patch"], {
-      cwd: temporaryRepository,
-      stdio: "ignore",
-    });
-
-    writeRepositoryFile(
-      temporaryRepository,
-      file,
-      createPatchDocument({ status: "accepted", base_commit: baseCommit }),
-    );
-    execFileSync("git", ["add", "."], {
-      cwd: temporaryRepository,
-      stdio: "ignore",
-    });
-    execFileSync("git", ["commit", "--quiet", "-m", "accept patch"], {
-      cwd: temporaryRepository,
-      stdio: "ignore",
-    });
-
-    const valid = spawnSync(process.execPath, [script, "--all"], {
-      cwd: temporaryRepository,
-      encoding: "utf8",
-    });
-    assert.equal(valid.status, 0, valid.stderr);
-
-    const skippedFile = patchPath("skipped-proposal", "proposed", 2);
+    const skippedFile = patchPath("skipped-draft", "archive", 2);
     writeRepositoryFile(
       temporaryRepository,
       skippedFile,
       createPatchDocument({
         patch_id: "SPEC-205-02",
         status: "accepted",
-        base_commit: baseCommit,
       }),
     );
     execFileSync("git", ["add", "."], {
       cwd: temporaryRepository,
       stdio: "ignore",
     });
-    execFileSync("git", ["commit", "--quiet", "-m", "skip proposal"], {
+    execFileSync("git", ["commit", "--quiet", "-m", "skip draft"], {
       cwd: temporaryRepository,
       stdio: "ignore",
     });
@@ -1149,7 +823,7 @@ test("all mode accepts proposed then accepted commits but rejects a skipped prop
       encoding: "utf8",
     });
     assert.equal(invalid.status, 1);
-    assert.match(invalid.stderr, /new Patch must start in draft or proposed/);
+    assert.match(invalid.stderr, /new Patch must start in draft/);
   } finally {
     fs.rmSync(temporaryRepository, { recursive: true, force: true });
   }

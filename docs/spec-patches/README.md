@@ -1,54 +1,33 @@
 # 명세 Patch 운영 가이드
 
-`docs/spec-patches/`는 정식 명세 변경을 제안하고 그 처리 이력을 남기는 **비규범 영역**이다. Patch가 `accepted` 상태여도 제품 계약은 아니며, Controller가 Patch를 정식 명세 릴리스에 적용한 뒤에도 계약의 단일 원본은 오직 [`docs/specs/**`](../specs/)이다. 개발자와 구현 Agent는 실행 시점에 정식 명세와 Patch를 합성해 계약으로 해석하지 않는다.
+`docs/spec-patches/`는 보호된 정식 명세를 기능 개발마다 직접 고치지 않고, 구현에 필요한
+변경분만 짧게 기록하는 개발 계약 영역이다. Patch는 전체 명세를 다시 작성하지 않는다.
 
-이 문서에서는 Git의 `HEAD`와 혼동되는 “HEAD 명세”라는 표현을 사용하지 않는다.
+- **정식 SPEC**: Controller가 릴리스하고 `SPEC_LOCK.json`으로 잠근 `docs/specs/**`
+- **draft Patch**: `dev`에서 해당 기능의 구현과 테스트에 사용하는 임시 개발 계약
+- **accepted Patch**: 내용이 정식 SPEC에 반영되어 보관된 기록
+- **Controller**: 정식 SPEC 반영과 Patch 수락을 담당하는 PM/Repository Admin
 
-- **정식 명세(Canonical/Released Spec)**: PM/Repository Admin이 릴리스하고 `SPEC_LOCK.json`으로 잠근 `docs/specs/**`
-- **명세 Patch**: 정식 명세 변경을 요청하는 비규범 제안·승인·감사 기록
-- **Controller**: Patch 승인과 정식 명세 통합을 담당하는 PM/Repository Admin `Flamingo7562`
-- **전달 방식(Delivery Mode)**: 구현과 Patch를 함께 검토하는 `implementation_bundled` 또는 정식 명세를 먼저 확정하는 `spec_first`
-
-## 역할과 책임
-
-### 제안자
-
-- 최신 `origin/dev`와 현재 정식 명세를 기준으로, 독립적으로 승인 가능한 최소 기능 단위마다 Patch 하나를 작성한다.
-- 같은 기능 변경 때문에 요구사항, API, 결정, 추적성이 함께 달라져야 한다면 그 전체 영향을 하나의 Patch에 적는다.
-- 변경의 호환성·보안·데이터·외부 소비자 영향을 평가해 `delivery_mode`를 선택하고 근거를 Patch 본문에 적는다.
-- 정식 명세를 직접 만들거나 수정·삭제·이동·복구하지 않는다.
-- 기준 명세와 활성 Patch가 바뀌면 대상 계약의 의미 호환성을 다시 확인하고 필요한 재검토를 요청한다.
-
-### Controller
-
-- 기준 명세 버전과 Commit, 대상 계약 식별자, 의존 Patch, 활성 Patch와의 중복·충돌을 확인한다.
-- Patch의 승인 여부와 적용 순서를 결정하고 `accepted`, `rejected`, `superseded`, `applied` 전환을 관리한다.
-- 승인된 내용을 최신 정식 명세에 편집 통합하고 릴리스 메타데이터와 Lock을 원자적으로 갱신한다.
-- 자동 검증 결과를 참고하되 제품 의미, 호환성, 적용 순서의 최종 판단을 직접 수행한다.
-
-### 구현자와 리뷰어
-
-- `implementation_bundled` Patch는 같은 PR의 구현만 설명하며, Controller가 `accepted`로 전환한 뒤 코드와 함께 `dev`에 병합할 수 있다.
-- `spec_first` Patch는 별도 Patch PR에서 승인·적용하고, 구현 PR은 해당 Patch가 `applied`된 정식 명세 버전을 기록한 뒤 병합한다.
-- 구현 PR은 `Spec Patch`, `Base Spec`, `Delivery Mode`, `Contract Change`를 기록한다.
-- 기술 검토와 코드 병합은 Controller의 제품 승인이나 정식 명세 릴리스를 대신하지 않는다.
+개발할 때는 정식 SPEC에 현재 작업과 직접 관련된 `draft` Patch만 더해 계약을 해석한다.
+다른 기능의 Patch를 임의로 합성하거나 하나의 새 제품 계약처럼 추론하지 않는다. 같은 대상에서
+정식 SPEC과 관련 `draft`가 다르면 `draft`에 명시된 변경분을 해당 기능의 `dev` 구현에 적용한다.
 
 ## 디렉터리
 
 ```text
-docs/specs/                  # 정식 명세: PM/Admin 전용
+docs/specs/                  # 정식 SPEC: PM/Admin 전용
 docs/spec-patches/
-  README.md                  # 이 비규범 영역의 운영 절차
-  TEMPLATE.md                # Patch 작성 템플릿
-  proposed/                  # draft, proposed, accepted Patch
-  archive/                   # applied, rejected, superseded Patch
+  README.md                  # 이 운영 가이드
+  TEMPLATE.md                # 경량 Patch 템플릿
+  draft/                     # dev에서 사용하는 draft Patch
+  archive/                   # 정식 SPEC에 반영된 accepted Patch
 ```
 
-활성 Patch는 [`proposed/`](proposed/)에, 종료된 감사 기록은 [`archive/`](archive/)에 둔다. 상태를 종료 상태로 바꿀 때는 파일 이동과 메타데이터 갱신을 같은 변경에서 처리한다. `README.md`와 [`TEMPLATE.md`](TEMPLATE.md)는 작성 지원 문서이며 Patch가 아니다.
+`README.md`와 `TEMPLATE.md`는 작성 지원 문서이며 Patch가 아니다.
 
-## 파일명과 리비전
+## 파일명
 
-Patch 파일명은 다음 형식을 따른다.
+기존 이력과 도구 호환을 위해 다음 형식을 유지한다.
 
 ```text
 <github-id>_issue-<number>_<kebab-summary>_patch_v<revision>.md
@@ -57,176 +36,112 @@ Patch 파일명은 다음 형식을 따른다.
 예시:
 
 ```text
-github-id_issue-207_spec-patch-governance_patch_v1.md
-```
-
-기계 검증 기준은 다음 정규식과 같다.
-
-```regex
-^[a-z0-9]+(?:-[a-z0-9]+)*_issue-[1-9][0-9]*_[a-z0-9]+(?:-[a-z0-9]+)*_patch_v[1-9][0-9]*\.md$
+flamingo7562_issue-236_spec-patch-simplification_patch_v1.md
 ```
 
 - GitHub ID와 요약은 영문 소문자, 숫자, 하이픈만 사용한다.
-- 파일명의 Issue 번호는 `issue` 메타데이터와 같아야 한다.
-- `v1`, `v2`는 Patch 문서의 리비전이며 정식 명세 SemVer와 무관하다.
-- 승인 전 수정은 같은 리비전에서 할 수 있다.
-- `accepted` 이후 제품 의미가 바뀌면 기존 문서를 덮어쓰지 않는다. 새 리비전을 만들고 이전 리비전을 `superseded`로 전환하며 `supersedes`와 `superseded_by`에 양방향 참조를 남긴다.
+- 파일명의 Issue 번호와 `issue` 메타데이터는 같아야 한다.
+- `draft`는 같은 파일에서 자유롭게 다듬는다.
+- 이미 `accepted`된 내용의 후속 변경은 새 Patch ID로 작성한다.
 
-## 메타데이터
+## 최소 메타데이터
 
-Patch는 파일 첫 줄부터 YAML front matter를 가져야 한다. 필드의 순서와 기본 구조는 [`TEMPLATE.md`](TEMPLATE.md)를 따른다.
+Patch는 아래 다섯 필드만 필수로 가진다.
 
-| 필드                 | 규칙                                                                                                                                                     |
-| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `patch_id`           | 저장소 전체에서 유일한 `SPEC-<issue>-<2자리 순번>` 형식이다. Issue 번호는 `issue`와 같아야 한다.                                                         |
-| `author`             | 파일명과 같은 소문자 GitHub ID이다.                                                                                                                      |
-| `status`             | `draft`, `proposed`, `accepted`, `applied`, `rejected`, `superseded` 중 하나이다.                                                                        |
-| `issue`              | Patch를 추적하는 양의 GitHub Issue 번호이며 파일명과 일치한다.                                                                                           |
-| `created_at`         | `YYYY-MM-DD` 형식의 최초 작성일이다. 리비전을 수정해도 조용히 바꾸지 않는다.                                                                             |
-| `base_spec_version`  | 작성·재검토 기준이 된 정식 명세의 정확한 SemVer이다.                                                                                                     |
-| `base_commit`        | 그 정식 명세를 포함한 최신 `origin/dev`의 축약 없는 소문자 40자리 Commit SHA이다.                                                                        |
-| `change_type`        | `additive`, `clarification`, `breaking` 중 하나이다.                                                                                                     |
-| `delivery_mode`      | `implementation_bundled` 또는 `spec_first`이다. 이 필드가 없는 정책 변경 이전 Patch는 `spec_first`로 취급한다.                                           |
-| `targets`            | 줄 번호가 아닌 안정적인 계약 식별자를 한 개 이상 적는다. 각 항목은 `requirement`, `decision`, `rest_operation` 등 식별자 종류 하나와 값 하나로 구성한다. |
-| `depends_on`         | 먼저 검토·적용되어야 하는 Patch ID 목록이며 없으면 `[]`이다.                                                                                             |
-| `supersedes`         | 이 리비전이 대체하는 Patch ID이며 없으면 `null`이다.                                                                                                     |
-| `superseded_by`      | 이 리비전을 대체하는 Patch ID이며 없으면 `null`이다. 두 Patch가 서로를 가리켜야 한다.                                                                    |
-| `applied_in_version` | `applied` 전에는 `null`, 적용 후에는 정식 명세 릴리스 SemVer이다.                                                                                        |
-| `applied_by_pr`      | `applied` 전에는 `null`, 적용 후에는 정식 명세 릴리스 PR의 양의 번호이다.                                                                                |
+| 필드                | 규칙                                                                                   |
+| ------------------- | -------------------------------------------------------------------------------------- |
+| `patch_id`          | 저장소에서 유일한 `SPEC-<issue>-<2자리 순번>` 형식이다.                                |
+| `status`            | `draft` 또는 `accepted`만 사용한다.                                                    |
+| `issue`             | Patch를 추적하는 양의 GitHub Issue 번호이다.                                           |
+| `base_spec_version` | 작성 기준이 된 정식 SPEC SemVer이다. Commit SHA는 Git이 추적하므로 적지 않는다.        |
+| `targets`           | 요구사항 ID, 결정 ID, REST Operation 등 변경 후에도 찾을 수 있는 계약 식별자 목록이다. |
 
-`change_type`의 의미는 다음과 같다.
+작성자, 작성일, 기준 Commit, 전달 방식, 변경 유형, 의존성, 대체 관계와 PR 번호는 Git과
+GitHub에서 확인한다. Patch에 중복해서 적지 않는다.
 
-- `additive`: 기존 계약과 호환되는 기능 추가
-- `clarification`: 제품 의미를 바꾸지 않는 명확화
-- `breaking`: 기존 외부 동작, 데이터 의미 또는 호환성을 바꾸는 변경
+## 최소 본문
 
-Patch 본문은 변경 요약과 필요성, 현재 명세와 문제, 최종 규범 문장 또는 Before/After, 모든 영향 영역, 검증 가능한 수용 조건, 미결 사항, 관련 Issue·PR·의존 Patch를 빠짐없이 포함한다. 대상은 줄 번호 대신 요구사항 ID, 결정 ID, REST Operation처럼 변경 후에도 추적 가능한 식별자를 사용한다.
+필수 본문은 두 섹션뿐이다.
 
-## 전달 방식과 위험 경계
+### 추가 사항
 
-### `implementation_bundled`
+구현에 필요한 제품 동작의 추가·변경분만 작성한다. 현재 명세 전체, 영향 없는 영역,
+Frontend·Backend 구현 계획을 반복하지 않는다.
 
-다음 조건을 모두 만족하는 변경만 사용할 수 있다.
+### 완료 조건
 
-- `change_type`이 `additive` 또는 제품 의미를 바꾸지 않는 `clarification`이다.
-- 기존 요청·응답과 호출자의 하위 호환성을 유지한다.
-- Flyway Migration, DDL, 통합 Schema 또는 저장 데이터 의미를 바꾸지 않는다.
-- 인증·인가·개인정보·감사·위협 모델의 제품 결정을 바꾸지 않는다.
-- 외부 소비자나 여러 독립 기능이 공유하는 계약을 일방적으로 바꾸지 않는다.
-- 되돌릴 때 같은 PR의 구현만 수정하면 되고 이미 배포된 호출자에게 강제 전환을 요구하지 않는다.
+사용자가 관찰하거나 테스트로 검증할 수 있는 결과를 체크리스트로 작성한다.
 
-제안자는 기능 브랜치에서 코드와 Patch를 함께 작성하고 Patch를 `proposed`로 제출한다. Controller는 같은 PR에서 기준선, 대상, 호환성과 위험 분류를 검토한 뒤 Patch를 `accepted`로 전환한다. `accepted` 전에는 PR을 병합하지 않는다. 병합 뒤 Patch가 정식 명세에 적용되기 전까지 코드는 `dev`의 잠정 구현이고 Patch는 비규범 변경 기록이다.
+API, 데이터·Migration, 보안, 화면 등 별도 설명이 실제로 필요한 경우에만 자유로운 선택 섹션을
+추가한다. `영향 없음`을 채우기 위한 빈 섹션은 만들지 않는다.
 
-### `spec_first`
+`draft`는 실제 구현 기준이므로 Placeholder, `TODO`, `TBD`, `미정`처럼 구현을 막는 핵심
+미결정 사항을 포함할 수 없다. 결정이 끝나지 않았다면 Patch를 `dev`에 병합하지 않는다.
 
-다음 중 하나라도 해당하면 반드시 이 방식을 사용한다.
+## 상태
 
-- `breaking` 변경 또는 기존 필드·Operation·오류 의미의 삭제·교체
-- 인증·인가·개인정보·보안·감사 계약 변경
-- Migration, DDL, 데이터 의미·정합성·역호환성 변경
-- 외부 소비자나 여러 기능이 공유하는 계약 변경
-- 구현 병합이 사실상 제품 결정을 강제하거나 되돌리기 어려운 변경
-
-Patch 전용 PR을 먼저 병합하고 Controller가 정식 명세 릴리스로 `applied`한 뒤 구현 PR을 병합한다. 구현을 병행할 수는 있지만 적용 전 코드를 `dev`에 병합하지 않는다. 판단이 모호하면 `spec_first`를 사용한다.
-
-## 상태 수명주기
-
-허용 전이는 아래 여섯 가지뿐이다.
+허용 상태와 전이는 다음뿐이다.
 
 ```text
-draft → proposed → accepted → applied
-                  ↘ rejected
-                  ↘ superseded
-accepted ─────────→ superseded
+draft ── 정식 SPEC 반영 ──> accepted
 ```
 
-| 상태         | 의미와 계약 효력                                                            | 위치        | 다음 상태                            |
-| ------------ | --------------------------------------------------------------------------- | ----------- | ------------------------------------ |
-| `draft`      | 작성 중인 비규범 초안                                                       | `proposed/` | `proposed`                           |
-| `proposed`   | Patch 전용 또는 구현 동반 PR에서 검토 중인 비규범 제안                      | `proposed/` | `accepted`, `rejected`, `superseded` |
-| `accepted`   | Controller가 내용을 승인했지만 아직 정식 명세에 적용하지 않은 비규범 기록   | `proposed/` | `applied`, `superseded`              |
-| `applied`    | Controller 릴리스에 적용된 감사 기록. 계약 효력은 갱신된 정식 명세에만 있음 | `archive/`  | 없음                                 |
-| `rejected`   | 채택하지 않은 사유를 보존하는 종료 기록                                     | `archive/`  | 없음                                 |
-| `superseded` | 새 Patch가 대체하고 양방향 참조를 남긴 종료 기록                            | `archive/`  | 없음                                 |
+| 상태       | 의미                                                     | 위치       | 수정 가능 여부 |
+| ---------- | -------------------------------------------------------- | ---------- | -------------- |
+| `draft`    | `dev`에서 해당 기능의 구현과 테스트에 사용하는 개발 계약 | `draft/`   | 가능           |
+| `accepted` | 내용이 정식 SPEC에 반영된 보관 기록                      | `archive/` | 불가           |
 
-상태를 건너뛰거나 되돌리지 않는다. `accepted`는 “승인됨”이고 `applied`는 “정식 명세 릴리스에 반영됨”이므로 서로 바꿔 쓸 수 없다. `accepted` Patch의 `applied_in_version`과 `applied_by_pr`는 여전히 `null`이어야 하며, 미결 사항이나 Placeholder가 남아 있어서는 안 된다.
+`accepted`는 단순 리뷰 승인 상태가 아니다. 정식 SPEC 반영이 끝난 상태만 뜻한다. 기존의
+`proposed`, `rejected`, `superseded`, `applied` 상태는 사용하지 않는다.
 
-## Patch 제출 절차
+## 개발 흐름
 
-1. 작업 시작 전에 최신 `origin/dev`를 확인하고 그 Commit의 정식 명세 버전을 읽는다.
-2. [`TEMPLATE.md`](TEMPLATE.md)를 `proposed/` 아래 올바른 파일명으로 복사하고 `delivery_mode`를 선택한다.
-3. 하나의 최소 기능 단위와 함께 바뀌어야 할 계약 영향을 모두 작성한다. 서로 독립적으로 승인할 수 있는 변경은 별도 Patch로 나눈다.
-4. 최초 기준의 `base_spec_version`과 축약하지 않은 `base_commit`을 기록하고, 모든 안내문과 Placeholder를 실제 값 또는 명시적인 “영향 없음”·“미결 사항 없음”으로 바꾼다.
-5. PR을 Ready로 전환하기 전에 상태를 `proposed`로 바꾸고 `Spec Patch`, `Base Spec`, `Delivery Mode`, `Contract Change`를 기록한다.
-6. Controller는 기준선, 대상, 의존성, 다른 활성 Patch와의 중복, 호환성, 전달 방식의 적합성을 확인한다. 기준이 오래되었거나 대상이 겹치면 자동 적용하지 않고 재검토 절차를 따른다.
-7. Controller가 승인하면 Patch를 `accepted`로 전환한다.
-8. `implementation_bundled`는 같은 PR의 구현과 함께 `dev`에 병합할 수 있다. `spec_first` Patch PR은 제품 구현 없이 끝내고 별도 정식 명세 릴리스 뒤 구현 PR을 병합한다.
+1. 최신 정식 SPEC 버전을 확인한다.
+2. `TEMPLATE.md`를 `draft/`에 올바른 파일명으로 복사한다.
+3. 최소 메타데이터, 추가 사항과 완료 조건을 작성한다.
+4. 기능 코드와 관련 `draft` Patch를 같은 PR로 `dev`에 병합한다.
+5. 개발 중 계약이 바뀌면 관련 코드·테스트와 같은 변경에서 `draft`를 수정한다.
+6. 기능을 철회하면 구현과 `draft`를 함께 제거한다. 이력은 Git과 PR에 남는다.
 
-## 허용·금지 조합
+Patch와 함께 Flyway Migration, DDL 또는 통합 Schema를 변경하지 않는다. 그런 변경은 사용자의
+명시적인 관리자 승인 범위에서 별도 작업으로 처리한다. `draft`와 정식 SPEC 파일도 같은 기능
+PR에서 함께 바꾸지 않는다.
 
-| 변경 조합                                         | 허용 여부 | 조건                                                                 |
-| ------------------------------------------------- | --------- | -------------------------------------------------------------------- |
-| `implementation_bundled` Patch + 같은 기능의 코드 | 허용      | 하위 호환, Migration·보안·데이터 영향 없음, 병합 전 `accepted`       |
-| `spec_first` Patch + 애플리케이션 코드            | 금지      | Patch 전용 PR과 정식 명세 릴리스를 먼저 완료                         |
-| 모든 Patch + Migration·DDL·통합 Schema            | 금지      | 별도 관리자 승인 Migration·DDL 작업 필요                             |
-| 제안·구현 PR + `docs/specs/**`·`SPEC_LOCK.json`   | 금지      | Controller 정식 명세 릴리스에서만 변경                               |
-| `applied` 전환 + 영향받는 정식 명세·Lock          | 허용      | Controller가 하나의 원자적 명세 릴리스로 처리                        |
-| Patch 거버넌스 관리 문서 + 관련 Guardrail·테스트  | 허용      | 명시적으로 승인된 거버넌스 변경 범위이며 제품 Patch·제품 구현은 제외 |
+## Controller 수락
 
-구현 동반형이라도 Patch가 설명하지 않는 제품 기능, 관련 없는 문서·자동화·설정, 다른 Patch의 구현을 같은 PR에 끌어오지 않는다.
+Controller가 Patch를 정식 SPEC에 반영할 때 다음을 한 변경으로 처리한다.
 
-## 기준선 변경, 충돌과 재검토
+1. 최신 `origin/dev`, `base_spec_version`, 대상이 겹치는 다른 `draft`를 확인한다.
+2. Patch 변경분을 영향받는 정식 요구사항·API·결정·추적 문서에 편집 통합한다.
+3. 정식 SPEC SemVer와 릴리스 기록을 갱신한다.
+4. `SPEC_LOCK.json`을 갱신한다.
+5. Patch 내용은 바꾸지 않고 `status: accepted`로 전환해 `archive/`로 이동한다.
 
-다음 이벤트에서는 막연히 “수시로 pull”하는 대신 최신 `origin/dev`와 정식 명세를 명시적으로 확인한다.
+부분 상태를 중간 Commit이나 Push로 공개하지 않는다. 수락 후 제품 계약의 정식 원본은 갱신된
+`docs/specs/**`이며, 보관 Patch는 변경 이력을 찾기 위한 기록이다.
 
-- 기능 또는 Patch 작업 시작 전
-- Patch 최종 승인 직전
-- 정식 명세 릴리스 직후
-- 구현 PR을 Ready로 전환하기 직전
-- 구현 PR 병합 직전
+이미 `accepted`된 계약을 되돌리거나 다시 바꿀 때는 보관 문서를 수정하지 않는다. 새 Issue와
+새 `draft` Patch를 만들고 동일한 흐름으로 정식 SPEC에 반영한다.
 
-`base_spec_version` 또는 `base_commit`이 최신 기준과 다르면 Git 충돌이 없더라도 대상 계약의 의미 호환성을 다시 검토한다.
+## 자동 검증
 
-- 기준 변경이 대상 의미에 영향을 주지 않으면 기준 메타데이터를 최신 값으로 갱신하고 Controller의 명시적 재검토를 받는다.
-- 승인 전에 제안 의미를 고치면 같은 리비전을 갱신할 수 있다.
-- `accepted` 이후 의미를 고쳐야 하면 새 리비전을 만들고 기존 리비전을 `superseded` 처리한 뒤 다시 승인받는다.
-- 다른 활성 Patch가 같은 계약 ID 또는 REST Operation을 대상으로 하면 텍스트 병합으로 해결하지 않는다. Patch 간 의존성과 적용 순서를 명시하고 Controller가 통합, 분리, 대체 또는 재승인을 결정한다.
-- 충돌을 해소하며 기준 Commit만 조용히 바꾸거나 기존 승인을 그대로 승계하지 않는다.
+Guardrail은 문서 분량이나 모든 영향 영역을 강제하지 않는다. 다음 최소 정합성만 검사한다.
 
-## Controller 정식 명세 릴리스
-
-1. `accepted` Patch가 병합된 최신 `dev`에서 Controller 릴리스 브랜치를 만들고 적용할 Patch의 의존성, 전달 방식과 순서를 다시 확인한다.
-2. 보호 파일이나 제품 의미를 바꾸지 않는 빈 번호 예약 커밋으로 브랜치를 Push하고 `dev` 대상 **Draft 정식 명세 릴리스 PR**을 먼저 열어 PR 번호를 확보한다. 이 PR은 Patch 전용 제안 PR과 별개다.
-3. 각 Patch의 추가·교체·삭제 의도와 다른 활성 Patch의 의미 충돌을 검토하며 최신 정식 명세에 편집 통합한다. 문장을 단순히 이어 붙이지 않는다.
-4. 영향받는 정식 명세, 릴리스 버전·승인일·소유자, 변경 이력, 필요한 호환 기준을 같은 릴리스로 정합화한다.
-5. 확보한 Draft PR의 양의 번호를 Patch의 `applied_by_pr`에, 릴리스 SemVer를 `applied_in_version`에 기록한다. `SPEC_LOCK.json`을 최종 정식 명세 파일 집합으로 재생성하고 Patch를 `applied`로 바꾸어 `archive/`로 이동한다.
-6. 3~5단계의 정식 명세, 릴리스 메타데이터, Lock, Patch 상태와 위치를 **하나의 최종 원자 커밋**으로 만들고 Push한다. 부분 상태를 중간 커밋이나 중간 Push로 공개하지 않는다.
-7. 릴리스 PR을 검토·병합한 뒤에는 갱신된 `docs/specs/**`만 계약으로 사용한다. 보관 Patch는 감사와 추적 용도일 뿐 두 번째 규범 원본이 아니다.
-
-승인 또는 운영 릴리스 전에는 `npm run check:guardrails:release`를 실행한다. 이 검사는 `accepted` 상태로 남은 `implementation_bundled` Patch가 있으면 실패한다. 해당 Patch를 정식 명세에 적용하거나 구현을 교정하고 Patch를 종료하기 전에는 릴리스를 진행하지 않는다.
-
-## 기존 Patch 전환
-
-- 이 정책 변경 전에 만들어져 `delivery_mode`가 없는 Patch는 자동으로 `spec_first`로 취급한다.
-- 기존 Patch를 `implementation_bundled`로 바꾸려면 `accepted` 전 같은 리비전에 `delivery_mode`와 위험 판단 근거를 추가하고 Controller의 명시적 재검토를 받는다.
-- 이미 `accepted`된 Patch는 전달 방식을 바꾸지 않는다. 새 리비전을 만들고 기존 리비전을 `superseded` 처리한다.
-- 기존 Patch 전용 PR과 구현 PR을 자동으로 합치지 않는다. Controller가 Issue와 Patch별로 전환 여부를 결정한다.
-
-## 거절, 대체와 Revert
-
-- `rejected` 전환에는 본문에 Controller의 사유를 남기고 `archive/`로 이동한다.
-- `superseded` 전환에는 새·이전 Patch의 `supersedes`와 `superseded_by`를 함께 갱신하고 이전 파일을 `archive/`로 이동한다.
-- 이미 `applied`된 변경을 되돌릴 때 과거 정식 명세 파일이나 Lock을 직접 복원하지 않는다. 원래 Patch와 릴리스를 관련 항목에 연결한 별도 Revert Patch를 제출하고, 동일한 승인과 Controller 릴리스 절차를 거친다. 기존 `applied` 감사 기록의 상태는 바꾸지 않는다.
+- 파일명, Issue 번호와 Patch ID 형식
+- 다섯 필수 메타데이터와 두 필수 본문
+- Placeholder와 중복 Patch ID·대상
+- `draft/`와 `archive/`의 상태 일치
+- 새 Patch가 `draft`로 시작하고 `accepted` 기록이 변경·삭제되지 않는지 여부
+- `draft`와 구현 코드의 동반 허용, Migration·DDL·정식 SPEC 혼합 금지
+- `accepted` 전환 시 정식 SPEC, 릴리스 버전과 Lock의 원자 갱신
+- 승인·운영 릴리스에 `draft`가 남아 있지 않은지 여부
 
 ## 제출 전 점검
 
-- [ ] 파일명, `patch_id`, `author`, `issue`가 서로 일치한다.
-- [ ] 기준 명세 버전과 축약하지 않은 최신 `origin/dev` Commit을 기록했다.
-- [ ] `delivery_mode`와 호환성·보안·데이터·외부 소비자 위험 판단 근거를 기록했다.
-- [ ] 안정적인 대상 계약 식별자와 의존 Patch를 빠짐없이 적었다.
-- [ ] 모든 영향 영역과 검증 가능한 수용 조건을 작성했다.
-- [ ] `accepted` 전환 전에 미결 사항과 Placeholder를 해소했다.
-- [ ] 같은 대상을 다루는 활성 Patch와 기준선 변경을 재검토했다.
-- [ ] `implementation_bundled`가 아닌 Patch에 애플리케이션 코드를 섞지 않았고, 모든 Patch에서 Migration·DDL·보호 명세 변경을 분리했다.
-- [ ] 구현 동반형 PR은 병합 전에 Patch가 `accepted`되었고, 명세 우선형 구현 PR은 Patch가 `applied`되었다.
-- [ ] `accepted`와 `applied`를 구분하고 상태에 맞는 디렉터리를 사용했다.
+- [ ] Patch가 하나의 작고 독립적인 기능 변경만 설명한다.
+- [ ] `patch_id`, `issue`, 파일명의 Issue 번호가 일치한다.
+- [ ] 현재 정식 SPEC의 `base_spec_version`과 안정적인 `targets`를 적었다.
+- [ ] 추가 사항과 완료 조건만으로 구현·검증할 수 있다.
+- [ ] Placeholder나 구현을 막는 미결정 사항이 없다.
+- [ ] 영향 없는 영역이나 Git·PR 메타데이터를 반복하지 않았다.
+- [ ] 기능 PR의 Patch는 `draft`, 정식 SPEC에 반영된 Patch만 `accepted`이다.

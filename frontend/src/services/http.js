@@ -11,7 +11,8 @@ import axios from 'axios'
  * - 오류 { code, message, traceId, fieldErrors } 필드를 axios error 에 부착(원본 error.response 보존).
  * - 401 AUTH_REQUIRED: 세션 상태를 버리고 온보딩(/)으로 이동(G5).
  *
- * ※ 현재 서비스는 USE_MOCK=true 라 실제 요청은 발화하지 않는다(교체 시 변경 지점 한정).
+ * ※ 인증·프로필·사업장 서비스는 이미 이 클라이언트로 실제 요청을 보낸다 — M3+ 서비스
+ *   (documents/invites/wallet/workCases/notifications/worker)만 파일 단위 USE_MOCK 을 유지한다.
  */
 const http = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || '/api',

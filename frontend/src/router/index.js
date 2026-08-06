@@ -240,8 +240,9 @@ const router = createRouter({
 /**
  * 라우터 가드 (라우팅테이블 G1~G7).
  * 프론트 가드는 UX용이며, 실제 권한·상태 검증은 서버가 최종 수행한다(G6).
+ * 테스트가 같은 함수를 메모리 라우터에 붙일 수 있도록 이름을 붙여 내보낸다.
  */
-router.beforeEach((to) => {
+export function routeGuard(to) {
   const auth = useAuthStore()
   const ui = useUiStore()
 
@@ -281,6 +282,8 @@ router.beforeEach((to) => {
   }
 
   return true
-})
+}
+
+router.beforeEach(routeGuard)
 
 export default router

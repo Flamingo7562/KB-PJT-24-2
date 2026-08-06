@@ -3,12 +3,12 @@
  * [A] 사장 로그인  ·  /owner/login  ·  PUBLIC(게스트 전용)
  * 아이디·비밀번호 로그인.
  * 연계 API: POST /auth/login  →  useAuthStore().login({ loginId, password, role: 'OWNER' })
- * 성공 후: 응답 needsWorkplaceSetup=true → /owner/workplaces/new,
+ * 성공 후: needsWorkplaceSetup=true → /owner/workplaces/new,
  *          아니면 route.query.redirect ?? '/owner/home'.
  * 공통: AppField(입력) · BaseButton(제출) · useUiStore().toast(실패 안내)
  */
 import { computed, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 
 import AuthRoleToggle from '@/components/auth/AuthRoleToggle.vue'
 import AppBackHeader from '@/components/common/AppBackHeader.vue'
@@ -20,6 +20,7 @@ import { useUiStore } from '@/stores/ui'
 import { resolveOwnerLoginRedirect } from '@/utils/authRedirect'
 
 const router = useRouter()
+const route = useRoute()
 const auth = useAuthStore()
 const ui = useUiStore()
 
@@ -51,7 +52,11 @@ async function onSubmit() {
       password: password.value,
       role: 'OWNER'
     })
-    router.push(resolveOwnerLoginRedirect(res))
+    router.push(resolveOwnerLoginRedirect(res, route.query.redirect))
+  } catch (err) {
+    // 승인 계약상 아이디 없음·비밀번호 불일치·비활성 계정은 모두 401 AUTH_REQUIRED 로
+    // 구분되지 않는다. 서버 메시지를 그대로 쓰고 계정 존재 여부를 추론할 문구를 덧붙이지 않는다.
+    ui.toast(err?.response?.data?.message || '로그인에 실패했어요.', { type: 'danger' })
   } finally {
     submitting.value = false
   }

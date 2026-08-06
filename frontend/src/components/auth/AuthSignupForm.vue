@@ -14,6 +14,7 @@ import { useRouter } from 'vue-router'
 import AppField from '@/components/common/AppField.vue'
 import BaseButton from '@/components/common/BaseButton.vue'
 import { checkEmail, checkLoginId, signup } from '@/services/auth'
+import { fieldErrorMap } from '@/services/http'
 import { useUiStore } from '@/stores/ui'
 import { blockNonDigitKeydown, formatPhoneInput } from '@/utils/format'
 import {
@@ -90,11 +91,20 @@ async function onCheckLoginId() {
   errors.loginId = rule.message
   if (!rule.valid) return
 
-  const { available } = await checkLoginId(form.loginId)
-  loginIdCheck.done = true
-  loginIdCheck.available = available
-  errors.loginId = available ? '' : '이미 사용 중인 아이디입니다.'
-  if (available) ui.toast('사용 가능한 아이디입니다.', { type: 'success' })
+  try {
+    const { available } = await checkLoginId(form.loginId)
+    loginIdCheck.done = true
+    loginIdCheck.available = available
+    errors.loginId = available ? '' : '이미 사용 중인 아이디입니다.'
+    if (available) ui.toast('사용 가능한 아이디입니다.', { type: 'success' })
+  } catch (err) {
+    const fieldMessage = fieldErrorMap(err).loginId
+    if (fieldMessage) {
+      errors.loginId = fieldMessage
+    } else {
+      ui.toast(err?.response?.data?.message || '아이디 중복확인에 실패했어요.', { type: 'danger' })
+    }
+  }
 }
 
 async function onCheckEmail() {
@@ -102,11 +112,20 @@ async function onCheckEmail() {
   errors.email = rule.message
   if (!rule.valid) return
 
-  const { available } = await checkEmail(form.email)
-  emailCheck.done = true
-  emailCheck.available = available
-  errors.email = available ? '' : '이미 사용 중인 이메일입니다.'
-  if (available) ui.toast('사용 가능한 이메일입니다.', { type: 'success' })
+  try {
+    const { available } = await checkEmail(form.email)
+    emailCheck.done = true
+    emailCheck.available = available
+    errors.email = available ? '' : '이미 사용 중인 이메일입니다.'
+    if (available) ui.toast('사용 가능한 이메일입니다.', { type: 'success' })
+  } catch (err) {
+    const fieldMessage = fieldErrorMap(err).email
+    if (fieldMessage) {
+      errors.email = fieldMessage
+    } else {
+      ui.toast(err?.response?.data?.message || '이메일 중복확인에 실패했어요.', { type: 'danger' })
+    }
+  }
 }
 
 /** 전 필드 검증. 하나라도 실패하면 false. */
@@ -162,6 +181,18 @@ async function onSubmit() {
     })
     ui.toast('회원가입이 완료되었습니다. 로그인해주세요.', { type: 'success' })
     router.push(props.role === 'OWNER' ? '/owner/login' : '/worker/login')
+  } catch (err) {
+    // 확인·제출 사이 경합으로 아이디·이메일이 막 선점되면(409) 서버가 fieldErrors 를 준다 —
+    // 해당 입력 아래에 사유를 붙이고, 필드로 못 옮기는 오류만 토스트로 보여준다.
+    const fieldErrors = fieldErrorMap(err)
+    const matchedField = Object.keys(errors).some((field) => {
+      if (!fieldErrors[field]) return false
+      errors[field] = fieldErrors[field]
+      return true
+    })
+    if (!matchedField) {
+      ui.toast(err?.response?.data?.message || '회원가입에 실패했어요.', { type: 'danger' })
+    }
   } finally {
     submitting.value = false
   }

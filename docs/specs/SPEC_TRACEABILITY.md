@@ -2,8 +2,8 @@
 
 | 항목        | 값              |
 | ----------- | --------------- |
-| 명세 릴리스 | `3.0.1`         |
-| 승인일      | 2026-08-05      |
+| 명세 릴리스 | `4.0.1`         |
+| 승인일      | 2026-08-06      |
 | 소유자      | PM/Admin Master |
 
 이 표는 요구사항을 승인 REST Operation과 도메인에 연결합니다. 개발 진행률, 임시 데이터
@@ -24,7 +24,7 @@
 | AUTH-009  | `PATCH /api/users/me/password`                                                                     | `users.password_hash`                          | DEC-AUTH-SESSION, DEC-AUTH-INPUT                                                                   |
 | AUTH-010  | `POST /api/users/me/withdrawal`                                                                    | `users.status`, 잔액·예치·근무 제약            | DEC-AUTH-SESSION                                                                                   |
 | AUTH-011  | `POST /api/auth/password-reset/requests`, `POST /api/auth/password-reset/confirmations`            | `password_reset_tokens`, `users.password_hash` | DEC-PASSWORD-RESET, DEC-AUTH-INPUT, DEC-OPEN-PASSWORD-RESET-DELIVERY                               |
-| BADGE-001 | HTTP 없음 — 이력 기반 산정                                                                         | `user_badges`, 정산·근태 이력                  | DEC-OPEN-WORK-CASE-RESPONSE-SHAPES                                                                 |
+| BADGE-001 | HTTP 없음 — 이력 기반 산정                                                                         | `user_badges`, 정산·근태 이력                  | —                                                                                                  |
 | BADGE-002 | `GET /api/users/me/badge`                                                                          | `user_badges`                                  | DEC-PROFILE-IMMUTABLE                                                                              |
 | BADGE-003 | `GET /api/invitations/{token}`                                                                     | `work_invitations`, `user_badges`              | DEC-INVITE-LOGIN-BADGE                                                                             |
 
@@ -60,61 +60,62 @@
 
 ## 홈·근무·초대·계약
 
-| 요구사항     | REST Operation                                                                 | 도메인·데이터                                                  | 연결 결정                                                 |
-| ------------ | ------------------------------------------------------------------------------ | -------------------------------------------------------------- | --------------------------------------------------------- |
-| DASH-001     | `GET /api/worker/home`                                                         | `work_cases`, `attendance_records`                             | DEC-TIME                                                  |
-| DASH-002     | `GET /api/worker/home`                                                         | 근무 시각, 휴게, 합의 일급                                     | DEC-DASHBOARD-REFRESH, DEC-OPEN-DASHBOARD-BREAK           |
-| DASH-003     | `GET /api/worker/home`                                                         | 일용근로소득 예상 세액 계산                                    | DEC-DAILY-WORKER-TAX                                      |
-| WORK-001     | `GET /api/workplaces/{workplaceId}/work-cases/summary`                         | `work_cases.status`                                            | DEC-CHECK-OUT-MISSING, DEC-OPEN-WORK-CASE-RESPONSE-SHAPES |
-| WORK-002     | `GET /api/workplaces/{workplaceId}/work-cases`                                 | `work_cases`, `users`                                          | DEC-PAGE, DEC-TIME                                        |
-| WORK-003     | `POST /api/workplaces/{workplaceId}/work-cases`                                | `work_cases`, 사업장 Snapshot                                  | DEC-WORKPLACE-RADIUS, DEC-TIME                            |
-| WORK-004     | `GET /api/work-cases/{workCaseId}`                                             | `work_cases`, 초대·계약·근태·정산 Aggregate                    | DEC-OPEN-WORK-CASE-RESPONSE-SHAPES                        |
-| WORK-005     | `PATCH /api/work-cases/{workCaseId}`                                           | `work_cases.condition_version`, `work_invitations`             | DEC-INVITE-ACCEPT                                         |
-| WORK-006     | `DELETE /api/work-cases/{workCaseId}`                                          | `work_cases.status`, 참조 이력                                 | DEC-INVITE-ACCEPT                                         |
-| WORK-007     | `GET /api/worker/work-cases`                                                   | `work_cases`, `escrows`, `settlements`                         | DEC-CHECK-OUT-MISSING                                     |
-| INVITE-001   | `POST /api/work-cases/{workCaseId}/invitations`                                | `work_invitations`, Token Hash, 조건 Version                   | DEC-INVITE-ACCEPT                                         |
-| INVITE-002   | `GET /api/invitations/{token}`                                                 | `work_invitations`, Session Redirect                           | DEC-INVITE-LOGIN-BADGE                                    |
-| INVITE-003   | `GET /api/invitations/{token}`                                                 | `work_cases`, `work_invitations`, `user_badges`                | DEC-INVITE-LOGIN-BADGE                                    |
-| CONTRACT-001 | `POST /api/invitations/{token}/accept`                                         | 최종 동의, 조건 Version                                        | DEC-INVITE-ACCEPT, DEC-OPEN-E-SIGN-EVIDENCE               |
-| CONTRACT-002 | `POST /api/invitations/{token}/accept`                                         | `work_cases`, `work_contracts`, `escrows`, `settlements`, 원장 | DEC-INVITE-ACCEPT, DEC-IDEMPOTENCY                        |
-| CONTRACT-003 | `POST /api/invitations/{token}/accept`, `GET /api/documents/{documentId}/file` | `work_contracts`, `documents`, `document_versions`             | DEC-CONTRACT-AUTO-GENERATION                              |
+| 요구사항     | REST Operation                                                                 | 도메인·데이터                                                                                  | 연결 결정                                                                                         |
+| ------------ | ------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| DASH-001     | `GET /api/worker/home`                                                         | `work_cases`, `attendance_records`                                                             | DEC-TIME                                                                                          |
+| DASH-002     | `GET /api/worker/home`                                                         | 근무 시각, 휴게, 합의 일급                                                                     | DEC-DASHBOARD-REFRESH, DEC-OPEN-DASHBOARD-BREAK                                                   |
+| DASH-003     | `GET /api/worker/home`                                                         | 일용근로소득 예상 세액 계산                                                                    | DEC-DAILY-WORKER-TAX                                                                              |
+| WORK-001     | `GET /api/workplaces/{workplaceId}/work-cases/summary`                         | `work_cases.status`                                                                            | DEC-CHECK-OUT-MISSING, DEC-WORK-CASE-RESPONSE-SHAPES                                              |
+| WORK-002     | `GET /api/workplaces/{workplaceId}/work-cases`                                 | `work_cases`, `users`                                                                          | DEC-PAGE, DEC-TIME, DEC-WORK-CASE-RESPONSE-SHAPES                                                 |
+| WORK-003     | `POST /api/workplaces/{workplaceId}/work-cases`                                | `work_cases`, 사업장 Snapshot                                                                  | DEC-WORKPLACE-RADIUS, DEC-TIME, DEC-WORK-CASE-RESPONSE-SHAPES                                     |
+| WORK-004     | `GET /api/work-cases/{workCaseId}`                                             | `work_cases`, 초대·계약·근태·에스크로·정산 Aggregate                                           | DEC-WORK-CASE-RESPONSE-SHAPES                                                                     |
+| WORK-005     | `PATCH /api/work-cases/{workCaseId}`                                           | `work_cases.terms_version`, `work_invitations.status`                                          | DEC-INVITE-LIFECYCLE, DEC-WORK-CASE-RESPONSE-SHAPES                                               |
+| WORK-006     | `DELETE /api/work-cases/{workCaseId}`                                          | `work_cases.status`, `work_invitations.status`                                                 | DEC-INVITE-LIFECYCLE, DEC-WORK-CASE-RESPONSE-SHAPES                                               |
+| WORK-007     | `GET /api/worker/work-cases`                                                   | `work_cases`, `escrows`, `settlements`                                                         | DEC-CHECK-OUT-MISSING                                                                             |
+| INVITE-001   | `POST /api/work-cases/{workCaseId}/invitations`                                | `work_invitations`, Token Hash, HMAC Key, 조건 Version                                         | DEC-INVITE-LIFECYCLE, DEC-INVITE-ERROR-CATALOG                                                    |
+| INVITE-002   | `GET /api/invitations/{token}`                                                 | `work_invitations`, Session Redirect, Bearer Token                                             | DEC-INVITE-LOGIN-BADGE, DEC-INVITE-LIFECYCLE                                                      |
+| INVITE-003   | `GET /api/invitations/{token}`                                                 | `work_cases`, `work_invitations`, `user_badges`                                                | DEC-INVITE-LOGIN-BADGE, DEC-INVITE-ERROR-CATALOG                                                  |
+| INVITE-004   | `POST /api/work-cases/{workCaseId}/invitations/reissue`                        | `work_invitations.status`, Token Hash, 조건 Version                                            | DEC-INVITE-LIFECYCLE, DEC-INVITE-ERROR-CATALOG                                                    |
+| CONTRACT-001 | `POST /api/invitations/{token}/accept`                                         | `idempotency_requests`, `work_invitations`, `document_signatures`                              | DEC-INVITE-ACCEPT, DEC-IDEMPOTENCY-STORAGE, DEC-E-SIGN-EVIDENCE                                   |
+| CONTRACT-002 | `POST /api/invitations/{token}/accept`                                         | `work_cases`, `work_contracts`, `wallets`, `escrows`, `wallet_transactions`, `settlements`     | DEC-INVITATION-ACCEPTANCE-AGGREGATE, DEC-IDEMPOTENCY-CLAIM-LIFECYCLE                              |
+| CONTRACT-003 | `POST /api/invitations/{token}/accept`, `GET /api/documents/{documentId}/file` | `documents`, `document_versions`, `document_signatures`, `document_shares`, 비공개 파일 저장소 | DEC-CONTRACT-AUTO-GENERATION, DEC-E-SIGN-EVIDENCE, DEC-CONTRACT-FILE-COMMIT, DEC-DOCUMENT-STORAGE |
 
 ## 근태·정산·신고
 
-| 요구사항    | REST Operation                                                                          | 도메인·데이터                                               | 연결 결정                                              |
-| ----------- | --------------------------------------------------------------------------------------- | ----------------------------------------------------------- | ------------------------------------------------------ |
-| ATT-001     | `GET /api/workplaces/{workplaceId}/qr`, `POST /api/workplaces/{workplaceId}/qr/reissue` | `qr_tokens`, HMAC Key                                       | DEC-QR-FIXED, DEC-OPEN-QR-REISSUE-IDEMPOTENCY          |
-| ATT-002     | `POST /api/attendance/scans`                                                            | `qr_tokens`, `work_cases`, `attendance_records`             | DEC-QR-FIXED                                           |
-| ATT-003     | `POST /api/attendance/scans`                                                            | 사업장 좌표, 100m 반경, 근무 Snapshot                       | DEC-WORKPLACE-RADIUS                                   |
-| ATT-004     | `POST /api/attendance/scans`                                                            | `attendance_records`, `work_cases.status`                   | DEC-EARLY-CHECKOUT                                     |
-| ATT-005     | HTTP 없음 — 노쇼 판정                                                                   | `work_cases.status`, `attendance_records`                   | DEC-CHECK-OUT-MISSING                                  |
-| ATT-006     | 판정·해소 Operation은 결정 후 정의                                                      | `work_cases.status=CHECK_OUT_MISSING`, `attendance_records` | DEC-CHECK-OUT-MISSING, DEC-OPEN-CHECK-OUT-MISSING-FLOW |
-| SETTLE-001  | HTTP 없음 — 정산 예약                                                                   | `settlements.scheduled_at`, `work_cases.status`             | DEC-OPEN-CHECK-OUT-MISSING-FLOW                        |
-| SETTLE-002  | `POST /api/work-cases/{workCaseId}/settlement/approve`                                  | `settlements`, `escrows`, `wallets`, 원장                   | DEC-SETTLEMENT-TIME, DEC-IDEMPOTENCY                   |
-| SETTLE-003  | HTTP 없음 — 예정 정산 실행                                                              | `settlements`, 실행 선점·재시도                             | DEC-SETTLEMENT-TIME                                    |
-| SETTLE-004  | 정산 승인·자동 정산 내부 처리                                                           | `escrows`, `wallets`, `wallet_transactions`                 | DEC-IDEMPOTENCY                                        |
-| SETTLE-005  | HTTP 없음 — 노쇼 환불                                                                   | `escrows`, `wallet_transactions`, `settlements`             | DEC-OPEN-NO-SHOW-SETTLEMENT                            |
-| CONTACT-001 | `GET /api/work-cases/{workCaseId}/workplace-contact`                                    | `work_cases`, `workplaces.phone`, OWNER                     | DEC-AUTH-SESSION, DEC-PHONE-STORAGE                    |
-| DISPUTE-001 | `POST /api/work-cases/{workCaseId}/disputes`                                            | `disputes`                                                  | DEC-DISPUTE-SETTLEMENT                                 |
-| DISPUTE-002 | `GET /api/work-cases/{workCaseId}/disputes`                                             | `disputes`, 근무 당사자                                     | DEC-DISPUTE-SETTLEMENT                                 |
-| DISPUTE-003 | 분쟁 조회·처리 Operation                                                                | `disputes.status`, 처리자·결과                              | DEC-DISPUTE-SETTLEMENT, DEC-OPEN-ADMIN-DISPUTE         |
+| 요구사항    | REST Operation                                                                          | 도메인·데이터                                               | 연결 결정                                                            |
+| ----------- | --------------------------------------------------------------------------------------- | ----------------------------------------------------------- | -------------------------------------------------------------------- |
+| ATT-001     | `GET /api/workplaces/{workplaceId}/qr`, `POST /api/workplaces/{workplaceId}/qr/reissue` | `qr_tokens`, HMAC Key                                       | DEC-QR-FIXED, DEC-OPEN-QR-REISSUE-IDEMPOTENCY                        |
+| ATT-002     | `POST /api/attendance/scans`                                                            | `qr_tokens`, `work_cases`, `attendance_records`             | DEC-QR-FIXED                                                         |
+| ATT-003     | `POST /api/attendance/scans`                                                            | 사업장 좌표, 100m 반경, 근무 Snapshot                       | DEC-WORKPLACE-RADIUS                                                 |
+| ATT-004     | `POST /api/attendance/scans`                                                            | `attendance_records`, `work_cases.status`                   | DEC-EARLY-CHECKOUT                                                   |
+| ATT-005     | HTTP 없음 — 노쇼 판정                                                                   | `work_cases.status`, `attendance_records`                   | DEC-CHECK-OUT-MISSING                                                |
+| ATT-006     | 판정·해소 Operation은 결정 후 정의                                                      | `work_cases.status=CHECK_OUT_MISSING`, `attendance_records` | DEC-CHECK-OUT-MISSING, DEC-OPEN-CHECK-OUT-MISSING-FLOW               |
+| SETTLE-001  | HTTP 없음 — 정상 퇴근 뒤 정산 예정 시각 결정                                            | `settlements.due_at`, `work_cases.status`                   | DEC-INVITATION-ACCEPTANCE-AGGREGATE, DEC-OPEN-CHECK-OUT-MISSING-FLOW |
+| SETTLE-002  | `POST /api/work-cases/{workCaseId}/settlement/approve`                                  | `settlements`, `escrows`, `wallets`, 원장                   | DEC-SETTLEMENT-TIME, DEC-IDEMPOTENCY                                 |
+| SETTLE-003  | HTTP 없음 — 예정 정산 실행                                                              | `settlements`, 실행 선점·재시도                             | DEC-SETTLEMENT-TIME                                                  |
+| SETTLE-004  | 정산 승인·자동 정산 내부 처리                                                           | `escrows`, `wallets`, `wallet_transactions`                 | DEC-IDEMPOTENCY                                                      |
+| SETTLE-005  | HTTP 없음 — 노쇼 환불                                                                   | `escrows`, `wallet_transactions`, `settlements`             | DEC-OPEN-NO-SHOW-SETTLEMENT                                          |
+| CONTACT-001 | `GET /api/work-cases/{workCaseId}/workplace-contact`                                    | `work_cases`, `workplaces.phone`, OWNER                     | DEC-AUTH-SESSION, DEC-PHONE-STORAGE                                  |
+| DISPUTE-001 | `POST /api/work-cases/{workCaseId}/disputes`                                            | `disputes`                                                  | DEC-DISPUTE-SETTLEMENT                                               |
+| DISPUTE-002 | `GET /api/work-cases/{workCaseId}/disputes`                                             | `disputes`, 근무 당사자                                     | DEC-DISPUTE-SETTLEMENT                                               |
+| DISPUTE-003 | 분쟁 조회·처리 Operation                                                                | `disputes.status`, 처리자·결과                              | DEC-DISPUTE-SETTLEMENT, DEC-OPEN-ADMIN-DISPUTE                       |
 
 ## 문서
 
-| 요구사항 | REST Operation                                                                 | 도메인·데이터                                              | 연결 결정                                                 |
-| -------- | ------------------------------------------------------------------------------ | ---------------------------------------------------------- | --------------------------------------------------------- |
-| DOC-001  | `GET /api/documents`                                                           | `documents`, `document_shares`, `workplaces`               | DEC-DOCUMENT-STORAGE, DEC-OPEN-DOCUMENT-RESPONSE-SHAPES   |
-| DOC-002  | `POST /api/invitations/{token}/accept`, `GET /api/documents/{documentId}/file` | `documents`, `document_versions`, `work_contracts`         | DEC-CONTRACT-AUTO-GENERATION                              |
-| DOC-003  | `GET /api/documents`, `GET /api/documents/{documentId}/file`                   | `documents`, `document_shares`, `document_access_logs`     | DEC-DOCUMENT-STORAGE                                      |
-| DOC-004  | `GET /api/documents`, `GET /api/documents/{documentId}/file`                   | `work_contracts`, `documents`, `document_versions`         | DEC-CONTRACT-AUTO-GENERATION, DEC-OPEN-E-SIGN-EVIDENCE    |
-| DOC-005  | `POST /api/documents`                                                          | `documents`, `document_versions`                           | DEC-DOCUMENT-STORAGE                                      |
-| DOC-006  | `PATCH /api/documents/{documentId}`, `DELETE /api/documents/{documentId}`      | 보건증 `documents`, `document_versions`, `document_shares` | DEC-DOCUMENT-STORAGE                                      |
-| DOC-007  | `GET /api/worker/workplaces`, `POST /api/documents/{documentId}/shares`        | `document_shares`, `work_cases`, `workplaces`              | DEC-DOCUMENT-STORAGE, DEC-WORKPLACE-LIST                  |
-| DOC-008  | `DELETE /api/documents/{documentId}/shares/{workplaceId}`                      | `document_shares`                                          | DEC-DOCUMENT-STORAGE                                      |
-| DOC-009  | `GET /api/documents/{documentId}/file`                                         | `document_versions`, `document_shares`, 접근 권한          | DEC-DOCUMENT-STORAGE                                      |
-| DOC-010  | `POST /api/documents`, 계약 확정 내부 생성                                     | 파일 형식 검증, `document_versions`                        | DEC-CONTRACT-AUTO-GENERATION, DEC-DOCUMENT-STORAGE        |
-| DOC-011  | 문서 조회·파일 Operation                                                       | `document_access_logs`                                     | DEC-DOCUMENT-STORAGE                                      |
-| DOC-012  | 사용자 계약서 DELETE 없음, HTTP 없음 — 보존 만료 삭제                          | `documents`, `document_versions`, `document_access_logs`   | DEC-CONTRACT-RETENTION, DEC-OPEN-DOCUMENT-RETENTION-SCOPE |
+| 요구사항 | REST Operation                                                                 | 도메인·데이터                                                                                 | 연결 결정                                                                    |
+| -------- | ------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| DOC-001  | `GET /api/documents`                                                           | `documents`, `document_shares`, `workplaces`                                                  | DEC-DOCUMENT-STORAGE, DEC-OPEN-DOCUMENT-RESPONSE-SHAPES                      |
+| DOC-002  | `POST /api/invitations/{token}/accept`, `GET /api/documents/{documentId}/file` | `work_contracts`, `documents`, `document_versions`                                            | DEC-CONTRACT-AUTO-GENERATION, DEC-CONTRACT-FILE-COMMIT                       |
+| DOC-003  | `GET /api/documents`, `GET /api/documents/{documentId}/file`                   | `documents`, `document_shares`, `document_access_logs`                                        | DEC-DOCUMENT-STORAGE                                                         |
+| DOC-004  | `GET /api/documents/{documentId}/file`                                         | `work_contracts`, `document_versions`, `document_signatures`                                  | DEC-E-SIGN-EVIDENCE, DEC-CONTRACT-FILE-COMMIT                                |
+| DOC-005  | `POST /api/documents`                                                          | `documents`, `document_versions`                                                              | DEC-DOCUMENT-STORAGE                                                         |
+| DOC-006  | `PATCH /api/documents/{documentId}`, `DELETE /api/documents/{documentId}`      | 보건증 `documents`, `document_versions`, `document_shares`                                    | DEC-DOCUMENT-STORAGE                                                         |
+| DOC-007  | `GET /api/worker/workplaces`, `POST /api/documents/{documentId}/shares`        | `document_shares`, `work_cases`, `workplaces`                                                 | DEC-DOCUMENT-STORAGE, DEC-WORKPLACE-LIST                                     |
+| DOC-008  | `DELETE /api/documents/{documentId}/shares/{workplaceId}`                      | `document_shares`                                                                             | DEC-DOCUMENT-STORAGE                                                         |
+| DOC-009  | `GET /api/documents/{documentId}/file`                                         | `document_versions`, `document_shares`, `document_access_logs`, Checksum Fallback             | DEC-DOCUMENT-STORAGE, DEC-CONTRACT-FILE-COMMIT                               |
+| DOC-010  | `POST /api/invitations/{token}/accept`                                         | PDF 형식·Checksum 검증, `documents`, `document_versions`                                      | DEC-CONTRACT-AUTO-GENERATION, DEC-DOCUMENT-STORAGE, DEC-CONTRACT-FILE-COMMIT |
+| DOC-011  | `GET /api/documents/{documentId}/file`                                         | `document_access_logs.document_version_id`, `action`, `result`, `denial_reason`, `created_at` | DEC-DOCUMENT-STORAGE, DEC-CONTRACT-FILE-COMMIT                               |
+| DOC-012  | 사용자 계약서 DELETE 없음, HTTP 없음 — 보존 만료 삭제                          | `documents`, `document_versions`, `document_access_logs`                                      | DEC-CONTRACT-RETENTION, DEC-OPEN-DOCUMENT-RETENTION-SCOPE                    |
 
 ## 알림·공통·외부 결제
 

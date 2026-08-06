@@ -2,8 +2,8 @@
 
 | 항목        | 값              |
 | ----------- | --------------- |
-| 명세 릴리스 | `3.0.1`         |
-| 승인일      | 2026-08-05      |
+| 명세 릴리스 | `4.0.1`         |
+| 승인일      | 2026-08-06      |
 | 소유자      | PM/Admin Master |
 | Base Path   | `/api`          |
 
@@ -574,45 +574,267 @@ Operation입니다. 신규 실행에서 계좌 Row를 잠근 뒤 상태·PIN·�
 
 ## OWNER 근무 관리
 
-| Method | Path                                               | 권한        | 계약                       |
-| ------ | -------------------------------------------------- | ----------- | -------------------------- |
-| GET    | `/api/workplaces/{workplaceId}/work-cases/summary` | 해당 OWNER  | 상태별 건수                |
-| GET    | `/api/workplaces/{workplaceId}/work-cases`         | 해당 OWNER  | 근무 Page                  |
-| POST   | `/api/workplaces/{workplaceId}/work-cases`         | 해당 OWNER  | `DRAFT` 생성               |
-| GET    | `/api/work-cases/{workCaseId}`                     | 당사자      | 근무 상세                  |
-| PATCH  | `/api/work-cases/{workCaseId}`                     | 해당 OWNER  | 계약 전 조건 수정          |
-| DELETE | `/api/work-cases/{workCaseId}`                     | 해당 OWNER  | 삭제 또는 취소             |
-| POST   | `/api/work-cases/{workCaseId}/invitations`         | 해당 OWNER  | 초대 Link 생성             |
-| GET    | `/api/work-cases/{workCaseId}/workplace-contact`   | 해당 WORKER | `{ownerName,phone}`        |
-| GET    | `/api/work-cases/{workCaseId}/disputes`            | 당사자      | 신고 Page                  |
-| POST   | `/api/work-cases/{workCaseId}/disputes`            | 당사자      | `{content}` → `{reportId}` |
+| Method | Path                                               | 권한        | 계약                               |
+| ------ | -------------------------------------------------- | ----------- | ---------------------------------- |
+| GET    | `/api/workplaces/{workplaceId}/work-cases/summary` | 해당 OWNER  | 8개 상태별 건수                    |
+| GET    | `/api/workplaces/{workplaceId}/work-cases`         | 해당 OWNER  | 검색·상태·날짜 필터 Work Case Page |
+| POST   | `/api/workplaces/{workplaceId}/work-cases`         | 해당 OWNER  | `DRAFT` 생성                       |
+| GET    | `/api/work-cases/{workCaseId}`                     | 당사자      | 조건과 Aggregate 상세              |
+| PATCH  | `/api/work-cases/{workCaseId}`                     | 해당 OWNER  | `DRAFT` 조건 전체 교체             |
+| DELETE | `/api/work-cases/{workCaseId}`                     | 해당 OWNER  | Hard Delete 또는 `CANCELED`        |
+| POST   | `/api/work-cases/{workCaseId}/invitations`         | 해당 OWNER  | 활성 초대 발급·조회                |
+| POST   | `/api/work-cases/{workCaseId}/invitations/reissue` | 해당 OWNER  | 활성 초대 원자적 교체              |
+| GET    | `/api/work-cases/{workCaseId}/workplace-contact`   | 해당 WORKER | `{ownerName,phone}`                |
+| GET    | `/api/work-cases/{workCaseId}/disputes`            | 당사자      | 신고 Page                          |
+| POST   | `/api/work-cases/{workCaseId}/disputes`            | 당사자      | `{content}` → `{reportId}`         |
 
-목록 Query는 `keyword?`, `status?`, `from?`, `to?`, `page?`, `size?`를 사용합니다.
+### `GET /api/workplaces/{workplaceId}/work-cases/summary`
 
-등록·수정 조건은 `title`, `workDate`, `startTime`, `endTime`, `breakMinutes`,
-`breakPaid`, `dailyWage`입니다. 서버는 날짜와 시간을 `Asia/Seoul`로 결합합니다. 생성
-성공은 `201 {data:{workCaseId}}`입니다. 계약 확정 뒤 조건 변경은
-`409 WORK_CASE_LOCKED`입니다.
+- 해당 사업장의 OWNER만 호출하고 Query는 받지 않습니다.
+- 취소를 포함한 전체 Work Case를 `DRAFT`, `ACCEPTED`, `READY`, `IN_PROGRESS`,
+  `CHECK_OUT_MISSING`, `COMPLETED`, `NO_SHOW`, `CANCELED`로 한 번씩만 집계합니다.
+- 데이터가 없는 상태도 Key를 생략하지 않고 0을 반환합니다.
 
-초대 생성은 Body가 없고 `201 {data:{inviteUrl,expiresAt}}`을 반환합니다.
-근무 상세와 상태별 요약의 전체 필드 집합은 `DEC-OPEN-WORK-CASE-RESPONSE-SHAPES`를 따릅니다.
+```json
+{
+  "data": {
+    "draft": 2,
+    "accepted": 1,
+    "ready": 3,
+    "inProgress": 1,
+    "checkOutMissing": 0,
+    "completed": 8,
+    "noShow": 1,
+    "canceled": 2
+  }
+}
+```
+
+### `GET /api/workplaces/{workplaceId}/work-cases`
+
+Query 계약은 다음과 같습니다.
+
+- `keyword?`: trim한 제목 또는 매칭 WORKER 이름의 대소문자 구분 없는 부분 일치입니다.
+  trim 결과가 비면 미지정과 같습니다.
+- `status?`: 8개 Work Case 상태 중 하나이며 미지정이면 전체 상태입니다.
+- `from?`, `to?`: `Asia/Seoul` 기준 `workDate`의 `LocalDate`이고 양끝을 포함합니다. 둘 다
+  있으면 `from <= to`여야 합니다.
+- `page?`, `size?`: `DEC-PAGE`의 `page=0`, `size=20`, 최대 100을 따릅니다.
+- 별도 정렬 Query는 받지 않고 `starts_at DESC, id DESC`로 고정합니다.
+
+목록 Item은 아래 닫힌 필드 집합을 사용합니다. 매칭이 없으면 객체 내부 필드를 nullable로
+만들지 않고 `worker` 전체를 `null`로 반환합니다.
+
+```json
+{
+  "data": {
+    "content": [
+      {
+        "workCaseId": 101,
+        "title": "주말 홀 서빙",
+        "workDate": "2026-08-20",
+        "startsAt": "2026-08-20T01:00:00Z",
+        "endsAt": "2026-08-20T09:00:00Z",
+        "dailyWage": 120000,
+        "status": "READY",
+        "worker": {
+          "workerId": 42,
+          "name": "이알바"
+        }
+      },
+      {
+        "workCaseId": 100,
+        "title": "평일 주방 보조",
+        "workDate": "2026-08-19",
+        "startsAt": "2026-08-19T00:00:00Z",
+        "endsAt": "2026-08-19T06:00:00Z",
+        "dailyWage": 90000,
+        "status": "DRAFT",
+        "worker": null
+      }
+    ],
+    "page": {
+      "number": 0,
+      "size": 20,
+      "totalElements": 2,
+      "totalPages": 1
+    }
+  }
+}
+```
+
+### `POST /api/workplaces/{workplaceId}/work-cases`
+
+요청은 `title`, `workDate`, `startTime`, `endTime`, `breakMinutes`, `breakPaid`,
+`dailyWage`를 사용하고 성공은 `201 {data:{workCaseId}}`입니다.
+
+1. 날짜와 시간을 `Asia/Seoul` 지역 시각으로 결합하고 `endsAt > startsAt`을 검증합니다.
+2. `workplaces.road_address`를 trim하고, trim한 `detail_address`가 비어 있지 않을 때만 한 칸을
+   사이에 두어 결합합니다.
+3. 사업장 이름, 결합 주소, 좌표와 100m 반경을 Work Case Snapshot으로 복사합니다.
+4. 조회의 `workDate`는 저장한 `startsAt`에서 파생하고 요청용 `startTime`, `endTime`은 응답하지
+   않습니다.
+
+### `GET /api/work-cases/{workCaseId}`
+
+- 해당 Work Case의 OWNER 또는 매칭 WORKER만 호출합니다. 미매칭 `DRAFT`에는 OWNER만
+  당사자입니다.
+- 아래 JSON의 Key가 전체 상세 필드 집합입니다. 문서 본문, 서명 증거, 좌표, 인증 반경,
+  전화번호와 Capability를 포함하지 않습니다.
+- `latestInvitation`은 조건 Version과 관계없이 생성 시각과 ID 내림차순의 최신 초대 한
+  건입니다.
+- 근태 시점은 각 유형의 `SUCCESS` 기록 `captured_at`이며 거절 시도는 포함하지 않습니다.
+
+```json
+{
+  "data": {
+    "workCaseId": 101,
+    "title": "주말 홀 서빙",
+    "workDate": "2026-08-20",
+    "startsAt": "2026-08-20T01:00:00Z",
+    "endsAt": "2026-08-20T09:00:00Z",
+    "breakMinutes": 60,
+    "breakPaid": false,
+    "dailyWage": 120000,
+    "status": "COMPLETED",
+    "termsVersion": 3,
+    "workplaceName": "강남점",
+    "workplaceAddress": "서울특별시 강남구 테헤란로 1 2층",
+    "worker": {
+      "workerId": 42,
+      "name": "이알바"
+    },
+    "latestInvitation": {
+      "status": "ACCEPTED",
+      "termsVersion": 3,
+      "expiresAt": "2026-08-20T01:00:00Z"
+    },
+    "contract": {
+      "contractId": 31,
+      "documentId": 51,
+      "sourceTermsVersion": 3,
+      "acceptedAt": "2026-08-10T04:00:00Z"
+    },
+    "attendance": {
+      "checkedInAt": "2026-08-20T01:00:00Z",
+      "checkedOutAt": "2026-08-20T09:00:00Z"
+    },
+    "escrow": {
+      "status": "RELEASED",
+      "amount": 120000
+    },
+    "settlement": {
+      "status": "COMPLETED",
+      "amount": 120000,
+      "dueAt": "2026-08-21T00:00:00Z",
+      "completedAt": "2026-08-21T00:05:00Z"
+    }
+  }
+}
+```
+
+중첩 객체의 `null` 규칙은 다음과 같습니다.
+
+- `worker`: `work_cases.worker_id`가 없으면 `null`입니다.
+- `latestInvitation`: 초대 이력이 없으면 `null`이며, 있으면 `status`, 외부
+  `termsVersion`, `expiresAt`을 반환합니다.
+- `contract`: `work_contracts`가 없으면 `null`입니다. 있으면 같은 Work Case의
+  `EMPLOYMENT_CONTRACT`를 연결해 `contractId`, `documentId`, `sourceTermsVersion`,
+  `acceptedAt`을 반환합니다. 클라이언트는 수락 응답의 `workCaseId`로 이 상세를 조회하고
+  `contract.documentId`로 계약 파일 API를 호출합니다. 계약은 있지만 연결 문서가 없으면
+  부분 객체나 `null` 대신 `500 INTERNAL_ERROR`와 `traceId` 무결성 로그를 남깁니다.
+- `attendance`: 항상 객체이고 성공 출근·퇴근이 없으면 각 시점이 `null`입니다.
+- `escrow`: 행이 없으면 `null`, 있으면 `status`, `amount`를 반환합니다.
+- `settlement`: 행이 없으면 `null`, 있으면 `status`, `amount`, nullable `dueAt`, nullable
+  `completedAt`을 반환합니다.
+
+### `PATCH /api/work-cases/{workCaseId}`
+
+- 해당 OWNER만 호출하며 `title`, `workDate`, `startTime`, `endTime`, `breakMinutes`,
+  `breakPaid`, `dailyWage` 일곱 필드를 모두 요구합니다. 생략과 명시적 `null`은
+  `400 VALIDATION_ERROR`입니다.
+- `DRAFT`가 아니면 `409 WORK_CASE_LOCKED`입니다.
+- 값이 같더라도 성공 요청마다 `terms_version`을 정확히 1 증가시킵니다.
+- 현재 조건 Version의 `PENDING` 초대를 같은 트랜잭션에서 `REVOKED`로 전이합니다.
+- 주소, 좌표, 반경과 사업장명 Snapshot은 수정하지 않습니다.
+- 성공은 Body 없는 204이고 최신 상세은 GET으로 다시 조회합니다.
+
+### `DELETE /api/work-cases/{workCaseId}`
+
+- 해당 OWNER만 호출합니다.
+- `DRAFT`가 아니거나 계약·에스크로가 있으면 `409 WORK_CASE_LOCKED`입니다.
+- 초대 이력이 없으면 Hard Delete하고, 있으면 활성 `PENDING` 초대를 철회한 뒤 `CANCELED`로
+  전이합니다. 두 성공 경로 모두 Body 없는 204입니다.
+
+### `POST /api/work-cases/{workCaseId}/invitations`
+
+- 해당 OWNER만 호출하며 Body는 없습니다.
+- Work Case가 `DRAFT`, `workerId=null`, `now < startsAt`일 때만 발급합니다.
+- Work Case와 활성 초대를 순서대로 잠급니다. 만료된 `PENDING`은 먼저 `EXPIRED`로
+  전이합니다.
+- 현재 조건 Version의 유효한 `PENDING`이 없으면 새 초대를 만들고 201, 있으면 행과 만료를
+  바꾸지 않고 같은 응답을 200으로 반환합니다.
+- `inviteUrl`은 요청 Header가 아니라 배포 설정의 허용 Web Origin과
+  `/invitations/{token}`을 결합한 Query·Fragment 없는 절대 URL입니다.
+
+```json
+{
+  "data": {
+    "inviteUrl": "https://app.example.com/invitations/BASE64URL_TOKEN",
+    "expiresAt": "2026-08-20T01:00:00Z"
+  }
+}
+```
+
+### `POST /api/work-cases/{workCaseId}/invitations/reissue`
+
+- 해당 OWNER만 호출하며 Body는 없습니다.
+- 현재 조건 Version의 유효한 `PENDING`이 없으면 `409 CONFLICT`입니다.
+- Work Case와 현재 초대를 잠근 뒤 기존 초대를 `REVOKED`로 바꾸고 다른 ID·Token의 새
+  `PENDING`을 한 트랜잭션에서 만듭니다. 성공은 발급과 같은 Envelope의 201입니다.
+- 재발급 전 Link는 즉시 `409 INVITATION_REVOKED`가 됩니다.
+- `Idempotency-Key` Replay를 적용하지 않습니다. 동시 요청은 요청마다 Link를 교체하며 마지막
+  Link만 유효합니다. 성공 응답이 유실되면 자동 재시도하지 않고 일반 발급으로 현재 Link를
+  복구합니다.
+
+### Capability와 화면 파생
+
+응답에 `canEdit`, `canDelete`, `canIssueInvitation` 또는 같은 의미의 별칭을 추가하지 않습니다.
+
+- 수정·삭제는 `status == DRAFT`일 때 표시합니다.
+- 발급·현재 Link 복사는 `status == DRAFT`, `worker == null`, `now < startsAt`일 때
+  표시합니다.
+- 재발급은 위 조건과 `latestInvitation.status == PENDING`,
+  `latestInvitation.termsVersion == termsVersion`을 모두 만족할 때 표시합니다.
+- 서버는 모든 변경 요청에서 권한, 상태, 매칭, 시각과 초대 Version을 다시 검증합니다.
 
 ## 초대 조회와 수락
 
 ### `GET /api/invitations/{token}`
 
-- 인증된 WORKER만 조회합니다.
-- 비로그인 웹 접근은 `/worker/login?redirect=<초대 경로>`로 보낸 뒤 로그인 성공 시 원래
-  경로로 돌아옵니다.
-- 서버는 Token Hash, 만료·철회·수락 상태, 근무 조건 Version과 대상 WORKER를 검증합니다.
-- 인증 전에는 초대 내용과 OWNER 뱃지를 노출하지 않습니다.
+- 인증된 WORKER만 호출합니다. 비인증 API는 `401 AUTH_REQUIRED`, 다른 역할은
+  `403 ROLE_MISMATCH`입니다.
+- 비로그인 웹 접근은 `/worker/login?redirect={encodedInvitationPath}`로 보낸 뒤 원래 경로로
+  복귀합니다.
+- 초대는 Bearer이므로 사전 대상 사용자 ID를 검사하지 않습니다. Token Hash로 찾은 초대의
+  상태, `now < expiresAt`, 현재 `termsVersion`과 Work Case의 수락 가능 상태를 검증합니다.
+- `now >= expiresAt`인 `PENDING`은 조회 트랜잭션에서 `EXPIRED`로 전이하고
+  `410 INVITATION_EXPIRED`를 반환합니다.
+- 인증과 검증 전에 초대 내용과 OWNER Badge를 노출하지 않습니다. 시각은 UTC `Instant`,
+  금액은 KRW 원 단위 정수입니다.
 
 ```json
 {
   "data": {
     "title": "주말 홀 서빙",
-    "startsAt": "2026-07-31T01:00:00Z",
-    "endsAt": "2026-07-31T09:00:00Z",
+    "workplaceName": "강남점",
+    "startsAt": "2026-08-20T01:00:00Z",
+    "endsAt": "2026-08-20T09:00:00Z",
+    "breakMinutes": 60,
+    "breakPaid": false,
+    "dailyWage": 120000,
+    "termsVersion": 3,
+    "expiresAt": "2026-08-20T01:00:00Z",
     "ownerBadge": {
       "badgeType": "TRUST_OWNER",
       "level": 2
@@ -621,13 +843,120 @@ Operation입니다. 신규 실행에서 계좌 Row를 잠근 뒤 상태·PIN·�
 }
 ```
 
+활성 OWNER Badge가 없으면 같은 필드 집합에서 `"ownerBadge": null`을 반환합니다.
+
+### 초대 오류 응답
+
+| 상황                                      | HTTP | Code                          | Message                                           |
+| ----------------------------------------- | ---: | ----------------------------- | ------------------------------------------------- |
+| Token 형식 오류 또는 미존재               |  404 | `RESOURCE_NOT_FOUND`          | `초대 링크를 찾을 수 없습니다.`                   |
+| 인증 없음                                 |  401 | `AUTH_REQUIRED`               | 공통 인증 메시지                                  |
+| WORKER 역할이 아님                        |  403 | `ROLE_MISMATCH`               | 공통 역할 불일치 메시지                           |
+| 만료                                      |  410 | `INVITATION_EXPIRED`          | `초대 링크가 만료되었습니다.`                     |
+| 철회                                      |  409 | `INVITATION_REVOKED`          | `철회된 초대 링크입니다.`                         |
+| 수락 완료                                 |  409 | `INVITATION_ALREADY_ACCEPTED` | `이미 수락된 초대 링크입니다.`                    |
+| `PENDING`이지만 조건 Version 불일치       |  409 | `INVITATION_TERMS_CHANGED`    | `근무 조건이 변경되어 초대를 사용할 수 없습니다.` |
+| 발급할 수 없는 Work Case 상태·시각        |  409 | `WORK_CASE_LOCKED`            | `초대를 발급할 수 없는 근무입니다.`               |
+| 활성 초대가 없는 재발급 등 기타 상태 충돌 |  409 | `CONFLICT`                    | `초대 상태를 다시 확인해 주세요.`                 |
+
+오류 Body는 공통 `{code,message,traceId,fieldErrors?}` Envelope를 사용합니다.
+
 ### `POST /api/invitations/{token}/accept`
 
-- 인증된 초대 대상 WORKER만 호출합니다.
-- `Idempotency-Key`가 필수이며 Body는 없습니다.
-- 사용자, OWNER, 근무, 금액 ID 또는 전자서명 이미지를 받지 않습니다.
-- 서버가 Token으로 당사자, 근무, 조건 Version과 금액을 도출합니다.
-- 매칭, 계약 Snapshot, 에스크로 HOLD와 정산 예약을 한 트랜잭션으로 처리합니다.
+- 인증된 WORKER만 호출합니다. 인증 없음은 `401 AUTH_REQUIRED`, 다른 역할은
+  `403 ROLE_MISMATCH`입니다.
+- CSRF와 `Idempotency-Key` 공통 규칙을 적용합니다.
+- HTTP Body는 0byte여야 합니다. JSON `{}`, `null`, 공백, 사용자·근무·금액 ID, 이름,
+  서명 이미지와 Multipart를 포함한 모든 Body는 `400 VALIDATION_ERROR`입니다.
+- Token을 Base64url 형식으로 해석하고 Hash로 상태와 무관한 초대 행을 조회합니다. 형식
+  오류·미존재는 Claim 없이 `404 RESOURCE_NOT_FOUND`입니다.
+- Token, Session·CSRF, Idempotency-Key, 이름, 계약 Bytes와 저장 Key를 일반 로그·분석
+  이벤트·오류에 남기지 않습니다.
+
+Claim과 Replay 순서는 다음과 같습니다.
+
+1. HTTP 구조·인증·역할·Body·Key와 Token 존재를 검증합니다.
+2. Token Hash와 `expected_terms_version`으로 `INVITATION_ACCEPT` Fingerprint를 만듭니다.
+3. 멱등 Claim을 선점합니다.
+4. 같은 Fingerprint의 완료 Claim이면 저장한 성공 Body와 200을
+   `Idempotency-Replayed: true`로 반환합니다.
+5. 새 Claim만 Aggregate Transaction에 진입합니다.
+
+Aggregate Transaction은 다음 순서로 처리합니다. 검증 실패는 성공 Claim을 남기지 않으며,
+만료 전이처럼 보존할 변경이 있으면 그 변경과 Claim 삭제만 Commit한 뒤 오류를 반환합니다.
+
+1. Claim, Work Case, Invitation, OWNER Wallet 순서로 잠급니다.
+2. Token Hash와 관계를 다시 확인하고 인증 WORKER가 OWNER와 같으면 `403 FORBIDDEN`입니다.
+3. Invitation의 `ACCEPTED`, `REVOKED`, `EXPIRED`는 각각
+   `INVITATION_ALREADY_ACCEPTED`, `INVITATION_REVOKED`, `INVITATION_EXPIRED`입니다.
+4. `PENDING`이지만 `now >= expires_at`이면 `EXPIRED`로 전이하고 410을 반환합니다.
+5. `expected_terms_version != work_cases.terms_version`이면
+   `409 INVITATION_TERMS_CHANGED`입니다.
+6. Work Case가 `DRAFT`가 아니거나 이미 WORKER가 있거나 시작 시각이 지났으면
+   `409 WORK_CASE_LOCKED`입니다. 계약·문서·에스크로·Settlement가 일부만 존재하는 손상
+   상태는 `500 INTERNAL_ERROR`입니다.
+7. OWNER KRW Wallet의 `available_balance < agreed_wage`이면 잔액을 노출하지 않고
+   `409 CONFLICT`와 `사장님의 예치 가능 잔액이 부족하여 근무를 확정할 수 없습니다.`를
+   반환합니다.
+8. 하나의 `acceptedAt`으로 아래 DB Aggregate와 임시 PDF를 만듭니다.
+9. 성공 Body와 200 상태로 Claim을 `COMPLETED` 전이하고 한 번에 Commit합니다.
+10. Commit 뒤 PDF 승격을 시도하며 실패해도 성공 응답을 실패로 바꾸지 않습니다.
+
+성공 시 DB 변경은 다음과 같습니다.
+
+- `work_cases`: `worker_id=Principal.userId`, `DRAFT → ACCEPTED`.
+- `work_invitations`: `PENDING → ACCEPTED`, `accepted_by_user_id`,
+  `accepted_terms_version`, `accepted_at` 기록.
+- `work_contracts`: 당사자, 제목, 시각, 휴게·유급, 사업장 Snapshot, 일급,
+  `source_terms_version`, `accepted_at`을 Work Case당 한 행에 저장합니다.
+- `work_contracts.terms_snapshot`: 아래 닫힌 JSON Shape를 저장합니다.
+
+```json
+{
+  "schemaVersion": 1,
+  "termsVersion": 3,
+  "title": "주말 홀 서빙",
+  "startsAt": "2026-08-20T01:00:00Z",
+  "endsAt": "2026-08-20T09:00:00Z",
+  "breakMinutes": 60,
+  "breakPaid": false,
+  "workplaceName": "강남점",
+  "workplaceAddress": "서울특별시 강남구 테헤란로 1 2층",
+  "workplaceLatitude": 37.498,
+  "workplaceLongitude": 127.027,
+  "allowedRadiusMeters": 100,
+  "dailyWage": 120000,
+  "owner": {
+    "userId": 7,
+    "name": "김사장"
+  },
+  "worker": {
+    "userId": 42,
+    "name": "이알바"
+  }
+}
+```
+
+- `documents`: Work Case당 `EMPLOYMENT_CONTRACT` 한 행입니다. 작성자·소유자는 OWNER,
+  `issued_on`은 `acceptedAt`의 `Asia/Seoul` 날짜, `expires_on=null`입니다. Version 1 준비 시
+  `AWAITING_SIGNATURE`, Version 2·서명·공유 준비 시 `SIGNED`, 최종 `ACTIVE`로 전이하고
+  Transaction 내부 중간 상태는 외부에 노출하지 않습니다.
+- `document_versions`: `ORIGINAL` Version 1과 `SIGNED` Version 2 PDF의 최종 Key, MIME,
+  byte 크기와 SHA-256을 기록합니다.
+- `document_signatures`: WORKER의 `TYPED_NAME` 한 행에 Source·Signed Version, 각 Checksum,
+  수락 당시 이름과 동일한 동의·서명 시각을 기록합니다. OWNER 서명 행은 만들지 않습니다.
+- `document_shares`: WORKER에게 `CONTRACT_PARTY`, `ACTIVE`, `expires_at=null` 한 행입니다.
+- OWNER Wallet: `available_balance -= agreed_wage`, `locked_balance += agreed_wage`.
+- `escrows`: Work Case당 `amount=agreed_wage`, `status=HELD`, `held_at=acceptedAt` 한 행입니다.
+- `wallet_transactions`: OWNER Wallet에 `ESCROW_HOLD`와 잔액 전후 Snapshot,
+  `reference_type=ESCROW`, `reference_id=escrow.id`를 기록합니다. 내부 `idempotency_key`는 Raw
+  Header가 아니라 `EHLD:`와
+  `SHA-256(UTF-8("INVITATION_ACCEPT\n" + decimalClaimId))` 소문자 Hex의 결합입니다.
+- `settlements`: `amount=agreed_wage`, `status=WAITING`, `due_at=null`, 승인·처리·완료·실패
+  필드가 `null`인 Work Case당 한 행입니다.
+- WORKER Wallet과 WORKER 원장은 수락 시 바꾸지 않고 M6 에스크로 해제에서 생성합니다.
+
+최초 성공은 200이며 `Idempotency-Replayed` Header를 생략합니다.
 
 ```json
 {
@@ -638,7 +967,31 @@ Operation입니다. 신규 실행에서 계좌 Row를 잠근 뒤 상태·PIN·�
 }
 ```
 
-성공과 멱등 재전송 모두 200이며 재전송에는 `Idempotency-Replayed: true`를 설정합니다.
+24시간 보존 안의 같은 Key·Fingerprint Replay는 정확히 같은 Body와 200을 반환하고
+`Idempotency-Replayed: true`를 설정합니다. 새 Aggregate를 만들거나 현재 Token·조건·잔액·
+파일 승격 상태를 다시 검사하지 않습니다.
+
+수락 오류는 다음과 같습니다.
+
+| 상황                                               | HTTP | Code                          |
+| -------------------------------------------------- | ---: | ----------------------------- |
+| Token 형식 오류·미존재                             |  404 | `RESOURCE_NOT_FOUND`          |
+| 인증 없음                                          |  401 | `AUTH_REQUIRED`               |
+| WORKER 역할이 아님                                 |  403 | `ROLE_MISMATCH`               |
+| Work Case OWNER와 같은 사용자                      |  403 | `FORBIDDEN`                   |
+| 같은 Key와 다른 Token·조건 Version                 |  409 | `IDEMPOTENCY_KEY_REUSED`      |
+| 같은 Key·Fingerprint의 처리 중                     |  409 | `CONFLICT`                    |
+| 만료                                               |  410 | `INVITATION_EXPIRED`          |
+| 철회                                               |  409 | `INVITATION_REVOKED`          |
+| 이미 수락 또는 동시 수락 패배                      |  409 | `INVITATION_ALREADY_ACCEPTED` |
+| 초대와 현재 조건 Version 불일치                    |  409 | `INVITATION_TERMS_CHANGED`    |
+| 수락 불가 Work Case 상태·매칭·시각                 |  409 | `WORK_CASE_LOCKED`            |
+| OWNER 예치 가능 잔액 부족                          |  409 | `CONFLICT`                    |
+| 부분 Aggregate, 파일 무결성 또는 예상 밖 서버 오류 |  500 | `INTERNAL_ERROR`              |
+
+잠금 교착이나 일시 충돌로 본 Transaction이 Commit되지 않았으면 Claim을 삭제하고 승인된
+`409 CONFLICT`로 반환해 같은 Key 재시도를 허용합니다. Commit 여부가 불명확하면 Key를 바꾸지
+않고 Replay합니다.
 
 ## 정산 즉시 승인
 
@@ -782,6 +1135,35 @@ PATCH와 DELETE는 보건증에만 적용합니다. 근로계약서를 직접 �
 
 문서 목록, 파일, 공유 응답의 전체 필드 집합은
 `DEC-OPEN-DOCUMENT-RESPONSE-SHAPES`를 따릅니다.
+
+### `GET /api/documents/{documentId}/file` 계약서 규칙
+
+`EMPLOYMENT_CONTRACT`에는 다음 규칙을 추가합니다. 일반 문서 목록·Metadata Shape는 여전히
+`DEC-OPEN-DOCUMENT-RESPONSE-SHAPES`를 따릅니다.
+
+- 수락 성공과 Replay의 `workCaseId`로 Work Case 상세를 다시 조회하고
+  `contract.documentId`를 얻어 호출합니다. 일반 문서 목록의 미승인 필드를 발견 경로로
+  추정하지 않습니다.
+- Work Case의 OWNER 또는 WORKER 당사자만 호출합니다.
+- `mode=view|download`를 지원하고 두 모드 모두 최신 SIGNED Version 2의 같은 Bytes를
+  반환합니다. ORIGINAL Version은 일반 사용자에게 반환하지 않습니다.
+- 최종 Object가 DB Checksum과 일치하면 사용합니다. 없거나 불일치하면 결정적 `.pending`
+  Object를 검사해 일치하는 Bytes를 반환하고 최종 승격을 재시도합니다. 둘 다 일치하지
+  않으면 Stream하지 않고 `500 INTERNAL_ERROR`를 반환합니다.
+- 인증 뒤 기존 문서 행을 식별한 요청은 접근 결정마다 `document_access_logs` 한 행을
+  Commit합니다. `actor_user_id`는 인증 사용자, `document_id`는 경로 문서,
+  `action`은 mode에 따라 `CONTRACT_FILE_VIEW` 또는 `CONTRACT_FILE_DOWNLOAD`, `result`는
+  `ALLOWED` 또는 `DENIED`, 시각은 서버 `created_at`입니다.
+- `ALLOWED`는 반환할 SIGNED Version 2의 `document_version_id`가 필수이고
+  `denial_reason=null`입니다. 감사 Commit에 실패하면 Header나 파일 Bytes를 보내지 않고
+  `500 INTERNAL_ERROR`와 같은 `traceId`의 보안 로그를 남깁니다.
+- 문서 식별 뒤 `DENIED`는 SIGNED Version을 찾았으면 그 `document_version_id`, 찾지 못한
+  경우만 `null`을 기록합니다. `denial_reason`은 `PARTY_ACCESS_DENIED`,
+  `DOCUMENT_UNAVAILABLE`, `SIGNED_VERSION_UNAVAILABLE`, `FILE_UNAVAILABLE`,
+  `CHECKSUM_MISMATCH` 중 하나입니다.
+- 인증·Query 검증에서 문서를 조회하기 전에 거부했거나 문서 행이 없으면 FK를 만족하는 가짜
+  감사 행을 만들지 않습니다. 대신 Token, 저장 Key와 파일 내용을 제외한 같은 `traceId`의
+  보안 로그를 남깁니다.
 
 ## 알림과 외부 결제
 

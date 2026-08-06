@@ -3,14 +3,17 @@
  * [D] 사업장 등록  ·  /owner/workplaces/new  ·  OWNER
  * 폼: 사업자등록번호·상호명·대표자명·사업장 주소·사업장 전화번호.
  * 주소는 도로명(다음 우편번호 검색 embed, @/utils/daumPostcode · 실패 시 직접 입력)과 세부주소를
- * 나눠 입력받고, 전송할 때 합쳐 서버의 단일 address 필드로 보낸다.
- * 좌표 자동 변환은 별도 지오코딩 API 필요(미구현). 인증 반경은 기본값(100).
+ * 나눠 입력받아 승인 계약대로 roadAddress·detailAddress 로 각각 보낸다.
+ * 좌표 자동 변환은 별도 지오코딩 API 필요(미구현). 인증 반경은 서버가 100m 를 적용한다(미전송).
  * 진입 경로 2가지: ① 첫 로그인(G7, 사업장 0개) 강제 진입 ② /owner/mypage/workplaces 에서 수동 추가.
  * 연계 API: POST /workplaces  →  @/services/workplaces (createWorkplace)
- * 등록 성공 후: useWorkplaceStore().load({force:true}) 갱신 →
- *   G7 강제 진입이었으면 needsWorkplaceSetup 을 false 로 갱신 후 /owner/home,
- *   수동 추가였으면 /owner/mypage/workplaces 로 복귀.
- *   (⚠ needsWorkplaceSetup 갱신을 빼먹으면 G7 가드가 /owner/home 이동을 즉시 되돌려 무한 루프)
+ * 등록 성공 후: useWorkplaceStore().load({force:true}) 갱신(실패해도 무시) →
+ *   세션을 다시 조회해 서버가 계산한 needsWorkplaceSetup 확인. 목록 갱신·세션 재조회
+ *   둘 다 실패해도 등록 자체는 이미 성공했으므로 성공 토스트를 띄운다.
+ *   G7 강제 진입이었고 재조회 결과 needsWorkplaceSetup=false 로 확인되면 /owner/home,
+ *   수동 추가였으면 /owner/mypage/workplaces 로 복귀. 세션 재조회가 실패해 확인이
+ *   안 되면 이동하지 않고 화면에 머무른다(다음 라우팅에서 가드가 최신 상태로 판단).
+ *   (⚠ 서버 확인 없이 홈으로 보내면 G7 가드가 즉시 되돌려 무한 루프)
  * 공통: AppField · BaseButton · @/utils/validators (isBusinessNumber, isPhone)
  */
 import { nextTick, ref } from 'vue'
@@ -37,10 +40,10 @@ const ui = useUiStore()
 // (등록 성공 후 이 값을 false 로 바꾸므로, 바뀌기 전에 미리 캡처해야 한다)
 const cameFromForcedSetup = authStore.needsWorkplaceSetup
 
-const businessNumber = ref('')
+const businessRegistrationNumber = ref('')
 const name = ref('')
 const representativeName = ref('')
-const address = ref('')
+const roadAddress = ref('')
 const detailAddress = ref('')
 const phone = ref('')
 
@@ -52,16 +55,11 @@ const phoneError = ref('')
 const submitting = ref(false)
 
 function onBusinessNumberInput(v) {
-  businessNumber.value = formatBusinessNumberInput(v)
+  businessRegistrationNumber.value = formatBusinessNumberInput(v)
 }
 
 function onPhoneInput(v) {
   phone.value = formatPhoneInput(v)
-}
-
-/** 서버 address 는 단일 필드 — 도로명과 세부주소를 공백으로 이어 보낸다. */
-function fullAddress() {
-  return [address.value.trim(), detailAddress.value.trim()].filter(Boolean).join(' ')
 }
 
 const addressSearchOpen = ref(false)
@@ -73,7 +71,7 @@ async function searchAddress() {
   embedAddressSearch(
     addressSearchContainer.value,
     (result) => {
-      address.value = result.address
+      roadAddress.value = result.address
       addressError.value = ''
       addressSearchOpen.value = false
     },
@@ -86,10 +84,10 @@ async function searchAddress() {
 
 function validate() {
   const checks = [
-    [isBusinessNumber(businessNumber.value), businessNumberError],
+    [isBusinessNumber(businessRegistrationNumber.value), businessNumberError],
     [isRequired(name.value, '상호명'), nameError],
     [isRequired(representativeName.value, '대표자명'), representativeNameError],
-    [isRequired(address.value, '사업장 주소'), addressError],
+    [isRequired(roadAddress.value, '사업장 주소'), addressError],
     [isPhone(phone.value, { required: true }), phoneError]
   ]
   checks.forEach(([check, errorRef]) => {
@@ -103,22 +101,41 @@ async function handleSubmit() {
 
   submitting.value = true
   try {
-    // 주소 → 좌표 자동 변환은 지오코딩 연동 전이라 미구현. 인증 반경은 기본값(100m)을 쓴다.
+    // 승인 Body 는 radius 를 받지 않는다 — 서버가 100m 를 적용한다(API_SPEC.md:341).
+    // 좌표는 지오코딩 미연동이라 보내지 않는다(둘 다 생략은 유효하다).
     await createWorkplace({
-      businessNumber: businessNumber.value,
+      businessRegistrationNumber: businessRegistrationNumber.value,
       name: name.value,
       representativeName: representativeName.value,
-      address: fullAddress(),
-      phone: phone.value,
-      radiusM: 100
+      roadAddress: roadAddress.value,
+      detailAddress: detailAddress.value,
+      phone: phone.value
     })
-    await workplaceStore.load({ force: true })
+    // 목록 갱신은 편의 동작이다. 실패해도 등록 자체는 이미 성공했으므로 전파하지
+    // 않는다 — GET /api/workplaces 는 아직 서버에 없어서(#145 후속) 지금은 항상
+    // 404 다. 전파하면 등록에 성공하고도 실패 토스트가 뜬다.
+    try {
+      await workplaceStore.load({ force: true })
+    } catch {
+      // 다음 화면이 목록을 다시 읽는다.
+    }
+
+    // needsWorkplaceSetup 은 서버가 요청 시점 DB 로 계산한다. 등록 성공만 보고
+    // 클라이언트가 false 로 단정하면 서버와 어긋난 채 홈으로 보내게 된다.
+    // 재조회 자체가 실패해도(일시적 네트워크 오류 등) 등록은 이미 성공했으므로 등록
+    // 실패로 보고하지 않는다 — 다만 서버 확인이 없는 채로 홈으로 보낼 수는 없으므로
+    // session 을 undefined 로 남겨 아래 게이트를 자연히 통과시키지 않는다(화면에 머무름).
+    let session
+    try {
+      session = await authStore.refreshSession()
+    } catch {
+      // 다음 라우팅 시도에서 가드가 최신 세션으로 다시 판단한다.
+    }
     ui.toast('사업장을 등록했어요.', { type: 'success' })
 
-    if (cameFromForcedSetup) {
-      authStore.setUser({ ...authStore.user, needsWorkplaceSetup: false })
+    if (cameFromForcedSetup && session?.needsWorkplaceSetup === false) {
       router.push('/owner/home')
-    } else {
+    } else if (!cameFromForcedSetup) {
       router.push('/owner/mypage/workplaces')
     }
   } catch (err) {
@@ -135,7 +152,7 @@ async function handleSubmit() {
     <main class="screen-body">
       <form class="new-form" @submit.prevent="handleSubmit">
         <AppField
-          :model-value="businessNumber"
+          :model-value="businessRegistrationNumber"
           label="사업자등록번호 (숫자 10자리)"
           digits-only
           placeholder="000-00-00000"
@@ -145,11 +162,13 @@ async function handleSubmit() {
           @keydown="blockNonDigitKeydown"
           @update:model-value="onBusinessNumberInput"
         />
+        <!-- maxlength 는 WorkplaceCreateRequest 의 @Size(max=...) 를 그대로 반영한다 — 임의로 바꾸지 말 것 -->
         <AppField
           v-model="name"
           label="상호명"
           placeholder="상호명을 입력하세요"
           required
+          maxlength="120"
           :error="nameError"
         />
         <AppField
@@ -157,13 +176,15 @@ async function handleSubmit() {
           label="대표자명"
           placeholder="대표자명을 입력하세요"
           required
+          maxlength="100"
           :error="representativeNameError"
         />
         <AppField
-          v-model="address"
+          v-model="roadAddress"
           label="사업장 주소 (도로명)"
           placeholder="주소 검색을 이용하거나 직접 입력하세요"
           required
+          maxlength="255"
           :error="addressError"
         >
           <template #suffix>
@@ -174,6 +195,7 @@ async function handleSubmit() {
           v-model="detailAddress"
           label="세부 주소"
           placeholder="건물명·동·호수 등을 입력하세요"
+          maxlength="100"
         />
         <AppField
           :model-value="phone"
