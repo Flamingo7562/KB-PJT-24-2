@@ -20,6 +20,11 @@ vi.mock('@/services/users', () => ({
   deleteMe: vi.fn()
 }))
 
+vi.mock('@/constants/pendingFeatures', () => ({
+  PENDING_FEATURES: { PASSWORD_CHANGE: 187, WITHDRAWAL: 188 }
+}))
+
+import { PENDING_FEATURES } from '@/constants/pendingFeatures'
 import { deleteMe, getBadge, getMe } from '@/services/users'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
@@ -56,6 +61,7 @@ describe('OwnerMyPageView', () => {
     getMe.mockReset()
     getBadge.mockReset()
     deleteMe.mockReset()
+    PENDING_FEATURES.WITHDRAWAL = 188 // #188 준비 중(기본값) — 개별 테스트가 필요하면 override
     logout = vi.spyOn(useAuthStore(), 'logout').mockResolvedValue()
     toastSpy = vi.spyOn(useUiStore(), 'toast')
   })
@@ -173,6 +179,13 @@ describe('OwnerMyPageView', () => {
   })
 
   describe('회원 탈퇴 오류 귀속', () => {
+    // #188 이 준비 중인 동안 탈퇴하기 버튼은 기본적으로 비활성화된다(아래 '준비 중 안내' 참고).
+    // 이 블록은 오류 귀속 로직 자체(#188 해제 이후에도 지켜야 하는 계약)를 검증하므로
+    // 버튼을 눌러 확인할 수 있도록 매 테스트마다 '해제된 상태'를 시뮬레이션한다.
+    beforeEach(() => {
+      PENDING_FEATURES.WITHDRAWAL = undefined
+    })
+
     async function openModalAndFillPassword(wrapper, password = 'current-pw1') {
       await findByText(wrapper, 'button', '회원 탈퇴').trigger('click')
       await flushPromises()
@@ -223,6 +236,19 @@ describe('OwnerMyPageView', () => {
       expect(toastSpy).toHaveBeenCalledWith('진행 중인 근무가 있어 탈퇴할 수 없어요.', {
         type: 'danger'
       })
+    })
+  })
+
+  describe('회원 탈퇴 준비 중 안내', () => {
+    it('모달에 준비 중 안내를 보여주고 탈퇴하기 버튼을 비활성화한다', async () => {
+      const wrapper = mountView()
+      await flushPromises()
+
+      await findByText(wrapper, 'button', '회원 탈퇴').trigger('click')
+      await flushPromises()
+
+      expect(wrapper.text()).toContain('회원 탈퇴는 준비 중입니다')
+      expect(findByText(wrapper, 'button', '탈퇴하기').attributes('disabled')).toBeDefined()
     })
   })
 })

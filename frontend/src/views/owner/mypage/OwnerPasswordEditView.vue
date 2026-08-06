@@ -11,6 +11,7 @@ import { useRouter } from 'vue-router'
 import AppBackHeader from '@/components/common/AppBackHeader.vue'
 import AppField from '@/components/common/AppField.vue'
 import BaseButton from '@/components/common/BaseButton.vue'
+import { PENDING_FEATURES } from '@/constants/pendingFeatures'
 import { fieldErrorMap } from '@/services/http'
 import { changePassword } from '@/services/users'
 import { useUiStore } from '@/stores/ui'
@@ -18,6 +19,10 @@ import { isRequired, passwordRule, passwordsMatch } from '@/utils/validators'
 
 const router = useRouter()
 const ui = useUiStore()
+
+// #187 구현 전까지 실 Endpoint 는 404 다 — 제출을 막고 준비 중 안내를 보여준다.
+// #187 이 머지되면 PENDING_FEATURES 에서 이 항목만 지우면 이 화면은 그대로 복구된다.
+const passwordChangePending = PENDING_FEATURES.PASSWORD_CHANGE
 
 const currentPassword = ref('')
 const newPassword = ref('')
@@ -75,6 +80,7 @@ async function handleSubmit() {
   <div class="sub-page">
     <AppBackHeader title="비밀번호 변경" />
     <main class="screen-body">
+      <p v-if="passwordChangePending" class="pending-notice">비밀번호 변경은 준비 중입니다.</p>
       <form class="edit-form" @submit.prevent="handleSubmit">
         <AppField
           v-model="currentPassword"
@@ -101,7 +107,14 @@ async function handleSubmit() {
           :error="confirmError"
         />
 
-        <BaseButton type="submit" variant="owner" block :disabled="submitting">변경</BaseButton>
+        <BaseButton
+          type="submit"
+          variant="owner"
+          block
+          :disabled="submitting || !!passwordChangePending"
+        >
+          변경
+        </BaseButton>
       </form>
     </main>
   </div>
@@ -115,5 +128,14 @@ async function handleSubmit() {
   display: flex;
   flex-direction: column;
   gap: var(--space-lg);
+}
+.pending-notice {
+  padding: var(--space-md);
+  margin-bottom: var(--space-lg);
+  border-radius: var(--radius-sm);
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
 }
 </style>

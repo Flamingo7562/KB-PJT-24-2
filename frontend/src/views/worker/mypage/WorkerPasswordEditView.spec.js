@@ -89,3 +89,16 @@ describe('WorkerPasswordEditView 오류 귀속', () => {
     expect(back).toHaveBeenCalledTimes(1)
   })
 })
+
+describe('WorkerPasswordEditView 준비 중 안내', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+  })
+
+  it('폼 상단에 준비 중 안내를 보여주고 제출 버튼을 비활성화한다', () => {
+    const wrapper = mount(WorkerPasswordEditView)
+
+    expect(wrapper.text()).toContain('비밀번호 변경은 준비 중입니다')
+    expect(wrapper.find('button[type="submit"]').attributes('disabled')).toBeDefined()
+  })
+})
