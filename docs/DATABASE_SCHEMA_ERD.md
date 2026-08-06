@@ -2,19 +2,20 @@
 
 > 저장소 원본: `docs/DATABASE_SCHEMA_ERD.md`
 >
-> 기준: 로컬 Docker MySQL 8.4, Flyway Schema Version `202608051337`
+> 기준: 로컬 Docker MySQL 8.4, Flyway Schema Version `202608061428`
 >
 > 범위: 도메인 테이블 24개와 Flyway 내부 관리 테이블 1개, 총 25개입니다.
 >
-> 읽기용 통합 DDL: [`database/schema-snapshot-202608051337.sql`](database/schema-snapshot-202608051337.sql)
+> 읽기용 통합 DDL: [`database/schema-snapshot-202608061428.sql`](database/schema-snapshot-202608061428.sql)
 >
 > 편집 정책: Migration과 통합 DDL은 프로젝트 소유자 전용입니다. 에이전트는 소유자가 변경한
 > 스키마를 근거로 이 설명 문서만 갱신할 수 있습니다.
 
-현재 소유자 승인 기준은 Head `202608051337`의 Migration 11개·도메인 테이블 24개입니다.
+현재 소유자 승인 기준은 Head `202608061428`의 Migration 12개·도메인 테이블 24개입니다.
 사업장 고정 QR `202607311427`, 비밀번호 재설정 Token `202607311428`, 퇴근 누락 상태
 `202607311429`, OWNER Profile 제거 `202608041138`, 멱등 요청 Claim `202608041614`, Mock 계좌
-비귀속 PIN 전환 `202608051337`을 모두 현재 스키마로 사용합니다.
+비귀속 PIN 전환 `202608051337`, 문서 접근 감사 상세 `202608061428`을 모두 현재 스키마로
+사용합니다.
 
 ## 한 장 요약
 
@@ -376,9 +377,11 @@ erDiagram
     DOCUMENT_ACCESS_LOGS {
         bigint id PK
         bigint document_id FK
+        bigint document_version_id FK "NULL"
         bigint actor_user_id FK "NULL"
         varchar action
         varchar result
+        varchar denial_reason "NULL, ASCII binary"
         datetime created_at
     }
 
@@ -448,6 +451,7 @@ erDiagram
     WORK_CASES ||--o{ DOCUMENT_SHARES : "share context"
     USERS ||--o{ DOCUMENT_SHARES : "receives"
     DOCUMENTS ||--o{ DOCUMENT_ACCESS_LOGS : "audits"
+    DOCUMENT_VERSIONS o|--o{ DOCUMENT_ACCESS_LOGS : "audited version"
     USERS o|--o{ DOCUMENT_ACCESS_LOGS : "acts"
     USERS ||--o{ USER_BADGES : "earns"
 ```
@@ -511,6 +515,7 @@ QR과 비밀번호 재설정의 상태·형태 제약은 다음과 같습니다.
 | `workplaces.name`, `representative_name`, `road_address`, `phone` | 각 값이 앞뒤 공백 제거 후 한 글자 이상     | 불가 | `ck_workplaces_required_text`                                      |
 | `workplaces.detail_address`                                       | `NULL` 또는 앞뒤 공백 제거 후 한 글자 이상 | 가능 | `ck_workplaces_detail_address`                                     |
 | `idempotency_requests.operation_code`, `idempotency_key`          | 빈 문자열 불가, ASCII 대소문자 구분        | 불가 | `ck_idempotency_requests_operation`, `ck_idempotency_requests_key` |
+| `document_access_logs.denial_reason`                              | NULL 또는 빈 문자열이 아닌 ASCII 사유 Code | 가능 | `ck_document_access_logs_denial_reason`                            |
 
 ### 아직 유한값 CHECK가 없는 코드성 문자열
 
@@ -523,11 +528,12 @@ QR과 비밀번호 재설정의 상태·형태 제약은 다음과 같습니다.
 | `idempotency_requests.operation_code`   | 멱등성 적용 Operation          | 빈 값이 아닌 `VARCHAR(64)` |
 | `disputes.dispute_type`                 | 분쟁 유형                      | 길이만 `VARCHAR(30)`       |
 | `document_access_logs.action`           | 문서 접근 행위                 | 길이만 `VARCHAR(30)`       |
+| `document_access_logs.denial_reason`    | DENIED 내부 사유 Code          | 빈 값이 아닌 `VARCHAR(50)` |
 | `user_badges.badge_type`                | 배지 유형                      | 길이만 `VARCHAR(40)`       |
 
 ### 복합키 목록
 
-복합 FK는 `work_cases(employer_id, workplace_id) → workplaces(owner_user_id, id)`, `qr_tokens(issued_by_user_id, workplace_id) → workplaces(owner_user_id, id)`, `work_contracts(work_case_id, employer_id, worker_id, agreed_wage) → work_cases(id, employer_id, worker_id, agreed_wage)`, `escrows/settlements(work_case_id, amount) → work_cases(id, agreed_wage)`, `document_signatures(document_id, source_version_id 또는 signed_version_id) → document_versions(document_id, id)`의 7개입니다.
+복합 FK는 `work_cases(employer_id, workplace_id) → workplaces(owner_user_id, id)`, `qr_tokens(issued_by_user_id, workplace_id) → workplaces(owner_user_id, id)`, `work_contracts(work_case_id, employer_id, worker_id, agreed_wage) → work_cases(id, employer_id, worker_id, agreed_wage)`, `escrows/settlements(work_case_id, amount) → work_cases(id, agreed_wage)`, `document_signatures(document_id, source_version_id 또는 signed_version_id) → document_versions(document_id, id)`, `document_access_logs(document_id, document_version_id) → document_versions(document_id, id)`의 8개입니다.
 
 복합 UK는 `password_reset_tokens(user_id, active_slot)`, `wallets(user_id, currency)`, `mock_bank_accounts(bank_code, mock_account_number)`, `workplaces(owner_user_id, id)`, `work_cases(id, employer_id, worker_id, agreed_wage)`와 `(id, agreed_wage)`, `work_invitations(work_case_id, active_slot)`, `mock_bank_transactions(reference_type, reference_id, transfer_type)`, `idempotency_requests(user_id, operation_code, idempotency_key)`, `qr_tokens(workplace_id, active_slot)`, `attendance_records(work_case_id, attendance_type, success_slot)`, `disputes(work_case_id, open_slot)`, `documents(work_case_id, document_type)`, `document_versions(document_id, version_no)`와 `(document_id, id)`, `document_signatures(document_id, source_version_id, signer_user_id)`, `document_shares(document_id, work_case_id, shared_with_user_id, purpose, active_slot)`, `user_badges(user_id, badge_type)`입니다. Mermaid 열의 `UK`는 단독 고유키에만 표시하고 이 복합키들은 여기에서 묶음 단위로 설명합니다.
 
@@ -546,7 +552,7 @@ QR과 비밀번호 재설정의 상태·형태 제약은 다음과 같습니다.
 
 ### 현재 DDL과 미결정 제품 Workflow
 
-아래 표는 현재 Head `202608051337`이 보장하는 사실과 제품 결정 또는 추가 DDL 검토가 남은
+아래 표는 현재 Head `202608061428`이 보장하는 사실과 제품 결정 또는 추가 DDL 검토가 남은
 부분을 분리합니다. Migration과 통합 DDL은 프로젝트 소유자만 변경합니다.
 
 | 기능                 | 현재 DB                                                                                           | 제품 Workflow·추가 검토                                                                                                      |
@@ -555,6 +561,7 @@ QR과 비밀번호 재설정의 상태·형태 제약은 다음과 같습니다.
 | 사업장 고정 반경     | `workplaces.radius_meters`와 근무 Snapshot `allowed_radius_meters`가 모든 양수를 허용             | 애플리케이션은 두 값에 항상 100m를 저장·검증. DB에서도 정확히 100을 강제할지는 소유자가 결정                                 |
 | 시스템 생성 계약서   | `EMPLOYMENT_CONTRACT`도 `work_case_id=NULL`을 가질 수 있음                                        | 계약서는 계약 확정 때 시스템만 생성하고 근무 건에 연결. DB 제약으로도 강제할지는 소유자가 결정                               |
 | 계약서 3년 자동 삭제 | `documents.status=DELETED`는 있으나 기준일·삭제 범위와 전용 추적 컬럼·Index가 없음                | 시작일·종료일 기준과 파일·Metadata·Checksum·감사 삭제 범위를 먼저 확정한 뒤 소유자가 필요한 Schema 보강을 결정               |
+| 문서 접근 감사       | 문서와 선택적 Version, 행위·결과·구조화된 거부 사유를 저장. 기존 행의 신규 상세는 NULL            | 호환 Backend가 새 접근마다 확정 Version과 거부 사유를 기록하고 보관·조회 정책을 적용                                         |
 | 멱등 요청 처리       | 사용자·Operation·Key Claim, Fingerprint, 완료 응답과 만료 시각을 저장                             | Claim 획득·대기 없는 충돌 처리·중단 복구·응답 재전송·만료 정리는 애플리케이션에서 구현                                       |
 | 비귀속 Mock 계좌     | 사용자 FK 없이 숫자 네 자리 PIN 저장, 기존 주문·출금·은행 원장 계좌 참조 유지                     | 호환 Backend가 은행·계좌번호로 ACTIVE 계좌를 찾고 충전에만 PIN을 검증하도록 전환                                             |
 
@@ -917,9 +924,11 @@ erDiagram
     DOCUMENT_ACCESS_LOGS {
         bigint id PK
         bigint document_id FK
+        bigint document_version_id FK "NULL"
         bigint actor_user_id FK "NULL"
         varchar action
         varchar result
+        varchar denial_reason "NULL, ASCII binary"
     }
     USER_BADGES {
         bigint id PK
@@ -938,6 +947,7 @@ erDiagram
     WORK_CASES ||--o{ DOCUMENT_SHARES : "share context"
     USERS ||--o{ DOCUMENT_SHARES : "recipient"
     DOCUMENTS ||--o{ DOCUMENT_ACCESS_LOGS : "access audit"
+    DOCUMENT_VERSIONS o|--o{ DOCUMENT_ACCESS_LOGS : "audited version"
     USERS o|--o{ DOCUMENT_ACCESS_LOGS : "actor"
     USERS ||--o{ USER_BADGES : "badges"
 ```
