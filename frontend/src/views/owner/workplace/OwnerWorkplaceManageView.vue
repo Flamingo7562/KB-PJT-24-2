@@ -77,13 +77,16 @@ function goCreate() {
 }
 
 function openEdit(workplace) {
+  // 값을 채우기 전에 이전 세션의 touched·errors 를 먼저 지운다. 값 대입 뒤에 reset() 을
+  // 부르면 지금은 우연히 맞지만(재검증 watcher 가 비동기로 flush 되어 reset() 이 먼저
+  // 실행됨), 그 순서가 정확성의 조건이 되어서는 안 된다(#238 Finding 4).
+  reset()
   editTarget.value = workplace
   editName.value = workplace.name
   editRoadAddress.value = workplace.roadAddress
   editDetailAddress.value = workplace.detailAddress ?? ''
   editDetailOpen.value = Boolean(workplace.detailAddress)
   editPhone.value = workplace.phone ? formatPhoneInput(workplace.phone) : ''
-  reset()
   editOpen.value = true
 }
 
