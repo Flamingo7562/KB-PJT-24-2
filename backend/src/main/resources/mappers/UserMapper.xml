@@ -39,6 +39,30 @@
           AND role IN ('OWNER', 'WORKER')
     </select>
 
+    <sql id="profileColumns">
+        id,
+        login_id,
+        email,
+        name,
+        phone,
+        role,
+        status
+    </sql>
+
+    <select id="findProfileById" resultType="com.gighub.member.domain.User">
+        SELECT <include refid="profileColumns"/>
+        FROM users
+        WHERE id = #{userId}
+          AND role IN ('OWNER', 'WORKER')
+    </select>
+
+    <update id="updatePhone">
+        UPDATE users
+        SET phone = #{phone}
+        WHERE id = #{userId}
+          AND role IN ('OWNER', 'WORKER')
+    </update>
+
     <insert id="insert"
             parameterType="com.gighub.member.domain.User"
             useGeneratedKeys="true"
