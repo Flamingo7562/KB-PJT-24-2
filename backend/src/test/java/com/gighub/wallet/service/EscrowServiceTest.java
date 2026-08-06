@@ -140,8 +140,7 @@ class EscrowServiceTest {
 
     @Test
     void holdRejectsEmployerMismatch() {
-        WorkCaseEscrowContext context = context("DRAFT");
-        context.setEmployerId(99L);
+        WorkCaseEscrowContext context = context("DRAFT").toBuilder().employerId(99L).build();
         when(workMapper.getEscrowContextForUpdate(WORK_CASE_ID))
                 .thenReturn(context);
 
@@ -234,13 +233,13 @@ class EscrowServiceTest {
     }
 
     private WorkCaseEscrowContext context(String status) {
-        WorkCaseEscrowContext context = new WorkCaseEscrowContext();
-        context.setWorkCaseId(WORK_CASE_ID);
-        context.setEmployerId(EMPLOYER_ID);
-        context.setWorkerId(WORKER_ID);
-        context.setAgreedWage(AGREED_WAGE);
-        context.setStatus(status);
-        return context;
+        return WorkCaseEscrowContext.builder()
+                .workCaseId(WORK_CASE_ID)
+                .employerId(EMPLOYER_ID)
+                .workerId(WORKER_ID)
+                .agreedWage(AGREED_WAGE)
+                .status(status)
+                .build();
     }
 
     private WalletBalanceSnapshot wallet(

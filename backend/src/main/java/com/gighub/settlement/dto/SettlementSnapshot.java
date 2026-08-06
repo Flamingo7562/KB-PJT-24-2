@@ -1,21 +1,24 @@
 package com.gighub.settlement.dto;
 
 import com.gighub.settlement.domain.SettlementStatus;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Getter;
-import lombok.Setter;
 
 import java.time.LocalDateTime;
 
+/** MyBatis가 &lt;constructor&gt; 매핑으로 생성하므로 no-args 생성자 없이 필드를 final로 고정한다. */
 @Getter
-@Setter
+@Builder(toBuilder = true)
+@AllArgsConstructor
 public class SettlementSnapshot {
-    private Long settlementId;
-    private Long workCaseId;
-    private Long amount;
-    private SettlementStatus status;
-    private Long approvedByUserId;
-    private LocalDateTime dueAt;
-    private LocalDateTime processingAt;
-    private LocalDateTime completedAt;
-    private String failureCode;
+    private final Long settlementId;
+    private final Long workCaseId;
+    private final Long amount;
+    private final SettlementStatus status;
+    private final Long approvedByUserId;
+    private final LocalDateTime dueAt;
+    private final LocalDateTime processingAt;
+    private final LocalDateTime completedAt;
+    private final String failureCode;
 }
