@@ -20,4 +20,39 @@
          100.00, 'ACTIVE')
     </insert>
 
+    <!--
+        목록과 건수의 조회 조건입니다. 두 SQL이 갈라지면 마지막 Page가 비거나 총 건수가
+        실제와 달라지므로 한 곳에 두고 공유합니다.
+    -->
+    <sql id="ownedManageableWorkplaces">
+        FROM workplaces
+        WHERE owner_user_id = #{ownerUserId}
+          AND status IN ('ACTIVE', 'INACTIVE')
+    </sql>
+
+    <!--
+        latitude, longitude 는 승인된 목록 Item에 없으므로 SELECT 자체에서 뺍니다.
+        정렬은 created_at 만으로는 같은 시각 등록에서 Page 사이 순서가 흔들릴 수 있어
+        id 를 마지막 기준으로 더해 고정합니다.
+    -->
+    <select id="findPageByOwnerUserId" resultType="com.gighub.workplace.mapper.result.WorkplaceListRow">
+        SELECT id AS workplace_id,
+               business_registration_number,
+               name,
+               representative_name,
+               road_address,
+               detail_address,
+               phone,
+               radius_meters,
+               status
+        <include refid="ownedManageableWorkplaces"/>
+        ORDER BY created_at DESC, id DESC
+        LIMIT #{size} OFFSET #{offset}
+    </select>
+
+    <select id="countByOwnerUserId" resultType="int">
+        SELECT COUNT(*)
+        <include refid="ownedManageableWorkplaces"/>
+    </select>
+
 </mapper>

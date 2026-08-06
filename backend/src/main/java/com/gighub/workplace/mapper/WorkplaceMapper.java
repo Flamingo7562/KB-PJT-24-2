@@ -1,7 +1,11 @@
 package com.gighub.workplace.mapper;
 
+import java.util.List;
+
 import com.gighub.workplace.mapper.param.WorkplaceInsertParam;
+import com.gighub.workplace.mapper.result.WorkplaceListRow;
 import org.apache.ibatis.annotations.Mapper;
+import org.apache.ibatis.annotations.Param;
 
 /** 사업장 등록과 소유 사업장 조회 SQL 진입점입니다. */
 @Mapper
@@ -15,4 +19,36 @@ public interface WorkplaceMapper {
      * 있어 사전 조회로는 동시 등록을 막지 못합니다.</p>
      */
     int insert(WorkplaceInsertParam param);
+
+    /**
+     * 인증 OWNER가 소유한 관리 대상 사업장 한 Page를 조회합니다.
+     *
+     * <p>승인 계약(DEC-WORKPLACE-LIST)에 따라 {@code ACTIVE}와 {@code INACTIVE}만 반환하고
+     * {@code DELETED}는 제외합니다. 제외 조건을 {@code <> 'DELETED'}로 쓰지 않는 이유는 나중에
+     * 상태가 추가될 때 그 값이 검토 없이 목록에 노출되기 때문입니다. 허용 목록으로 두면 새 상태는
+     * 기본적으로 숨겨지고, 노출 여부를 계약으로 결정한 뒤에만 열립니다.</p>
+     *
+     * <p>{@code ownerUserId}는 요청 값이 아니라 인증 Principal에서 채웁니다. 소유권 조건이
+     * 목록 SQL 자체에 있어야 다른 OWNER의 사업장이 Page에 섞이지 않습니다.</p>
+     *
+     * @param ownerUserId 인증 Principal의 사용자 식별자
+     * @param size        가져올 최대 행 수
+     * @param offset      건너뛸 행 수
+     * @return 정렬이 고정된 사업장 목록. 해당 Page에 행이 없으면 빈 List
+     */
+    List<WorkplaceListRow> findPageByOwnerUserId(
+            @Param("ownerUserId") Long ownerUserId,
+            @Param("size") int size,
+            @Param("offset") long offset);
+
+    /**
+     * 같은 조건으로 전체 건수를 셉니다. Page Metadata의 {@code totalElements}에 씁니다.
+     *
+     * <p>목록 조회와 조건이 어긋나면 마지막 Page가 비거나 총 건수가 실제와 달라지므로 두 SQL의
+     * {@code WHERE}는 항상 같이 바꿉니다.</p>
+     *
+     * @param ownerUserId 인증 Principal의 사용자 식별자
+     * @return {@code DELETED}를 제외한 소유 사업장 수
+     */
+    int countByOwnerUserId(@Param("ownerUserId") Long ownerUserId);
 }
