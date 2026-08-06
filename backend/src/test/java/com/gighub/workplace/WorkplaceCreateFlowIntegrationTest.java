@@ -246,7 +246,9 @@ class WorkplaceCreateFlowIntegrationTest {
                         .header("X-XSRF-TOKEN", csrf.getValue())
                         .contentType(APPLICATION_JSON)
                         .content(body(businessNumber(6), "\"radiusM\":500,")))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isBadRequest())
+                // 미승인 필드는 @Valid가 아니라 역직렬화 단계에서 끊기므로 Code를 함께 고정합니다.
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
 
         mockMvc.perform(post("/api/workplaces")
                         .session(session)

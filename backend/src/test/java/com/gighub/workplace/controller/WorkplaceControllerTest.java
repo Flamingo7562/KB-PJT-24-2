@@ -139,7 +139,9 @@ class WorkplaceControllerTest {
                                 + "\"phone\":\"0212345678\","
                                 + "\"radiusM\":500"
                                 + "}"))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isBadRequest())
+                // @Valid 실패와 다른 핸들러(handleNotReadable)를 타므로 Code를 함께 고정합니다.
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
 
         verify(workplaceService, never()).create(any(), any());
     }

@@ -1,6 +1,7 @@
 package com.gighub.workplace.service.impl;
 
 import java.util.List;
+import java.util.Objects;
 
 import com.gighub.auth.security.AuthPrincipal;
 import com.gighub.common.api.PageRequests;
@@ -47,7 +48,9 @@ public class WorkplaceServiceImpl implements WorkplaceService {
                 .build();
 
         insertOrReportDuplicate(param);
-        return param.getId();
+        // 생성 Key 회수가 깨지면 201과 함께 workplaceId=null이 조용히 나갑니다.
+        // ApiResponse는 래퍼만 검사하므로 여기서 끊습니다.
+        return Objects.requireNonNull(param.getId(), "생성된 사업장 식별자");
     }
 
     @Override
