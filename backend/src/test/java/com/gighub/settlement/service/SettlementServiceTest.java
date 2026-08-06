@@ -149,12 +149,13 @@ class SettlementServiceTest {
     void approveLocksWalletsByUserIdWithoutChangingParticipantRoles() {
         Long employerId = 8L;
         Long workerId = 2L;
-        WorkCaseEscrowContext context = context("READY");
-        context.setEmployerId(employerId);
-        context.setWorkerId(workerId);
+        WorkCaseEscrowContext context = context("READY").toBuilder()
+                .employerId(employerId)
+                .workerId(workerId)
+                .build();
         SettlementSnapshot waiting = settlement(SettlementStatus.WAITING);
-        SettlementSnapshot completed = settlement(SettlementStatus.COMPLETED);
-        completed.setApprovedByUserId(employerId);
+        SettlementSnapshot completed = settlement(SettlementStatus.COMPLETED)
+                .toBuilder().approvedByUserId(employerId).build();
         WalletTransactionSnapshot held = holdLedger().toBuilder()
                 .walletId(80L)
                 .walletUserId(employerId)
@@ -222,8 +223,8 @@ class SettlementServiceTest {
 
     @Test
     void approveRejectsSettlementAmountMismatch() {
-        SettlementSnapshot settlement = settlement(SettlementStatus.WAITING);
-        settlement.setAmount(AGREED_WAGE - 1);
+        SettlementSnapshot settlement = settlement(SettlementStatus.WAITING)
+                .toBuilder().amount(AGREED_WAGE - 1).build();
         when(workMapper.getEscrowContextForUpdate(WORK_CASE_ID))
                 .thenReturn(context("ACCEPTED"));
         when(settlementMapper.findByWorkCaseIdForUpdate(WORK_CASE_ID))
@@ -333,8 +334,8 @@ class SettlementServiceTest {
 
     @Test
     void approveRejectsSameEmployerAndWorker() {
-        WorkCaseEscrowContext invalid = context("ACCEPTED");
-        invalid.setWorkerId(EMPLOYER_ID);
+        WorkCaseEscrowContext invalid =
+                context("ACCEPTED").toBuilder().workerId(EMPLOYER_ID).build();
         when(workMapper.getEscrowContextForUpdate(WORK_CASE_ID))
                 .thenReturn(invalid);
 
@@ -349,8 +350,8 @@ class SettlementServiceTest {
     @Test
     void approveRejectsChangedEmployerAgainstHeldLedgerOwner() {
         Long changedEmployerId = 8L;
-        WorkCaseEscrowContext context = context("ACCEPTED");
-        context.setEmployerId(changedEmployerId);
+        WorkCaseEscrowContext context =
+                context("ACCEPTED").toBuilder().employerId(changedEmployerId).build();
         SettlementSnapshot waiting = settlement(SettlementStatus.WAITING);
         when(workMapper.getEscrowContextForUpdate(WORK_CASE_ID))
                 .thenReturn(context);
@@ -497,27 +498,27 @@ class SettlementServiceTest {
     }
 
     private WorkCaseEscrowContext context(String status) {
-        WorkCaseEscrowContext context = new WorkCaseEscrowContext();
-        context.setWorkCaseId(WORK_CASE_ID);
-        context.setEmployerId(EMPLOYER_ID);
-        context.setWorkerId(WORKER_ID);
-        context.setAgreedWage(AGREED_WAGE);
-        context.setStatus(status);
-        return context;
+        return WorkCaseEscrowContext.builder()
+                .workCaseId(WORK_CASE_ID)
+                .employerId(EMPLOYER_ID)
+                .workerId(WORKER_ID)
+                .agreedWage(AGREED_WAGE)
+                .status(status)
+                .build();
     }
 
     private SettlementSnapshot settlement(SettlementStatus status) {
-        SettlementSnapshot settlement = new SettlementSnapshot();
-        settlement.setSettlementId(SETTLEMENT_ID);
-        settlement.setWorkCaseId(WORK_CASE_ID);
-        settlement.setAmount(AGREED_WAGE);
-        settlement.setStatus(status);
+        SettlementSnapshot.SettlementSnapshotBuilder builder = SettlementSnapshot.builder()
+                .settlementId(SETTLEMENT_ID)
+                .workCaseId(WORK_CASE_ID)
+                .amount(AGREED_WAGE)
+                .status(status);
         if (SettlementStatus.COMPLETED == status) {
-            settlement.setApprovedByUserId(EMPLOYER_ID);
-            settlement.setProcessingAt(PROCESSING_AT);
-            settlement.setCompletedAt(COMPLETED_AT);
+            builder.approvedByUserId(EMPLOYER_ID)
+                    .processingAt(PROCESSING_AT)
+                    .completedAt(COMPLETED_AT);
         }
-        return settlement;
+        return builder.build();
     }
 
     private WalletBalanceSnapshot wallet(

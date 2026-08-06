@@ -4,6 +4,21 @@
 
 <mapper namespace="com.gighub.settlement.mapper.SettlementMapper">
 
+    <!-- DTO가 setter를 갖지 않으므로 생성자 인자로 매핑한다. 인자 순서는 필드 선언 순서를 따른다 -->
+    <resultMap id="settlementSnapshotResult" type="com.gighub.settlement.dto.SettlementSnapshot">
+        <constructor>
+            <idArg column="settlementId" javaType="java.lang.Long"/>
+            <arg column="workCaseId" javaType="java.lang.Long"/>
+            <arg column="amount" javaType="java.lang.Long"/>
+            <arg column="status" javaType="com.gighub.settlement.domain.SettlementStatus"/>
+            <arg column="approvedByUserId" javaType="java.lang.Long"/>
+            <arg column="dueAt" javaType="java.time.LocalDateTime"/>
+            <arg column="processingAt" javaType="java.time.LocalDateTime"/>
+            <arg column="completedAt" javaType="java.time.LocalDateTime"/>
+            <arg column="failureCode" javaType="java.lang.String"/>
+        </constructor>
+    </resultMap>
+
     <sql id="settlementSnapshotColumns">
         id                  AS settlementId,
         work_case_id        AS workCaseId,
@@ -17,8 +32,7 @@
     </sql>
 
     <!-- 정산 원장: 상태 검사와 갱신이 끝날 때까지 같은 행을 잠근다. -->
-    <select id="findByWorkCaseIdForUpdate"
-            resultType="com.gighub.settlement.dto.SettlementSnapshot">
+    <select id="findByWorkCaseIdForUpdate" resultMap="settlementSnapshotResult">
         SELECT <include refid="settlementSnapshotColumns"/>
         FROM settlements
         WHERE work_case_id = #{workCaseId}
