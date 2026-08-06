@@ -1,7 +1,7 @@
 ---
 patch_id: SPEC-218-01
 author: flamingo7562
-status: accepted
+status: applied
 issue: 218
 created_at: 2026-08-06
 base_spec_version: 3.0.1
@@ -26,8 +26,8 @@ targets:
 depends_on: []
 supersedes: null
 superseded_by: null
-applied_in_version: null
-applied_by_pr: null
+applied_in_version: 4.0.0
+applied_by_pr: 235
 ---
 
 # SPEC-218-01: M4 초대 생명주기 계약 확정
