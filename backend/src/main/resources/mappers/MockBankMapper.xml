@@ -4,31 +4,38 @@
 
 <mapper namespace="com.gighub.bank.mapper.MockBankMapper">
 
-    <!-- camelCase 매핑 설정에 의존하지 않도록 별칭을 명시한다 -->
+    <resultMap id="mockBankAccountResult" type="com.gighub.bank.dto.MockBankAccount">
+        <constructor>
+            <idArg column="id" javaType="java.lang.Long"/>
+            <arg column="bank_code" javaType="java.lang.String"/>
+            <arg column="mock_account_number" javaType="java.lang.String"/>
+            <arg column="pin" javaType="java.lang.String"/>
+            <arg column="balance" javaType="java.lang.Long"/>
+            <arg column="available_amount" javaType="java.lang.Long"/>
+            <arg column="status" javaType="java.lang.String"/>
+        </constructor>
+    </resultMap>
+
+    <!-- camelCase 매핑에 의존하지 않도록 컬럼을 명시한다 -->
     <sql id="accountColumns">
-        id                AS id,
-        user_id           AS userId,
-        bank_code         AS bankCode,
-        mock_account_number AS mockAccountNumber,
-        balance           AS balance,
-        available_amount  AS availableAmount,
-        status            AS status
+        id, bank_code, mock_account_number, pin, balance, available_amount, status
     </sql>
 
-    <select id="findActiveAccountsByUserId" resultType="com.gighub.bank.dto.MockBankAccount">
-        SELECT <include refid="accountColumns"/>
+    <!-- 비귀속 Fixture 식별. status와 무관하게 존재 자체만 조회한다(Idempotency Replay가
+         현재 상태와 무관하게 원래 계좌를 다시 찾을 수 있어야 한다). -->
+    <select id="findAccountIdByBankCodeAndAccountNo" resultType="java.lang.Long">
+        SELECT id
         FROM mock_bank_accounts
-        WHERE user_id = #{userId} AND status = 'ACTIVE'
-        ORDER BY id
+        WHERE bank_code = #{bankCode} AND mock_account_number = #{accountNo}
     </select>
 
-    <select id="getAccountById" resultType="com.gighub.bank.dto.MockBankAccount">
+    <select id="getAccountById" resultMap="mockBankAccountResult">
         SELECT <include refid="accountColumns"/>
         FROM mock_bank_accounts
         WHERE id = #{accountId}
     </select>
 
-    <select id="getAccountForUpdate" resultType="com.gighub.bank.dto.MockBankAccount">
+    <select id="getAccountForUpdate" resultMap="mockBankAccountResult">
         SELECT <include refid="accountColumns"/>
         FROM mock_bank_accounts
         WHERE id = #{accountId}

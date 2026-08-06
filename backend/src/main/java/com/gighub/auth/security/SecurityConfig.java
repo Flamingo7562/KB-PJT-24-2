@@ -3,6 +3,7 @@ package com.gighub.auth.security;
 import java.util.Arrays;
 import java.util.List;
 
+import com.gighub.member.domain.UserRole;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.env.Environment;
@@ -51,6 +52,8 @@ public class SecurityConfig {
         "/api/auth/password-reset/confirmations"
     };
     private static final String LOCAL_TEST_LOGIN_PATH = "/api/test-login/**";
+    // 지갑 충전은 API_SPEC에서 OWNER 전용 Operation이다.
+    private static final String FUNDING_ORDERS_PATH = "/api/wallet/funding-orders";
 
     private final Environment environment;
 
@@ -121,6 +124,8 @@ public class SecurityConfig {
                     if (environment.acceptsProfiles(Profiles.of("local"))) {
                         authorize.requestMatchers(matchers(HttpMethod.GET, LOCAL_TEST_LOGIN_PATH)).permitAll();
                     }
+                    authorize.requestMatchers(matchers(HttpMethod.POST, FUNDING_ORDERS_PATH))
+                            .hasRole(UserRole.OWNER.name());
                     authorize.anyRequest().authenticated();
                 });
 

@@ -14,34 +14,14 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
  * 지갑 요청 DTO는 Builder 기반으로 역직렬화된다.
  *
  * <p>{@code @Builder}만 붙이고 {@code @Jacksonized}를 빠뜨리면 Jackson이 필드를 채우지 못해
- * 모든 충전·출금·에스크로 요청이 런타임에서 조용히 깨진다. Controller 테스트가 이 세 DTO의
- * JSON 본문을 다루지 않으므로 역직렬화 계약을 여기서 직접 고정한다.</p>
+ * 요청이 런타임에서 조용히 깨진다. FundingRequest/WithdrawalRequest는 bankCode·accountNo·pin
+ * 계약(DEC-BANK-INPUT)으로 재설계되며 Builder 대신 명시적 {@code @JsonCreator} 생성자로
+ * 바뀌었고, 그 역직렬화·검증 계약은 FundingRequestValidationTest/WithdrawalRequestValidationTest,
+ * FundingControllerTest/WithdrawalControllerTest가 다룬다.</p>
  */
 class WalletRequestDeserializationTest {
 
     private final ObjectMapper objectMapper = new ObjectMapper();
-
-    @Test
-    void withdrawalRequestBindsJsonBody() throws Exception {
-        WithdrawalRequest request = objectMapper.readValue(
-                "{\"bankAccountId\":7,\"amount\":50000}",
-                WithdrawalRequest.class
-        );
-
-        assertEquals(7L, request.getBankAccountId());
-        assertEquals(50_000L, request.getAmount());
-    }
-
-    @Test
-    void fundingRequestBindsJsonBody() throws Exception {
-        FundingRequest request = objectMapper.readValue(
-                "{\"bankAccountId\":3,\"amount\":1000}",
-                FundingRequest.class
-        );
-
-        assertEquals(3L, request.getBankAccountId());
-        assertEquals(1_000L, request.getAmount());
-    }
 
     @Test
     void escrowHoldRequestBindsJsonBody() throws Exception {

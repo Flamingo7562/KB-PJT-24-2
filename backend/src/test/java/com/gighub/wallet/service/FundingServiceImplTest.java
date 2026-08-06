@@ -56,6 +56,9 @@ class FundingServiceImplTest {
 
     private static final Long EMPLOYER_ID = 3L;
     private static final Long ACCOUNT_ID = 10L;
+    private static final String BANK_CODE = "004";
+    private static final String ACCOUNT_NO = "1234567890";
+    private static final String PIN = "0000";
     private static final Long AMOUNT = 300_000L;
     private static final Long ORDER_ID = 21L;
     private static final Long BANK_TRANSACTION_ID = 31L;
@@ -87,6 +90,9 @@ class FundingServiceImplTest {
         org.mockito.Mockito.lenient()
                 .when(walletMapper.getWalletSnapshotForUpdate(EMPLOYER_ID))
                 .thenReturn(wallet(50L, 700_000L, 20_000L));
+        org.mockito.Mockito.lenient()
+                .when(bankTransferGateway.resolveAccountId(BANK_CODE, ACCOUNT_NO))
+                .thenReturn(ACCOUNT_ID);
     }
 
     @Test
@@ -168,7 +174,8 @@ class FundingServiceImplTest {
         assertEquals(1_000_000L, result.getAvailableBalance());
         assertEquals(20_000L, result.getLockedBalance());
         assertEquals(BANK_TRANSACTION_ID, result.getBankTransactionId());
-        verifyNoInteractions(bankTransferGateway);
+        verify(bankTransferGateway, never()).preflight(any());
+        verify(bankTransferGateway, never()).withdraw(any());
         verify(walletMapper, never()).addAvailableBalance(anyLong(), anyLong());
         verify(walletMapper).getWalletSnapshotForUpdate(EMPLOYER_ID);
     }
@@ -186,7 +193,8 @@ class FundingServiceImplTest {
                 () -> fundingService.fund(command(AMOUNT, KEY))
         );
 
-        verifyNoInteractions(bankTransferGateway);
+        verify(bankTransferGateway, never()).preflight(any());
+        verify(bankTransferGateway, never()).withdraw(any());
         verify(walletMapper).getWalletSnapshotForUpdate(EMPLOYER_ID);
         verify(walletMapper, never()).addAvailableBalance(anyLong(), anyLong());
     }
@@ -223,7 +231,8 @@ class FundingServiceImplTest {
                 () -> fundingService.fund(command(AMOUNT, KEY))
         );
 
-        verifyNoInteractions(bankTransferGateway);
+        verify(bankTransferGateway, never()).preflight(any());
+        verify(bankTransferGateway, never()).withdraw(any());
         verify(walletMapper).getWalletSnapshotForUpdate(EMPLOYER_ID);
         verify(walletMapper, never()).addAvailableBalance(anyLong(), anyLong());
     }
@@ -486,7 +495,9 @@ class FundingServiceImplTest {
     private FundingCommand command(Long amount, String key) {
         return FundingCommand.builder()
                 .employerId(EMPLOYER_ID)
-                .linkedAccountId(ACCOUNT_ID)
+                .bankCode(BANK_CODE)
+                .accountNo(ACCOUNT_NO)
+                .pin(PIN)
                 .amount(amount)
                 .idempotencyKey(key)
                 .build();

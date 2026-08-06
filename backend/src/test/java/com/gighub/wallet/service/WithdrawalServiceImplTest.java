@@ -60,6 +60,8 @@ class WithdrawalServiceImplTest {
 
     private static final Long USER_ID = 4L;
     private static final Long ACCOUNT_ID = 20L;
+    private static final String BANK_CODE = "004";
+    private static final String ACCOUNT_NO = "1234567890";
     private static final Long WALLET_ID = 40L;
     private static final Long AMOUNT = 300_000L;
     private static final Long REQUEST_ID = 22L;
@@ -89,6 +91,9 @@ class WithdrawalServiceImplTest {
                     Supplier<WithdrawalResult> attempt = invocation.getArgument(0);
                     return attempt.get();
                 });
+        Mockito.lenient()
+                .when(bankTransferGateway.resolveAccountId(BANK_CODE, ACCOUNT_NO))
+                .thenReturn(ACCOUNT_ID);
     }
 
     @Test
@@ -474,7 +479,8 @@ class WithdrawalServiceImplTest {
     private WithdrawalCommand command(Long amount, String key) {
         return WithdrawalCommand.builder()
                 .userId(USER_ID)
-                .linkedAccountId(ACCOUNT_ID)
+                .bankCode(BANK_CODE)
+                .accountNo(ACCOUNT_NO)
                 .amount(amount)
                 .idempotencyKey(key)
                 .build();

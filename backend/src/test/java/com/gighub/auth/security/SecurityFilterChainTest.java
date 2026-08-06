@@ -1,15 +1,26 @@
 package com.gighub.auth.security;
 
+import java.util.List;
+
 import javax.servlet.Filter;
+import javax.servlet.http.Cookie;
 import javax.servlet.http.HttpServletRequest;
 
+import com.gighub.member.domain.UserRole;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.ResponseEntity;
+import org.springframework.mock.web.MockHttpSession;
 import org.springframework.mock.web.MockServletContext;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContext;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.security.web.csrf.CsrfToken;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -93,6 +104,52 @@ class SecurityFilterChainTest {
                 .andExpect(status().isForbidden());
     }
 
+    /** 충전은 OWNER 전용 Operation이므로 Security 경계에서 WORKER를 차단한다. */
+    @Test
+    void fundingOrdersAreRestrictedToOwnerRole() throws Exception {
+        Cookie csrfCookie = prepareCsrfCookie();
+
+        mockMvc.perform(post("/api/wallet/funding-orders")
+                        .session(sessionFor(UserRole.WORKER))
+                        .cookie(csrfCookie)
+                        .header("X-XSRF-TOKEN", csrfCookie.getValue()))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("FORBIDDEN"))
+                .andExpect(jsonPath("$.traceId").isNotEmpty());
+
+        mockMvc.perform(post("/api/wallet/funding-orders")
+                        .session(sessionFor(UserRole.OWNER))
+                        .cookie(csrfCookie)
+                        .header("X-XSRF-TOKEN", csrfCookie.getValue()))
+                .andExpect(status().isOk());
+    }
+
+    private MockHttpSession sessionFor(UserRole role) {
+        AuthPrincipal principal = new AuthPrincipal(7L, role, "테스트 사용자");
+        Authentication authentication = new UsernamePasswordAuthenticationToken(
+                principal,
+                null,
+                List.of(new SimpleGrantedAuthority("ROLE_" + role.name()))
+        );
+        SecurityContext securityContext = SecurityContextHolder.createEmptyContext();
+        securityContext.setAuthentication(authentication);
+
+        MockHttpSession session = new MockHttpSession();
+        session.setAttribute(
+                HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY,
+                securityContext
+        );
+        return session;
+    }
+
+    private Cookie prepareCsrfCookie() throws Exception {
+        return mockMvc.perform(get("/api/auth/csrf"))
+                .andExpect(status().isNoContent())
+                .andReturn()
+                .getResponse()
+                .getCookie("XSRF-TOKEN");
+    }
+
     @Test
     void testLoginIsPublicOnlyInLocalProfile() throws Exception {
         mockMvc.perform(get("/api/test-login/1"))
@@ -162,7 +219,7 @@ class SecurityFilterChainTest {
             return ResponseEntity.noContent().build();
         }
 
-        @PostMapping("/api/protected")
+        @PostMapping({"/api/protected", "/api/wallet/funding-orders"})
         ResponseEntity<Void> postEndpoint() {
             return ResponseEntity.ok().build();
         }
