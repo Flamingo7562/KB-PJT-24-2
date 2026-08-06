@@ -6,6 +6,7 @@ import javax.servlet.http.HttpServletResponse;
 import com.gighub.auth.security.AuthPrincipal;
 import com.gighub.auth.security.AuthSessionManager;
 import com.gighub.common.api.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.context.annotation.Profile;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -19,6 +20,8 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @RestController
 @Profile("local")
+// Runtime Swagger 탐색에서 제품 계약 API와 구분되도록 별도 Tag로 묶는다(#123).
+@Tag(name = "Runtime — Local Support", description = "local 프로파일에서만 등록되는 개발 전용 Endpoint입니다.")
 public class TestLoginController {
 
     private final TestLoginService testLoginService;

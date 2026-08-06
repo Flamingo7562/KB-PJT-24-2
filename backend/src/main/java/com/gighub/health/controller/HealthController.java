@@ -3,6 +3,7 @@ package com.gighub.health.controller;
 import java.time.Instant;
 
 import com.gighub.health.dto.HealthResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -15,6 +16,8 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @RestController
 @RequestMapping("/api/health")
+// Runtime Swagger 탐색에서 제품 계약 API와 구분되도록 별도 Tag로 묶는다(#123).
+@Tag(name = "Runtime — Health", description = "제품 계약이 아닌 Liveness 확인용 Endpoint입니다.")
 public class HealthController {
 
     /**

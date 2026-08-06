@@ -1,5 +1,7 @@
 package com.gighub.config;
 
+import com.fasterxml.classmate.TypeResolver;
+import com.gighub.common.api.ApiErrorResponse;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.core.Authentication;
@@ -21,6 +23,9 @@ import javax.servlet.http.HttpSession;
 @Configuration
 @EnableOpenApi
 public class SwaggerConfig {
+
+    private final TypeResolver typeResolver = new TypeResolver();
+
     @Bean
     public Docket api() {
         return new Docket(DocumentationType.OAS_30)
@@ -28,6 +33,9 @@ public class SwaggerConfig {
                 .ignoredParameterTypes(HttpSession.class, HttpServletRequest.class, HttpServletResponse.class,
                         Authentication.class, Principal.class)
                 .useDefaultResponseMessages(false) // 기본 응답 메시지(200, 401 등) 자동 추가 끄기
+                // 오류는 CommonExceptionHandler가 공통 Envelope로 반환하므로 Controller 반환 타입에
+                // 나타나지 않는다. 탐색자가 오류 계약을 볼 수 있도록 Schema를 명시 등록한다(#123).
+                .additionalModels(typeResolver.resolve(ApiErrorResponse.class))
                 .select()
                 .apis(RequestHandlerSelectors.basePackage("com.gighub")) // API 컨트롤러가 있는 최상위 패키지
                 .paths(PathSelectors.ant("/api/**")) // /api/ 로 시작하는 주소만 문서화
