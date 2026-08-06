@@ -41,8 +41,8 @@ class WalletRequestDeserializationTest {
         try (ValidatorFactory factory = Validation.buildDefaultValidatorFactory()) {
             Validator validator = factory.getValidator();
 
-            WithdrawalRequest empty =
-                    objectMapper.readValue("{}", WithdrawalRequest.class);
+            EscrowHoldRequest empty =
+                    objectMapper.readValue("{}", EscrowHoldRequest.class);
 
             assertFalse(
                     validator.validate(empty).isEmpty(),
