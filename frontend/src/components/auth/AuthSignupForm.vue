@@ -6,6 +6,12 @@
  * 연계 API: GET /auth/check-login-id · GET /auth/check-email · POST /auth/signup
  *   → @/services/auth (checkLoginId, checkEmail, signup)
  * 성공 후: role 에 맞는 로그인 화면으로 이동.
+ *
+ * 실시간 검증(#238): useFieldValidation 이 형식 오류(errors)를 담당한다. 아이디·이메일의
+ * 중복확인 결과(성공/실패, 서버가 준 fieldErrors 포함)는 서버만 아는 답이라 별도 슬롯
+ * (checkErrors)에 둔다 — 같은 슬롯을 쓰면 값을 고쳐 형식이 재검증될 때 "이미 사용
+ * 중입니다" 같은 서버 응답을 지워버리기 때문이다. 템플릿은 두 슬롯을
+ * `errors.x || checkErrors.x` 로 합치고, 형식 오류가 항상 먼저 보인다.
  */
 import { Check } from 'lucide-vue-next'
 import { computed, reactive, ref, watch } from 'vue'
@@ -13,6 +19,7 @@ import { useRouter } from 'vue-router'
 
 import AppField from '@/components/common/AppField.vue'
 import BaseButton from '@/components/common/BaseButton.vue'
+import { useFieldValidation } from '@/composables/useFieldValidation'
 import { checkEmail, checkLoginId, signup } from '@/services/auth'
 import { fieldErrorMap } from '@/services/http'
 import { useUiStore } from '@/stores/ui'
@@ -45,30 +52,37 @@ const form = reactive({
   phone: ''
 })
 
-const errors = reactive({
-  loginId: '',
-  password: '',
-  passwordConfirm: '',
-  name: '',
-  email: '',
-  phone: ''
+// 형식 오류 전용. 규칙은 기존 validate() 가 쓰던 것을 그대로 옮겼다 — 규칙 자체는 불변.
+const { errors, handleBlur, validateAll } = useFieldValidation(() => form, {
+  loginId: (v) => loginIdRule(v.loginId),
+  password: (v) => passwordRule(v.password),
+  passwordConfirm: (v) => passwordsMatch(v.password, v.passwordConfirm),
+  name: (v) => nameRule(v.name),
+  email: (v) => isEmail(v.email),
+  phone: (v) => isPhone(v.phone)
 })
+
+// 중복확인(서버) 전용 슬롯 — errors 와 분리해 형식 재검증이 서버 응답을 덮어쓰지 않게 한다.
+// 아이디·이메일만 서버에 물어볼 수 있으므로 이 두 키만 가진다.
+const checkErrors = reactive({ loginId: '', email: '' })
+const AVAILABILITY_FIELDS = new Set(['loginId', 'email'])
 
 const loginIdCheck = reactive({ done: false, available: false })
 const emailCheck = reactive({ done: false, available: false })
 const submitting = ref(false)
 
-// 중복확인을 통과한 상태 — 버튼 자리를 '확인완료' 표시로 바꾼다.
-// 값이 바뀌면 아래 watch 가 done 을 내려 자동으로 버튼이 돌아온다.
+// 중복확인을 통과한 상태 — 버튼 자리를 '확인완료' 표시로, 필드 아래를 성공 문구로 바꾼다.
+// 값이 바뀌면 아래 watch 가 done 을 내려 자동으로 되돌아온다.
 const loginIdVerified = computed(() => loginIdCheck.done && loginIdCheck.available)
 const emailVerified = computed(() => emailCheck.done && emailCheck.available)
 
-// 값이 바뀌면 이전 중복확인 결과는 무효화한다.
+// 값이 바뀌면 이전 중복확인 결과(상태 + 표시 메시지)를 모두 무효화한다.
 watch(
   () => form.loginId,
   () => {
     loginIdCheck.done = false
     loginIdCheck.available = false
+    checkErrors.loginId = ''
   }
 )
 watch(
@@ -76,6 +90,7 @@ watch(
   () => {
     emailCheck.done = false
     emailCheck.available = false
+    checkErrors.email = ''
   }
 )
 
@@ -87,20 +102,25 @@ function onPhoneInput(v) {
 }
 
 async function onCheckLoginId() {
-  const rule = loginIdRule(form.loginId)
-  errors.loginId = rule.message
-  if (!rule.valid) return
+  // 포커스가 버튼으로 넘어가며 native blur 로 handleBlur 가 이미 한 번 불렸을 수 있다.
+  // handleBlur 는 같은 값이면 같은 결과를 내는 멱등 함수라 두 번 불러도 안전하다.
+  handleBlur('loginId')
+  if (errors.loginId) return
 
+  // 응답이 오는 동안 사용자가 값을 바꿀 수 있다. 그 사이 값이 달라지면 이 응답은 지금
+  // 화면에 있는 값에 대한 답이 아니므로(watch 가 이미 상태를 무효화했다) 버린다.
+  const checkedValue = form.loginId
   try {
-    const { available } = await checkLoginId(form.loginId)
+    const { available } = await checkLoginId(checkedValue)
+    if (form.loginId !== checkedValue) return
     loginIdCheck.done = true
     loginIdCheck.available = available
-    errors.loginId = available ? '' : '이미 사용 중인 아이디입니다.'
-    if (available) ui.toast('사용 가능한 아이디입니다.', { type: 'success' })
+    checkErrors.loginId = available ? '' : '이미 사용 중인 아이디입니다.'
   } catch (err) {
+    if (form.loginId !== checkedValue) return
     const fieldMessage = fieldErrorMap(err).loginId
     if (fieldMessage) {
-      errors.loginId = fieldMessage
+      checkErrors.loginId = fieldMessage
     } else {
       ui.toast(err?.response?.data?.message || '아이디 중복확인에 실패했어요.', { type: 'danger' })
     }
@@ -108,61 +128,68 @@ async function onCheckLoginId() {
 }
 
 async function onCheckEmail() {
-  const rule = isEmail(form.email)
-  errors.email = rule.message
-  if (!rule.valid) return
+  // 포커스가 버튼으로 넘어가며 native blur 로 handleBlur 가 이미 한 번 불렸을 수 있다.
+  // handleBlur 는 같은 값이면 같은 결과를 내는 멱등 함수라 두 번 불러도 안전하다.
+  handleBlur('email')
+  if (errors.email) return
 
+  // 응답이 오는 동안 사용자가 값을 바꿀 수 있다. 그 사이 값이 달라지면 이 응답은 지금
+  // 화면에 있는 값에 대한 답이 아니므로(watch 가 이미 상태를 무효화했다) 버린다.
+  const checkedValue = form.email
   try {
-    const { available } = await checkEmail(form.email)
+    const { available } = await checkEmail(checkedValue)
+    if (form.email !== checkedValue) return
     emailCheck.done = true
     emailCheck.available = available
-    errors.email = available ? '' : '이미 사용 중인 이메일입니다.'
-    if (available) ui.toast('사용 가능한 이메일입니다.', { type: 'success' })
+    checkErrors.email = available ? '' : '이미 사용 중인 이메일입니다.'
   } catch (err) {
+    if (form.email !== checkedValue) return
     const fieldMessage = fieldErrorMap(err).email
     if (fieldMessage) {
-      errors.email = fieldMessage
+      checkErrors.email = fieldMessage
     } else {
       ui.toast(err?.response?.data?.message || '이메일 중복확인에 실패했어요.', { type: 'danger' })
     }
   }
 }
 
-/** 전 필드 검증. 하나라도 실패하면 false. */
-function validate() {
-  const nameCheck = nameRule(form.name)
-  const pwRule = passwordRule(form.password)
-  const pwConfirmRule = passwordsMatch(form.password, form.passwordConfirm)
-  const phoneRule = isPhone(form.phone)
+/**
+ * 중복확인 완료 여부를 제출 시점에 확인한다. loginIdCheck/emailCheck 는
+ * useFieldValidation 의 규칙표가 모르는, 이 컴포넌트만 가진 상태라 규칙에 넣지 않고
+ * 여기서 따로 얹는다. 형식이 이미 무효여도 이 함수는 그대로 checkErrors 를 채우지만,
+ * 화면은 항상 `errors.x || checkErrors.x` 로 errors 를 우선 보여주므로 형식 오류가
+ * 있는 동안은 이 메시지가 가려진다.
+ */
+function checkAvailabilityBeforeSubmit() {
+  let ok = true
 
-  errors.name = nameCheck.message
-  errors.password = pwRule.message
-  errors.passwordConfirm = pwConfirmRule.message
-  errors.phone = phoneRule.message
+  if (!loginIdCheck.done) {
+    checkErrors.loginId = '아이디 중복확인을 해주세요.'
+    ok = false
+  } else if (!loginIdCheck.available) {
+    checkErrors.loginId = '이미 사용 중인 아이디입니다.'
+    ok = false
+  } else {
+    checkErrors.loginId = ''
+  }
 
-  const idRule = loginIdRule(form.loginId)
-  errors.loginId = !idRule.valid
-    ? idRule.message
-    : !loginIdCheck.done
-      ? '아이디 중복확인을 해주세요.'
-      : !loginIdCheck.available
-        ? '이미 사용 중인 아이디입니다.'
-        : ''
+  if (!emailCheck.done) {
+    checkErrors.email = '이메일 중복확인을 해주세요.'
+    ok = false
+  } else if (!emailCheck.available) {
+    checkErrors.email = '이미 사용 중인 이메일입니다.'
+    ok = false
+  } else {
+    checkErrors.email = ''
+  }
 
-  const emailRule = isEmail(form.email)
-  errors.email = !emailRule.valid
-    ? emailRule.message
-    : !emailCheck.done
-      ? '이메일 중복확인을 해주세요.'
-      : !emailCheck.available
-        ? '이미 사용 중인 이메일입니다.'
-        : ''
-
-  return Object.values(errors).every((message) => !message)
+  return ok
 }
 
 async function onSubmit() {
-  if (!validate()) {
+  const formatOk = validateAll()
+  const availabilityOk = checkAvailabilityBeforeSubmit()
+  if (!formatOk || !availabilityOk) {
     ui.toast('입력 내용을 확인해주세요.', { type: 'warning' })
     return
   }
@@ -184,10 +211,17 @@ async function onSubmit() {
   } catch (err) {
     // 확인·제출 사이 경합으로 아이디·이메일이 막 선점되면(409) 서버가 fieldErrors 를 준다 —
     // 해당 입력 아래에 사유를 붙이고, 필드로 못 옮기는 오류만 토스트로 보여준다.
+    // 아이디·이메일의 서버 거부는 checkErrors 로(형식 재검증이 지우지 못하게), 나머지
+    // 필드는 그대로 errors 로 보낸다.
     const fieldErrors = fieldErrorMap(err)
-    const matchedField = Object.keys(errors).some((field) => {
-      if (!fieldErrors[field]) return false
-      errors[field] = fieldErrors[field]
+    const matchedField = Object.keys(form).some((field) => {
+      const reason = fieldErrors[field]
+      if (!reason) return false
+      if (AVAILABILITY_FIELDS.has(field)) {
+        checkErrors[field] = reason
+      } else {
+        errors[field] = reason
+      }
       return true
     })
     if (!matchedField) {
@@ -206,7 +240,9 @@ async function onSubmit() {
       label="아이디"
       placeholder="4~20자 영문·숫자"
       required
-      :error="errors.loginId"
+      :error="errors.loginId || checkErrors.loginId"
+      :success="loginIdVerified ? '사용 가능한 아이디입니다.' : ''"
+      @blur="handleBlur('loginId')"
     >
       <template #suffix>
         <span v-if="loginIdVerified" class="verified"><Check :size="16" /> 확인완료</span>
@@ -224,6 +260,7 @@ async function onSubmit() {
       :maxlength="PASSWORD_MAX_LENGTH"
       required
       :error="errors.password"
+      @blur="handleBlur('password')"
     />
 
     <AppField
@@ -233,6 +270,7 @@ async function onSubmit() {
       placeholder="비밀번호를 한 번 더 입력"
       required
       :error="errors.passwordConfirm"
+      @blur="handleBlur('passwordConfirm')"
     />
 
     <AppField
@@ -242,6 +280,7 @@ async function onSubmit() {
       :maxlength="NAME_MAX_LENGTH"
       required
       :error="errors.name"
+      @blur="handleBlur('name')"
     />
 
     <AppField
@@ -250,7 +289,9 @@ async function onSubmit() {
       label="이메일"
       placeholder="example@gighub.com"
       required
-      :error="errors.email"
+      :error="errors.email || checkErrors.email"
+      :success="emailVerified ? '사용 가능한 이메일입니다.' : ''"
+      @blur="handleBlur('email')"
     >
       <template #suffix>
         <span v-if="emailVerified" class="verified"><Check :size="16" /> 확인완료</span>
@@ -270,6 +311,7 @@ async function onSubmit() {
       :error="errors.phone"
       @keydown="blockNonDigitKeydown"
       @update:model-value="onPhoneInput"
+      @blur="handleBlur('phone')"
     />
 
     <BaseButton
