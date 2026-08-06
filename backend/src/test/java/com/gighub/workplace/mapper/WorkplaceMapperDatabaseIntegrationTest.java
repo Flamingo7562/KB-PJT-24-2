@@ -8,6 +8,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 
 import javax.sql.DataSource;
@@ -36,6 +37,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 @Tag("database")
 class WorkplaceMapperDatabaseIntegrationTest {
 
+    private String businessNumberPrefix;
+
     @Test
     @Timeout(30)
     void storesContractValuesAndBlocksDuplicateBusinessNumberOnCurrentMysqlSchema() throws Exception {
@@ -45,6 +48,10 @@ class WorkplaceMapperDatabaseIntegrationTest {
             WorkplaceMapper workplaceMapper = context.getBean(WorkplaceMapper.class);
 
             String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 10);
+            // 사업자등록번호는 Unique 숫자 10자리이므로 앞 6자리를 실행마다 다르게 만듭니다.
+            // 고정값을 쓰면 이전 실행이 정리 전에 중단됐을 때 다음 실행이 엉뚱한 중복으로 실패합니다.
+            businessNumberPrefix = String.format(
+                    "%06d", ThreadLocalRandom.current().nextInt(1_000_000));
             Long ownerUserId = insertOwnerFixture(jdbcTemplate, suffix);
 
             try {
@@ -65,7 +72,7 @@ class WorkplaceMapperDatabaseIntegrationTest {
             JdbcTemplate jdbcTemplate,
             WorkplaceMapper workplaceMapper,
             Long ownerUserId) {
-        WorkplaceInsertParam param = paramBuilder(ownerUserId, "1000000001")
+        WorkplaceInsertParam param = paramBuilder(ownerUserId, businessNumber(1))
                 .latitude(new BigDecimal("37.1234567"))
                 .longitude(new BigDecimal("127.1234567"))
                 .build();
@@ -77,7 +84,7 @@ class WorkplaceMapperDatabaseIntegrationTest {
                 "SELECT * FROM workplaces WHERE id = ?", param.getId());
 
         assertEquals(ownerUserId, ((Number) row.get("owner_user_id")).longValue());
-        assertEquals("1000000001", row.get("business_registration_number"));
+        assertEquals(businessNumber(1), row.get("business_registration_number"));
         assertEquals("강남점", row.get("name"));
         assertEquals("김사장", row.get("representative_name"));
         assertEquals("서울 강남구 테헤란로 1", row.get("road_address"));
@@ -94,7 +101,7 @@ class WorkplaceMapperDatabaseIntegrationTest {
             JdbcTemplate jdbcTemplate,
             WorkplaceMapper workplaceMapper,
             Long ownerUserId) {
-        WorkplaceInsertParam param = paramBuilder(ownerUserId, "1000000002")
+        WorkplaceInsertParam param = paramBuilder(ownerUserId, businessNumber(2))
                 .detailAddress(null)
                 .build();
 
@@ -119,7 +126,7 @@ class WorkplaceMapperDatabaseIntegrationTest {
     private void verifyPartialCoordinateIsRejected(
             WorkplaceMapper workplaceMapper,
             Long ownerUserId) {
-        WorkplaceInsertParam param = paramBuilder(ownerUserId, "1000000003")
+        WorkplaceInsertParam param = paramBuilder(ownerUserId, businessNumber(3))
                 .latitude(new BigDecimal("37.1234567"))
                 .build();
 
@@ -129,9 +136,9 @@ class WorkplaceMapperDatabaseIntegrationTest {
     private void verifyDuplicateBusinessNumberIsRejected(
             WorkplaceMapper workplaceMapper,
             Long ownerUserId) {
-        assertEquals(1, workplaceMapper.insert(paramBuilder(ownerUserId, "1000000004").build()));
+        assertEquals(1, workplaceMapper.insert(paramBuilder(ownerUserId, businessNumber(4)).build()));
 
-        WorkplaceInsertParam duplicate = paramBuilder(ownerUserId, "1000000004").build();
+        WorkplaceInsertParam duplicate = paramBuilder(ownerUserId, businessNumber(4)).build();
         assertThrows(DuplicateKeyException.class, () -> workplaceMapper.insert(duplicate));
     }
 
@@ -143,7 +150,7 @@ class WorkplaceMapperDatabaseIntegrationTest {
             JdbcTemplate jdbcTemplate,
             WorkplaceMapper workplaceMapper,
             Long ownerUserId) throws Exception {
-        String businessNumber = "1000000005";
+        String businessNumber = businessNumber(5);
         CountDownLatch start = new CountDownLatch(1);
         ExecutorService executor = Executors.newFixedThreadPool(2);
 
@@ -186,6 +193,10 @@ class WorkplaceMapperDatabaseIntegrationTest {
         } catch (DuplicateKeyException expected) {
             return false;
         }
+    }
+
+    private String businessNumber(int index) {
+        return businessNumberPrefix + String.format("%04d", index);
     }
 
     private WorkplaceInsertParam.WorkplaceInsertParamBuilder paramBuilder(

@@ -5,6 +5,7 @@ import java.sql.Timestamp;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.ThreadLocalRandom;
 
 import javax.sql.DataSource;
 
@@ -37,6 +38,8 @@ class WorkplaceListMapperDatabaseIntegrationTest {
     private static final LocalDateTime MIDDLE = LocalDateTime.of(2026, 1, 2, 10, 0, 0);
     private static final LocalDateTime NEWEST = LocalDateTime.of(2026, 1, 3, 10, 0, 0);
 
+    private String businessNumberPrefix;
+
     @Test
     @Timeout(30)
     void returnsOnlyOwnedManageableWorkplacesInStableOrderOnCurrentMysqlSchema() {
@@ -46,6 +49,10 @@ class WorkplaceListMapperDatabaseIntegrationTest {
             WorkplaceMapper workplaceMapper = context.getBean(WorkplaceMapper.class);
 
             String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 8);
+            // 사업자등록번호는 Unique 숫자 10자리이므로 앞 6자리를 실행마다 다르게 만듭니다.
+            // 고정값을 쓰면 이전 실행이 정리 전에 중단됐을 때 다음 실행이 엉뚱한 중복으로 실패합니다.
+            businessNumberPrefix = String.format(
+                    "%06d", ThreadLocalRandom.current().nextInt(1_000_000));
             Long ownerUserId = insertOwnerFixture(jdbcTemplate, suffix + "a");
             Long otherOwnerUserId = insertOwnerFixture(jdbcTemplate, suffix + "b");
             Long emptyOwnerUserId = insertOwnerFixture(jdbcTemplate, suffix + "c");
@@ -123,7 +130,7 @@ class WorkplaceListMapperDatabaseIntegrationTest {
         List<WorkplaceListRow> rows = workplaceMapper.findPageByOwnerUserId(ownerUserId, 100, 0L);
 
         WorkplaceListRow newest = rowOf(rows, fixture.newestActive);
-        assertEquals("2000000001", newest.getBusinessRegistrationNumber());
+        assertEquals(businessNumber(1), newest.getBusinessRegistrationNumber());
         assertEquals("강남점", newest.getName());
         assertEquals("김사장", newest.getRepresentativeName());
         assertEquals("서울 강남구 테헤란로 1", newest.getRoadAddress());
@@ -192,16 +199,16 @@ class WorkplaceListMapperDatabaseIntegrationTest {
             Long otherOwnerUserId) {
         Fixture fixture = new Fixture();
         fixture.newestActive = insertWorkplace(
-                jdbcTemplate, ownerUserId, "2000000001", "2층", "ACTIVE", NEWEST);
+                jdbcTemplate, ownerUserId, businessNumber(1), "2층", "ACTIVE", NEWEST);
         fixture.middleInactive = insertWorkplace(
-                jdbcTemplate, ownerUserId, "2000000002", null, "INACTIVE", MIDDLE);
+                jdbcTemplate, ownerUserId, businessNumber(2), null, "INACTIVE", MIDDLE);
         fixture.middleActive = insertWorkplace(
-                jdbcTemplate, ownerUserId, "2000000003", "3층", "ACTIVE", MIDDLE);
+                jdbcTemplate, ownerUserId, businessNumber(3), "3층", "ACTIVE", MIDDLE);
         fixture.oldestActive = insertWorkplace(
-                jdbcTemplate, ownerUserId, "2000000004", "4층", "ACTIVE", OLDEST);
+                jdbcTemplate, ownerUserId, businessNumber(4), "4층", "ACTIVE", OLDEST);
 
-        insertWorkplace(jdbcTemplate, ownerUserId, "2000000005", "5층", "DELETED", NEWEST);
-        insertWorkplace(jdbcTemplate, otherOwnerUserId, "2000000006", "6층", "ACTIVE", NEWEST);
+        insertWorkplace(jdbcTemplate, ownerUserId, businessNumber(5), "5층", "DELETED", NEWEST);
+        insertWorkplace(jdbcTemplate, otherOwnerUserId, businessNumber(6), "6층", "ACTIVE", NEWEST);
 
         return fixture;
     }
@@ -233,6 +240,10 @@ class WorkplaceListMapperDatabaseIntegrationTest {
                 "SELECT id FROM workplaces WHERE business_registration_number = ?",
                 Long.class,
                 businessRegistrationNumber);
+    }
+
+    private String businessNumber(int index) {
+        return businessNumberPrefix + String.format("%04d", index);
     }
 
     private Long insertOwnerFixture(JdbcTemplate jdbcTemplate, String suffix) {
