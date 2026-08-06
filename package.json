@@ -7,6 +7,7 @@
     "prepare": "husky",
     "check:commit": "node scripts/validate-commit-msg.js",
     "check:guardrails": "node scripts/check-project-guardrails.js --all",
+    "check:guardrails:release": "node scripts/check-project-guardrails.js --release",
     "check:guardrails:staged": "node scripts/check-project-guardrails.js --staged",
     "check:precommit": "node scripts/run-precommit.js",
     "db:migrate": "docker compose --profile tools run --rm flyway migrate",

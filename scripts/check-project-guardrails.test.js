@@ -104,6 +104,7 @@ function createPatchDocument(overrides = {}, options = {}) {
     base_spec_version: "3.0.0",
     base_commit: "a".repeat(40),
     change_type: "additive",
+    delivery_mode: "spec_first",
     targets: [{ requirement: "WALLET-003" }],
     depends_on: [],
     supersedes: null,
@@ -147,6 +148,10 @@ function createPatchDocument(overrides = {}, options = {}) {
     "## 현재 명세와 문제",
     "",
     "현재 계약은 추적 대상과 검증 조건을 함께 확인해야 한다.",
+    "",
+    "## 전달 방식과 위험 판정",
+    "",
+    "하위 호환성과 보안·데이터·외부 소비자 영향을 검토해 전달 방식을 선택했다.",
     "",
     "## 제안할 최종 규범 문장 또는 Before/After",
     "",
@@ -204,6 +209,7 @@ function patchPath(summary, directory = "proposed", revision = 1) {
 test("parses explicit staged and all modes", () => {
   assert.equal(parseMode(["--staged"]), "staged");
   assert.equal(parseMode(["--all"]), "all");
+  assert.equal(parseMode(["--release"]), "release");
   assert.throws(() => parseMode([]), /Use one mode/);
 });
 
@@ -328,7 +334,11 @@ test("validates Patch paths, metadata, enums, and duplicate IDs", () => {
   );
 
   const invalidMetadata = createPatchDocument(
-    { status: "reviewing", change_type: "rewrite" },
+    {
+      status: "reviewing",
+      change_type: "rewrite",
+      delivery_mode: "fast",
+    },
     { omit: ["base_spec_version", "base_commit"] },
   );
   const metadataErrors = parsePatchDocument(
@@ -339,6 +349,19 @@ test("validates Patch paths, metadata, enums, and duplicate IDs", () => {
   assert.match(metadataErrors, /missing required metadata: base_commit/);
   assert.match(metadataErrors, /status must be one of/);
   assert.match(metadataErrors, /change_type must be one of/);
+  assert.match(metadataErrors, /delivery_mode must be one of/);
+
+  const missingDeliveryRationale = createPatchDocument().replace(
+    /## 전달 방식과 위험 판정\n\n[^\n]+\n\n/,
+    "",
+  );
+  assert.match(
+    parsePatchDocument(validPath, missingDeliveryRationale).errors.join("\n"),
+    /requires a non-empty "## 전달 방식과 위험 판정" section/,
+  );
+
+  const legacyDocument = createPatchDocument({}, { omit: ["delivery_mode"] });
+  assert.deepEqual(parsePatchDocument(validPath, legacyDocument).errors, []);
 
   const missingAppliedMetadata = parsePatchDocument(
     patchPath("wallet-contract", "archive"),
@@ -485,8 +508,9 @@ test("blocks mixed Patch proposal scope but permits an atomic Controller release
   const proposalErrors = proposal.errors.join("\n");
   assert.match(
     proposalErrors,
-    /must not include application, Migration, or DDL/,
+    /spec_first Patch must not include application code/,
   );
+  assert.match(proposalErrors, /must not include Migration or DDL/);
   assert.match(proposalErrors, /must not include protected spec changes/);
 
   const archivePath = patchPath("wallet-contract", "archive");
@@ -589,6 +613,94 @@ test("blocks mixed Patch proposal scope but permits an atomic Controller release
   assert.match(
     unchangedRelease.errors.join("\n"),
     /must advance the canonical release beyond 3\.0\.1/,
+  );
+});
+
+test("allows accepted bundled implementation but keeps compatibility and release gates", () => {
+  const file = patchPath("wallet-contract");
+  const applicationPath =
+    "backend/src/main/java/com/gighub/wallet/controller/WalletController.java";
+  const proposedDocument = createPatchDocument({
+    delivery_mode: "implementation_bundled",
+    status: "proposed",
+  });
+  const acceptedDocument = createPatchDocument({
+    delivery_mode: "implementation_bundled",
+    status: "accepted",
+  });
+
+  const awaitingApproval = verifyPatchSnapshot({
+    changedFiles: new Set([file, applicationPath]),
+    currentFiles: createPatchSnapshot({ [file]: proposedDocument }),
+    previousFiles: createPatchSnapshot(),
+    requireBundledAcceptance: true,
+  });
+  assert.match(
+    awaitingApproval.errors.join("\n"),
+    /must be accepted before its application change can merge/,
+  );
+
+  const accepted = verifyPatchSnapshot({
+    changedFiles: new Set([file, applicationPath]),
+    currentFiles: createPatchSnapshot({ [file]: acceptedDocument }),
+    previousFiles: createPatchSnapshot({ [file]: proposedDocument }),
+    requireBundledAcceptance: true,
+  });
+  assert.deepEqual(accepted.errors, []);
+
+  const breaking = parsePatchDocument(
+    file,
+    createPatchDocument({
+      change_type: "breaking",
+      delivery_mode: "implementation_bundled",
+    }),
+  );
+  assert.match(
+    breaking.errors.join("\n"),
+    /breaking Patch must use spec_first delivery_mode/,
+  );
+
+  const migration = verifyPatchSnapshot({
+    changedFiles: new Set([
+      file,
+      applicationPath,
+      "backend/src/main/resources/db/migration/V1__wallet.sql",
+    ]),
+    currentFiles: createPatchSnapshot({ [file]: acceptedDocument }),
+    previousFiles: createPatchSnapshot({ [file]: proposedDocument }),
+    requireBundledAcceptance: true,
+  });
+  assert.match(
+    migration.errors.join("\n"),
+    /must not include Migration or DDL/,
+  );
+
+  const release = verifyPatchSnapshot({
+    changedFiles: new Set(),
+    currentFiles: createPatchSnapshot({ [file]: acceptedDocument }),
+    previousFiles: createPatchSnapshot({ [file]: acceptedDocument }),
+    requireBundledApplied: true,
+  });
+  assert.match(
+    release.errors.join("\n"),
+    /release is blocked by accepted, unapplied implementation_bundled Patch/,
+  );
+});
+
+test("warns when API boundary code changes without a Patch", () => {
+  const result = verifyPatchSnapshot({
+    changedFiles: new Set([
+      "frontend/src/services/wallet.js",
+      "backend/src/main/java/com/gighub/wallet/dto/WalletResponse.java",
+    ]),
+    currentFiles: createPatchSnapshot(),
+    previousFiles: createPatchSnapshot(),
+  });
+
+  assert.equal(result.errors.length, 0);
+  assert.match(
+    result.warnings.join("\n"),
+    /API boundary change requires a Spec Patch or an explicit N\/A rationale/,
   );
 });
 
@@ -769,8 +881,114 @@ test("all mode checks committed Patch PR scope from the origin/dev merge base", 
     assert.equal(result.status, 1);
     assert.match(
       result.stderr,
-      /Patch change must not include application, Migration, or DDL: frontend\/src\/wallet\.js/,
+      /spec_first Patch must not include application code in the same change/,
     );
+  } finally {
+    fs.rmSync(temporaryRepository, { recursive: true, force: true });
+  }
+});
+
+test("all mode accepts an approved bundled implementation and release mode blocks it until applied", () => {
+  const temporaryRepository = fs.mkdtempSync(
+    path.join(os.tmpdir(), "gighub-bundled-patch-scope-"),
+  );
+  const script = path.resolve(__dirname, "check-project-guardrails.js");
+
+  try {
+    execFileSync("git", ["init", "--quiet"], {
+      cwd: temporaryRepository,
+      stdio: "ignore",
+    });
+    execFileSync("git", ["config", "user.name", "Guardrail Test"], {
+      cwd: temporaryRepository,
+      stdio: "ignore",
+    });
+    execFileSync("git", ["config", "user.email", "guardrail@example.com"], {
+      cwd: temporaryRepository,
+      stdio: "ignore",
+    });
+    writeSpecFixture(temporaryRepository);
+    for (const [file, content] of Object.entries(PATCH_SCAFFOLD)) {
+      writeRepositoryFile(temporaryRepository, file, content);
+    }
+    execFileSync("git", ["add", "."], {
+      cwd: temporaryRepository,
+      stdio: "ignore",
+    });
+    execFileSync("git", ["commit", "--quiet", "-m", "baseline"], {
+      cwd: temporaryRepository,
+      stdio: "ignore",
+    });
+    const baseCommit = execFileSync("git", ["rev-parse", "HEAD"], {
+      cwd: temporaryRepository,
+      encoding: "utf8",
+    }).trim();
+    execFileSync("git", ["update-ref", "refs/remotes/origin/dev", baseCommit], {
+      cwd: temporaryRepository,
+      stdio: "ignore",
+    });
+
+    const file = patchPath("wallet-contract");
+    writeRepositoryFile(
+      temporaryRepository,
+      file,
+      createPatchDocument({
+        base_commit: baseCommit,
+        delivery_mode: "implementation_bundled",
+        status: "proposed",
+      }),
+    );
+    writeRepositoryFile(
+      temporaryRepository,
+      "frontend/src/services/wallet.js",
+      "export const wallet = 'bundled';\n",
+    );
+    execFileSync("git", ["add", "."], {
+      cwd: temporaryRepository,
+      stdio: "ignore",
+    });
+    execFileSync("git", ["commit", "--quiet", "-m", "propose bundled patch"], {
+      cwd: temporaryRepository,
+      stdio: "ignore",
+    });
+
+    const proposed = spawnSync(process.execPath, [script, "--all"], {
+      cwd: temporaryRepository,
+      encoding: "utf8",
+    });
+    assert.equal(proposed.status, 1);
+    assert.match(proposed.stderr, /must be accepted before.*can merge/);
+
+    writeRepositoryFile(
+      temporaryRepository,
+      file,
+      createPatchDocument({
+        base_commit: baseCommit,
+        delivery_mode: "implementation_bundled",
+        status: "accepted",
+      }),
+    );
+    execFileSync("git", ["add", "."], {
+      cwd: temporaryRepository,
+      stdio: "ignore",
+    });
+    execFileSync("git", ["commit", "--quiet", "-m", "accept bundled patch"], {
+      cwd: temporaryRepository,
+      stdio: "ignore",
+    });
+
+    const accepted = spawnSync(process.execPath, [script, "--all"], {
+      cwd: temporaryRepository,
+      encoding: "utf8",
+    });
+    assert.equal(accepted.status, 0, accepted.stderr);
+
+    const release = spawnSync(process.execPath, [script, "--release"], {
+      cwd: temporaryRepository,
+      encoding: "utf8",
+    });
+    assert.equal(release.status, 1);
+    assert.match(release.stderr, /release is blocked by accepted, unapplied/);
   } finally {
     fs.rmSync(temporaryRepository, { recursive: true, force: true });
   }

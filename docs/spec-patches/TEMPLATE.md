@@ -7,6 +7,7 @@ created_at: YYYY-MM-DD
 base_spec_version: 0.0.0
 base_commit: "0000000000000000000000000000000000000000"
 change_type: additive
+delivery_mode: spec_first
 targets:
   - requirement: REQUIREMENT-ID
 depends_on: []
@@ -27,6 +28,10 @@ applied_by_pr: null
 ## 현재 명세와 문제
 
 <!-- 현재 정식 명세의 안정적인 계약 식별자와 공백·모순·변경 필요성을 적는다. 줄 번호에 의존하지 않는다. -->
+
+## 전달 방식과 위험 판정
+
+<!-- implementation_bundled 또는 spec_first 선택 이유를 적는다. 하위 호환성, 보안·개인정보, 데이터·Migration, 외부 소비자, 되돌리기 난이도를 모두 판정한다. -->
 
 ## 제안할 최종 규범 문장 또는 Before/After
 
@@ -76,4 +81,4 @@ applied_by_pr: null
 
 ## 관련 Issue·PR·의존 Patch
 
-<!-- GitHub Issue·PR 링크와 SPEC Patch ID, 적용 순서 또는 의존 이유를 적는다. 없으면 “없음”이라고 명시한다. -->
+<!-- GitHub Issue·구현 PR·정식 명세 릴리스 PR 링크와 SPEC Patch ID, 적용 순서 또는 의존 이유를 적는다. 아직 PR 번호가 없으면 생성 전이라고 적고 번호 확보 후 갱신한다. -->
