@@ -24,6 +24,7 @@ import org.springframework.context.annotation.AnnotationConfigApplicationContext
 import org.springframework.jdbc.core.JdbcTemplate;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -71,6 +72,8 @@ class WorkCaseMapperDatabaseIntegrationTest {
 
                 OwnedWorkplaceSnapshotRow snapshot = verifySnapshotScope(
                         mapper, activeWorkplaceId, inactiveWorkplaceId, ownerUserId, otherOwnerUserId);
+                verifyManageableWorkplaceScope(
+                        mapper, activeWorkplaceId, inactiveWorkplaceId, ownerUserId, otherOwnerUserId);
 
                 Long editedCaseId = verifyInsertFixesServerOwnedColumns(
                         jdbc, mapper, ownerUserId, activeWorkplaceId, snapshot);
@@ -112,6 +115,22 @@ class WorkCaseMapperDatabaseIntegrationTest {
         assertNull(mapper.findOwnedActiveWorkplace(activeWorkplaceId, otherOwnerUserId));
         assertNull(mapper.findOwnedActiveWorkplace(inactiveWorkplaceId, ownerUserId));
         return snapshot;
+    }
+
+    /**
+     * Summary·목록은 ACTIVE와 INACTIVE 둘 다 관리 대상이라는 점에서
+     * {@link #verifySnapshotScope}가 확인하는 등록 대상 범위와 다릅니다.
+     */
+    private void verifyManageableWorkplaceScope(
+            WorkCaseMapper mapper,
+            Long activeWorkplaceId,
+            Long inactiveWorkplaceId,
+            Long ownerUserId,
+            Long otherOwnerUserId) {
+        assertTrue(mapper.existsOwnedManageableWorkplace(activeWorkplaceId, ownerUserId));
+        assertTrue(mapper.existsOwnedManageableWorkplace(inactiveWorkplaceId, ownerUserId));
+        assertFalse(mapper.existsOwnedManageableWorkplace(activeWorkplaceId, otherOwnerUserId));
+        assertFalse(mapper.existsOwnedManageableWorkplace(-1L, ownerUserId));
     }
 
     /** worker_id, terms_version, status와 저장 시각은 호출자가 정할 수 없는 계약값입니다. */

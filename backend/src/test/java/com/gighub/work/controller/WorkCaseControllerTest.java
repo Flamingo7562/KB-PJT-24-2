@@ -8,6 +8,7 @@ import com.gighub.common.exception.ResourceNotFoundException;
 import com.gighub.common.exception.RoleMismatchException;
 import com.gighub.common.exception.WorkCaseLockedException;
 import com.gighub.member.domain.UserRole;
+import com.gighub.work.dto.WorkCaseSummaryResponse;
 import com.gighub.work.service.WorkCaseService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -17,11 +18,13 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -180,6 +183,41 @@ class WorkCaseControllerTest {
     @Test
     void deleteRejectsRequestWithoutAuthentication() throws Exception {
         mockMvc.perform(delete("/api/work-cases/101"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    // ---------- GET summary ----------
+
+    @Test
+    void summaryReturnsApprovedEightBucketEnvelope() throws Exception {
+        when(workCaseService.summary(any(), anyLong())).thenReturn(WorkCaseSummaryResponse.builder()
+                .draft(2).accepted(1).ready(3).inProgress(1)
+                .checkOutMissing(0).completed(8).noShow(1).canceled(2)
+                .build());
+
+        mockMvc.perform(get("/api/workplaces/5/work-cases/summary")
+                        .principal(ownerAuthentication()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.draft").value(2))
+                .andExpect(jsonPath("$.data.inProgress").value(1))
+                .andExpect(jsonPath("$.data.checkOutMissing").value(0))
+                .andExpect(jsonPath("$.data.noShow").value(1));
+    }
+
+    @Test
+    void summarySurfacesUnownedWorkplaceAsNotFound() throws Exception {
+        when(workCaseService.summary(any(), anyLong()))
+                .thenThrow(new ResourceNotFoundException("사업장을 찾을 수 없습니다."));
+
+        mockMvc.perform(get("/api/workplaces/5/work-cases/summary")
+                        .principal(ownerAuthentication()))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("RESOURCE_NOT_FOUND"));
+    }
+
+    @Test
+    void summaryRejectsRequestWithoutAuthentication() throws Exception {
+        mockMvc.perform(get("/api/workplaces/5/work-cases/summary"))
                 .andExpect(status().isUnauthorized());
     }
 

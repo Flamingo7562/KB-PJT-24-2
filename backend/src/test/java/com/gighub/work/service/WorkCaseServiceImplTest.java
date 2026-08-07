@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.List;
 
 import com.gighub.auth.security.AuthPrincipal;
 import com.gighub.common.exception.ResourceNotFoundException;
@@ -15,8 +16,10 @@ import com.gighub.work.domain.WorkCaseStatus;
 import com.gighub.work.mapper.WorkCaseMapper;
 import com.gighub.work.mapper.param.WorkCaseInsertParam;
 import com.gighub.work.mapper.param.WorkCaseTermsUpdateParam;
+import com.gighub.work.dto.WorkCaseSummaryResponse;
 import com.gighub.work.mapper.result.OwnedWorkplaceSnapshotRow;
 import com.gighub.work.mapper.result.WorkCaseLockRow;
+import com.gighub.work.mapper.result.WorkCaseStatusCountRow;
 import com.gighub.work.service.command.WorkCaseCreateCommand;
 import com.gighub.work.service.command.WorkCaseUpdateCommand;
 import com.gighub.work.service.impl.WorkCaseServiceImpl;
@@ -200,6 +203,42 @@ class WorkCaseServiceImplTest {
 
         verify(workCaseMapper, never()).deleteDraft(anyLong());
         verify(workCaseMapper, never()).cancelDraft(anyLong());
+    }
+
+    // ---------- summary ----------
+
+    @Test
+    void summaryRejectsNonOwner() {
+        assertThrows(
+                RoleMismatchException.class,
+                () -> service.summary(worker(), WORKPLACE_ID));
+
+        verifyNoInteractions(workCaseMapper);
+    }
+
+    @Test
+    void summaryRejectsUnownedWorkplace() {
+        when(workCaseMapper.existsOwnedManageableWorkplace(WORKPLACE_ID, OWNER_ID))
+                .thenReturn(false);
+
+        assertThrows(
+                ResourceNotFoundException.class,
+                () -> service.summary(owner(), WORKPLACE_ID));
+
+        verify(workCaseMapper, never()).countByStatus(any(), any());
+    }
+
+    @Test
+    void summaryFillsMissingStatusesWithZero() {
+        when(workCaseMapper.existsOwnedManageableWorkplace(WORKPLACE_ID, OWNER_ID))
+                .thenReturn(true);
+        when(workCaseMapper.countByStatus(WORKPLACE_ID, OWNER_ID)).thenReturn(List.of(
+                WorkCaseStatusCountRow.builder().status(WorkCaseStatus.DRAFT).caseCount(2L).build()));
+
+        WorkCaseSummaryResponse response = service.summary(owner(), WORKPLACE_ID);
+
+        assertEquals(2, response.getDraft());
+        assertEquals(0, response.getCompleted());
     }
 
     // ---------- fixtures ----------

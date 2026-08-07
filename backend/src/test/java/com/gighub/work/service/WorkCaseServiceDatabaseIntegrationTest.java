@@ -22,6 +22,7 @@ import com.gighub.common.exception.ResourceNotFoundException;
 import com.gighub.common.exception.WorkCaseLockedException;
 import com.gighub.config.RootConfig;
 import com.gighub.member.domain.UserRole;
+import com.gighub.work.dto.WorkCaseSummaryResponse;
 import com.gighub.work.service.command.WorkCaseCreateCommand;
 import com.gighub.work.service.command.WorkCaseUpdateCommand;
 import org.junit.jupiter.api.Tag;
@@ -84,6 +85,8 @@ class WorkCaseServiceDatabaseIntegrationTest {
 
                 Long cancelableId = createDraft(service, ownerId, workplaceId);
                 verifyDeleteCancelsWithInvitationHistory(service, jdbc, ownerId, cancelableId);
+
+                verifySummaryReflectsCurrentStatuses(service, ownerId, otherOwnerId, workplaceId);
             } finally {
                 cleanUp(jdbc, ownerId, otherOwnerId);
             }
@@ -159,6 +162,27 @@ class WorkCaseServiceDatabaseIntegrationTest {
                         .breakPaid(true)
                         .dailyWage(130_000L)
                         .build()));
+    }
+
+    /**
+     * write 시나리오가 만든 실제 상태 분포로 Summary를 검증합니다. 이 시점엔
+     * {@code workCaseId}=CANCELED, {@code concurrentId}=DRAFT, {@code deletableId}=삭제됨,
+     * {@code cancelableId}=CANCELED가 남아 있어야 합니다.
+     */
+    private void verifySummaryReflectsCurrentStatuses(
+            WorkCaseService service,
+            Long ownerId,
+            Long otherOwnerId,
+            Long workplaceId) {
+        WorkCaseSummaryResponse summary = service.summary(owner(ownerId), workplaceId);
+
+        assertEquals(1, summary.getDraft());
+        assertEquals(2, summary.getCanceled());
+        assertEquals(0, summary.getCompleted());
+
+        assertThrows(
+                ResourceNotFoundException.class,
+                () -> service.summary(owner(otherOwnerId), workplaceId));
     }
 
     /** 다른 OWNER는 존재 여부를 알 수 없도록 404로만 응답받습니다. */
