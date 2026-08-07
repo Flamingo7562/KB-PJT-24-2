@@ -65,4 +65,19 @@ public interface WorkplaceMapper {
     int countOwnedActiveById(
             @Param("workplaceId") Long workplaceId,
             @Param("ownerUserId") Long ownerUserId);
+
+    /**
+     * 인증 OWNER가 소유한 {@code ACTIVE} 사업장을 잠그며 조회합니다.
+     *
+     * <p>QR을 바꾸는 흐름은 항상 {@code workplaces}를 먼저 잠그고 {@code qr_tokens}를
+     * 건드립니다. {@code qr_tokens}만 잠그면 두 요청이 서로 다른 순서로 행을 잡아 교착할 수
+     * 있습니다.</p>
+     *
+     * @param workplaceId 잠글 사업장 식별자
+     * @param ownerUserId 인증 Principal의 사용자 식별자
+     * @return 소유한 {@code ACTIVE} 사업장 식별자. 아니면 {@code null}
+     */
+    Long findOwnedActiveIdForUpdate(
+            @Param("workplaceId") Long workplaceId,
+            @Param("ownerUserId") Long ownerUserId);
 }

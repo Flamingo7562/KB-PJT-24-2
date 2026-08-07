@@ -1,5 +1,6 @@
 package com.gighub.attendance.service;
 
+import com.gighub.attendance.dto.WorkplaceQrReissueResponse;
 import com.gighub.attendance.dto.WorkplaceQrResponse;
 import com.gighub.auth.security.AuthPrincipal;
 
@@ -13,4 +14,11 @@ public interface WorkplaceQrService {
      * 매번 같은 Token이 나옵니다.</p>
      */
     WorkplaceQrResponse findQr(AuthPrincipal principal, Long workplaceId);
+
+    /**
+     * 기존 활성 QR을 즉시 폐기하고 새 QR을 발급합니다.
+     *
+     * <p>활성 QR이 없어도 성공합니다. 발급이 누락된 사업장의 유일한 복구 경로입니다.</p>
+     */
+    WorkplaceQrReissueResponse reissue(AuthPrincipal principal, Long workplaceId);
 }

@@ -3,11 +3,13 @@ package com.gighub.attendance.controller;
 import java.time.Instant;
 import java.util.List;
 
+import com.gighub.attendance.dto.WorkplaceQrReissueResponse;
 import com.gighub.attendance.dto.WorkplaceQrResponse;
 import com.gighub.attendance.exception.WorkplaceQrIntegrityException;
 import com.gighub.attendance.service.WorkplaceQrService;
 import com.gighub.auth.security.AuthPrincipal;
 import com.gighub.common.exception.CommonExceptionHandler;
+import com.gighub.common.exception.ConflictException;
 import com.gighub.config.ApiJsonMapper;
 import com.gighub.common.exception.ResourceNotFoundException;
 import com.gighub.common.exception.RoleMismatchException;
@@ -25,6 +27,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -88,6 +91,29 @@ class WorkplaceQrControllerTest {
                 .andExpect(status().isInternalServerError())
                 .andExpect(jsonPath("$.code").value("INTERNAL_ERROR"))
                 .andExpect(jsonPath("$.traceId").isNotEmpty());
+    }
+
+    @Test
+    void reissueReturnsApprovedEnvelope() throws Exception {
+        when(workplaceQrService.reissue(any(), eq(1L))).thenReturn(
+                new WorkplaceQrReissueResponse(1L, "v1.k1.1.new.mac",
+                        Instant.parse("2026-07-31T00:10:00Z")));
+
+        mockMvc.perform(post("/api/workplaces/1/qr/reissue").principal(ownerAuthentication()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.workplaceId").value(1))
+                .andExpect(jsonPath("$.data.qrToken").value("v1.k1.1.new.mac"))
+                .andExpect(jsonPath("$.data.reissuedAt").value("2026-07-31T00:10:00Z"));
+    }
+
+    @Test
+    void reissueReportsConcurrentLoserAsConflict() throws Exception {
+        when(workplaceQrService.reissue(any(), any()))
+                .thenThrow(new ConflictException("QR 재발급이 이미 처리 중입니다."));
+
+        mockMvc.perform(post("/api/workplaces/1/qr/reissue").principal(ownerAuthentication()))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("CONFLICT"));
     }
 
     private static Authentication ownerAuthentication() {

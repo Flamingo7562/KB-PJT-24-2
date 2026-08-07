@@ -1,17 +1,23 @@
 package com.gighub.attendance.service.impl;
 
+import java.time.Instant;
+
+import com.gighub.attendance.dto.WorkplaceQrReissueResponse;
 import com.gighub.attendance.dto.WorkplaceQrResponse;
 import com.gighub.attendance.exception.WorkplaceQrIntegrityException;
 import com.gighub.attendance.mapper.QrTokenMapper;
 import com.gighub.attendance.mapper.result.QrTokenRow;
 import com.gighub.attendance.qr.QrTokenCodec;
+import com.gighub.attendance.service.WorkplaceQrIssuer;
 import com.gighub.attendance.service.WorkplaceQrService;
 import com.gighub.auth.security.AuthPrincipal;
 import com.gighub.common.api.ApiTimes;
+import com.gighub.common.exception.ConflictException;
 import com.gighub.common.exception.ResourceNotFoundException;
 import com.gighub.common.exception.RoleMismatchException;
 import com.gighub.member.domain.UserRole;
 import com.gighub.workplace.mapper.WorkplaceMapper;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,14 +28,17 @@ public class WorkplaceQrServiceImpl implements WorkplaceQrService {
     private final WorkplaceMapper workplaceMapper;
     private final QrTokenMapper qrTokenMapper;
     private final QrTokenCodec qrTokenCodec;
+    private final WorkplaceQrIssuer qrIssuer;
 
     public WorkplaceQrServiceImpl(
             WorkplaceMapper workplaceMapper,
             QrTokenMapper qrTokenMapper,
-            QrTokenCodec qrTokenCodec) {
+            QrTokenCodec qrTokenCodec,
+            WorkplaceQrIssuer qrIssuer) {
         this.workplaceMapper = workplaceMapper;
         this.qrTokenMapper = qrTokenMapper;
         this.qrTokenCodec = qrTokenCodec;
+        this.qrIssuer = qrIssuer;
     }
 
     @Override
@@ -49,6 +58,39 @@ public class WorkplaceQrServiceImpl implements WorkplaceQrService {
                 workplaceId,
                 qrTokenCodec.sign(workplaceId, row.getTokenNonce()),
                 ApiTimes.toInstant(row.getCreatedAt()));
+    }
+
+    @Override
+    @Transactional
+    public WorkplaceQrReissueResponse reissue(AuthPrincipal principal, Long workplaceId) {
+        requireOwnerRole(principal);
+        // 사업장을 먼저 잠급니다. 잠금 순서는 workplaces -> qr_tokens로 고정합니다.
+        if (workplaceMapper.findOwnedActiveIdForUpdate(workplaceId, principal.getUserId()) == null) {
+            throw new ResourceNotFoundException("사업장을 찾을 수 없습니다.");
+        }
+
+        // 활성 QR이 없어도 0을 받고 그대로 진행합니다. 발급 누락 상태를 여기서 복구합니다.
+        qrTokenMapper.revokeActiveByWorkplaceId(workplaceId);
+        byte[] nonce = issueOrReportConflict(workplaceId, principal.getUserId());
+
+        return new WorkplaceQrReissueResponse(
+                workplaceId,
+                qrTokenCodec.sign(workplaceId, nonce),
+                Instant.now());
+    }
+
+    /**
+     * 활성 QR 유일성 위반을 승인된 충돌 응답으로 바꿉니다.
+     *
+     * <p>행 잠금을 잡았더라도 최종 보장은 {@code uk_qr_tokens_workplace_active}입니다. 잠금
+     * 범위 밖에서 들어온 경로가 생기면 이 예외만이 두 활성 QR을 막습니다.</p>
+     */
+    private byte[] issueOrReportConflict(Long workplaceId, Long ownerUserId) {
+        try {
+            return qrIssuer.issueActive(workplaceId, ownerUserId);
+        } catch (DuplicateKeyException exception) {
+            throw new ConflictException("QR 재발급이 이미 처리 중입니다. 잠시 후 다시 시도해 주세요.");
+        }
     }
 
     /**
