@@ -241,7 +241,10 @@ export async function chargeWallet(
 }
 
 /** 출금 성공 응답에는 최신 잔액을 합치지 않고 GET /wallet 재조회 결과를 사용한다. */
-export async function withdrawWallet({ bankCode, accountNo, amount }) {
+export async function withdrawWallet(
+  { bankCode, accountNo, amount },
+  { idempotencyKey = null } = {}
+) {
   if (USE_MOCK) {
     const normalizedAmount = Number(amount)
     mockWallet.availableBalance -= normalizedAmount
@@ -266,10 +269,14 @@ export async function withdrawWallet({ bankCode, accountNo, amount }) {
     })
     return result
   }
-  const { data } = await idempotentPost('/wallet/withdrawal-requests', {
-    bankCode,
-    accountNo,
-    amount
-  })
+  const { data } = await idempotentPost(
+    '/wallet/withdrawal-requests',
+    {
+      bankCode,
+      accountNo,
+      amount
+    },
+    { idempotencyKey }
+  )
   return data
 }

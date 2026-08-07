@@ -106,6 +106,19 @@ describe('wallet service', () => {
     expect(body).toEqual({ bankCode: '088', accountNo: '170000000002', amount: 50_000 })
     expect(result).toEqual({ withdrawalRequestId: 11, status: 'COMPLETED', bankTransactionId: 21 })
   })
+
+  it('출금은 호출자가 보존한 Idempotency Key를 그대로 넘긴다', async () => {
+    idempotentPost.mockResolvedValue({
+      data: { withdrawalRequestId: 11, status: 'COMPLETED', bankTransactionId: 21 }
+    })
+
+    await withdrawWallet(
+      { bankCode: '088', accountNo: '170000000002', amount: 50_000 },
+      { idempotencyKey: 'keep-this-withdrawal-key' }
+    )
+
+    expect(idempotentPost.mock.calls[0][2]).toEqual({ idempotencyKey: 'keep-this-withdrawal-key' })
+  })
 })
 
 describe('wallet Mock service', () => {
