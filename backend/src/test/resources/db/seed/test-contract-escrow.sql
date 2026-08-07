@@ -115,7 +115,7 @@ ON DUPLICATE KEY UPDATE
     available_amount = 0,
     status = 'ACTIVE';
 
--- canonical bank code마다 충전·출금에 재사용할 수 있는 ACTIVE 합성 계좌를 유지한다.
+-- 기존 004 계좌와 함께 canonical bank code 20종을 모두 검증할 수 있도록 합성 계좌를 유지한다.
 INSERT INTO mock_bank_accounts (
     bank_code, mock_account_number, pin, mock_fintech_use_num,
     currency, balance, available_amount, status
@@ -134,6 +134,66 @@ INSERT INTO mock_bank_accounts (
     ),
     (
         '011', '3010245000011', '0000', 'TEST-FINTECH-NH-245',
+        'KRW', 1000000, 1000000, 'ACTIVE'
+    ),
+    (
+        '003', '00324500000003', '0000', 'TEST-FINTECH-IBK-245',
+        'KRW', 1000000, 1000000, 'ACTIVE'
+    ),
+    (
+        '090', '3333245000090', '0000', 'TEST-FINTECH-KAKAO-245',
+        'KRW', 1000000, 1000000, 'ACTIVE'
+    ),
+    (
+        '092', '100024500092', '0000', 'TEST-FINTECH-TOSS-245',
+        'KRW', 1000000, 1000000, 'ACTIVE'
+    ),
+    (
+        '089', '100245000089', '0000', 'TEST-FINTECH-KBANK-245',
+        'KRW', 1000000, 1000000, 'ACTIVE'
+    ),
+    (
+        '032', '1012450000032', '0000', 'TEST-FINTECH-BUSAN-245',
+        'KRW', 1000000, 1000000, 'ACTIVE'
+    ),
+    (
+        '031', '508245000031', '0000', 'TEST-FINTECH-DGB-245',
+        'KRW', 1000000, 1000000, 'ACTIVE'
+    ),
+    (
+        '131', '508245000131', '0000', 'TEST-FINTECH-IM-245',
+        'KRW', 1000000, 1000000, 'ACTIVE'
+    ),
+    (
+        '034', '110245000034', '0000', 'TEST-FINTECH-GWANGJU-245',
+        'KRW', 1000000, 1000000, 'ACTIVE'
+    ),
+    (
+        '023', '02324500001', '0000', 'TEST-FINTECH-SC-245',
+        'KRW', 1000000, 1000000, 'ACTIVE'
+    ),
+    (
+        '027', '0272450001', '0000', 'TEST-FINTECH-CITI-245',
+        'KRW', 1000000, 1000000, 'ACTIVE'
+    ),
+    (
+        '002', '00224500000002', '0000', 'TEST-FINTECH-KDB-245',
+        'KRW', 1000000, 1000000, 'ACTIVE'
+    ),
+    (
+        '007', '101245000007', '0000', 'TEST-FINTECH-SUHYUP-245',
+        'KRW', 1000000, 1000000, 'ACTIVE'
+    ),
+    (
+        '045', '9002245000045', '0000', 'TEST-FINTECH-MG-245',
+        'KRW', 1000000, 1000000, 'ACTIVE'
+    ),
+    (
+        '048', '0482450000048', '0000', 'TEST-FINTECH-CREDIT-UNION-245',
+        'KRW', 1000000, 1000000, 'ACTIVE'
+    ),
+    (
+        '071', '07124500000071', '0000', 'TEST-FINTECH-POST-245',
         'KRW', 1000000, 1000000, 'ACTIVE'
     )
 ON DUPLICATE KEY UPDATE
