@@ -4,9 +4,16 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.TimeUnit;
 
 import javax.sql.DataSource;
 
@@ -47,7 +54,7 @@ class WorkCaseServiceDatabaseIntegrationTest {
 
     @Test
     @Timeout(60)
-    void appliesWorkCaseWriteContractOnCurrentMysqlSchema() {
+    void appliesWorkCaseWriteContractOnCurrentMysqlSchema() throws Exception {
         try (AnnotationConfigApplicationContext context =
                      new AnnotationConfigApplicationContext(RootConfig.class)) {
             JdbcTemplate jdbc = new JdbcTemplate(context.getBean(DataSource.class));
@@ -67,6 +74,10 @@ class WorkCaseServiceDatabaseIntegrationTest {
                 verifyUpdateBumpsVersionAndRevokesPendingInvitation(
                         service, jdbc, ownerId, workCaseId);
                 verifyOwnershipIsolation(service, otherOwnerId, workCaseId);
+
+                Long concurrentId = createDraft(service, ownerId, workplaceId);
+                verifyConcurrentUpdatesAreSerializedWithoutLostUpdate(
+                        service, jdbc, ownerId, concurrentId);
 
                 Long deletableId = createDraft(service, ownerId, workplaceId);
                 verifyDeleteHardDeletesWithoutInvitationHistory(service, jdbc, ownerId, deletableId);
@@ -155,6 +166,75 @@ class WorkCaseServiceDatabaseIntegrationTest {
         assertThrows(
                 ResourceNotFoundException.class,
                 () -> service.delete(owner(otherOwnerId), workCaseId));
+    }
+
+    /**
+     * {@code lockById}의 {@code FOR UPDATE}가 실제 동시 요청을 직렬화하는지 확인합니다.
+     *
+     * <p>여러 스레드가 같은 DRAFT를 동시에 수정해도 {@code terms_version = terms_version + 1}은
+     * 읽은 값을 그대로 되쓰지 않고 매번 현재 값에 더합니다. 잠금이 걸리지 않으면 두 요청이 같은
+     * 이전 값을 동시에 읽어 증가분 하나가 사라지는 Lost Update가 생깁니다. 최종 Version이
+     * 시작값+요청 수와 정확히 같아야 아무 증가분도 유실되지 않은 것입니다.</p>
+     */
+    private void verifyConcurrentUpdatesAreSerializedWithoutLostUpdate(
+            WorkCaseService service,
+            JdbcTemplate jdbc,
+            Long ownerId,
+            Long workCaseId) throws Exception {
+        int concurrentRequests = 5;
+        int startingVersion = currentTermsVersion(jdbc, workCaseId);
+
+        ExecutorService executor = Executors.newFixedThreadPool(concurrentRequests);
+        CountDownLatch start = new CountDownLatch(1);
+        try {
+            List<Future<?>> results = new ArrayList<>();
+            for (int index = 0; index < concurrentRequests; index++) {
+                results.add(executor.submit(
+                        () -> attemptConcurrentUpdate(service, ownerId, workCaseId, start)));
+            }
+
+            start.countDown();
+
+            for (Future<?> result : results) {
+                result.get(20, TimeUnit.SECONDS);
+            }
+
+            assertEquals(
+                    startingVersion + concurrentRequests,
+                    currentTermsVersion(jdbc, workCaseId),
+                    "동시 요청이 모두 반영되어야 하며 Lost Update가 있으면 안 됩니다.");
+        } finally {
+            executor.shutdownNow();
+        }
+    }
+
+    private void attemptConcurrentUpdate(
+            WorkCaseService service,
+            Long ownerId,
+            Long workCaseId,
+            CountDownLatch start) {
+        try {
+            start.await();
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            return;
+        }
+
+        service.update(owner(ownerId), WorkCaseUpdateCommand.builder()
+                .workCaseId(workCaseId)
+                .title("동시 수정 시도")
+                .workDate(LocalDate.of(2026, 8, 10))
+                .startTime(LocalTime.of(9, 0))
+                .endTime(LocalTime.of(18, 0))
+                .breakMinutes(60)
+                .breakPaid(false)
+                .dailyWage(120_000L)
+                .build());
+    }
+
+    private int currentTermsVersion(JdbcTemplate jdbc, Long workCaseId) {
+        return jdbc.queryForObject(
+                "SELECT terms_version FROM work_cases WHERE id = ?", Integer.class, workCaseId);
     }
 
     private void verifyDeleteHardDeletesWithoutInvitationHistory(
