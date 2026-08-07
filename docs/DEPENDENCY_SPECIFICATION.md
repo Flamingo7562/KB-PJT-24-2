@@ -71,6 +71,7 @@
 | JSON               | Jackson BOM, `jackson-databind`, `jackson-datatype-jsr310`                                                              |
 | Logging            | SLF4J API, Log4j2 BOM·API·Core, `log4j-slf4j2-impl`                                                                     |
 | 계약 PDF·QR        | Apache PDFBox, ZXing Core·JavaSE                                                                                        |
+| Runtime API 탐색   | Springfox `springfox-swagger2`, `springfox-swagger-ui`, `springfox-oas`                                                 |
 | Container 제공 API | Servlet API와 Annotation API를 `compileOnly`로 사용하고, MockMvc 테스트에는 Servlet API를 `testImplementation`으로 사용 |
 | 코드 생성          | Lombok을 compile/test annotation processor로 사용                                                                       |
 | 테스트             | JUnit Jupiter·Platform Launcher, Spring Test, Mockito Core·JUnit Jupiter, JSONAssert, JsonPath, Hamcrest, GlassFish EL  |
@@ -82,6 +83,7 @@
 - Servlet API와 Annotation API는 Tomcat이 제공하므로 운영 WAR에 중복 포함하지 않는다.
 - Connector/J 버전을 변경하면 `backend/build.gradle`과 `compose.yaml`의 Flyway driver mount 파일명을 같은 PR에서 변경한다.
 - Hibernate Validator는 Bean Validation 구현체이며 금지된 Hibernate ORM에 해당하지 않는다.
+- Springfox는 현재 구현을 탐색하는 Runtime 도구이며 `docs/specs/API_SPEC.md`를 대체하지 않는다. Springfox 버전을 올릴 때는 사용 중인 `EnableOpenApi`(OAS 3.0) 경계와 호환되는지 먼저 확인한다.
 
 ### Frontend
 

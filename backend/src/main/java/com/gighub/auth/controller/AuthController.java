@@ -17,6 +17,7 @@ import com.gighub.auth.security.AuthSessionManager;
 import com.gighub.auth.service.AuthService;
 import com.gighub.auth.service.LoginResult;
 import com.gighub.common.api.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -41,6 +42,9 @@ public class AuthController {
         this.authSessionManager = authSessionManager;
     }
 
+    // Runtime Swagger가 반환 타입만으로는 204를 추론하지 못하므로 명시한다(#123).
+    @ApiResponses(@io.swagger.v3.oas.annotations.responses.ApiResponse(
+            responseCode = "204", description = "XSRF-TOKEN Cookie 준비 완료"))
     @GetMapping("/csrf")
     public ResponseEntity<Void> csrf(HttpServletRequest request) {
         Object attribute = request.getAttribute(CsrfToken.class.getName());
@@ -108,6 +112,9 @@ public class AuthController {
         return ResponseEntity.ok(ApiResponse.of(response));
     }
 
+    // Runtime Swagger가 반환 타입만으로는 204를 추론하지 못하므로 명시한다(#123).
+    @ApiResponses(@io.swagger.v3.oas.annotations.responses.ApiResponse(
+            responseCode = "204", description = "Session·CSRF Token 폐기 완료"))
     @PostMapping("/logout")
     public ResponseEntity<Void> logout(
             HttpServletRequest request,
