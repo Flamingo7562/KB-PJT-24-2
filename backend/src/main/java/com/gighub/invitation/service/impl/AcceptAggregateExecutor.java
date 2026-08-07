@@ -144,18 +144,22 @@ public class AcceptAggregateExecutor {
             throw new InvitationAlreadyAcceptedException();
         }
 
-        long contractId = insertContract(workCase, principal, acceptedAt);
-        // 파일은 Commit 전에 임시 Key까지만 씁니다. 여기서 실패하면 수락 전체가 Rollback되고,
-        // 최종 위치로 옮기는 것은 Commit 뒤입니다.
-        ContractArtifactHandle artifact = contractArtifactPort.prepare(
-                ContractArtifactCommand.of(workCaseId, contractId, acceptedAt));
-
+        // 예치를 계약서보다 먼저 처리합니다. 잔액 부족은 되돌릴 수 있지만, 그 전에 PDF를
+        // 만들어 두면 실패할 때마다 임시 파일을 쓰고 지우는 일이 반복됩니다. 승인 순서도
+        // 잔액 확인을 Aggregate 쓰기 앞에 둡니다.
         escrowHold.hold(
                 workCase.getEmployerId(),
                 workCaseId,
                 workCase.getDailyWage(),
                 claimId,
                 acceptedAt);
+
+        long contractId = insertContract(workCase, principal, acceptedAt);
+        // 파일은 Commit 전에 임시 Key까지만 씁니다. 여기서 실패하면 수락 전체가 Rollback되고,
+        // 최종 위치로 옮기는 것은 Commit 뒤입니다.
+        ContractArtifactHandle artifact = contractArtifactPort.prepare(
+                ContractArtifactCommand.of(workCaseId, contractId, acceptedAt));
+
         if (settlementMapper.insertWaiting(workCaseId, workCase.getDailyWage()) != 1) {
             throw new IllegalStateException("정산 예약을 생성하지 못했습니다.");
         }

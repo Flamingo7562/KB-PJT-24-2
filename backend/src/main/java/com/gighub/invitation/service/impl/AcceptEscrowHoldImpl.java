@@ -74,7 +74,9 @@ public class AcceptEscrowHoldImpl implements AcceptEscrowHold {
         long escrowId = Objects.requireNonNull(
                 walletMapper.getEscrowIdByWorkCaseId(workCaseId), "생성된 에스크로 식별자");
 
-        walletMapper.insertWalletTransaction(WalletTransactionParam.builder()
+        // 다른 쓰기와 마찬가지로 결과 행 수를 확인합니다. 놓치면 돈은 움직였는데 그 사실을
+        // 설명하는 원장이 없는 상태가 조용히 남습니다.
+        int recorded = walletMapper.insertWalletTransaction(WalletTransactionParam.builder()
                 .walletId(wallet.getWalletId())
                 .workCaseId(workCaseId)
                 .transactionType(TRANSACTION_TYPE)
@@ -87,6 +89,9 @@ public class AcceptEscrowHoldImpl implements AcceptEscrowHold {
                 .referenceId(escrowId)
                 .idempotencyKey(ledgerKey(claimId))
                 .build());
+        if (recorded != 1) {
+            throw new IllegalStateException("에스크로 예치 원장을 기록하지 못했습니다.");
+        }
 
         return escrowId;
     }

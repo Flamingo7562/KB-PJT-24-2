@@ -5,6 +5,7 @@ import com.gighub.common.exception.RoleMismatchException;
 import com.gighub.contract.ContractArtifactPort;
 import com.gighub.idempotency.IdempotencyClaimResult;
 import com.gighub.idempotency.IdempotencyClaimService;
+import com.gighub.idempotency.IdempotencyKeys;
 import com.gighub.invitation.dto.InvitationAcceptResponse;
 import com.gighub.invitation.exception.InvitationNotFoundException;
 import com.gighub.invitation.mapper.InvitationMapper;
@@ -64,6 +65,10 @@ public class InvitationAcceptServiceImpl implements InvitationAcceptService {
         if (principal.getRole() != UserRole.WORKER) {
             throw new RoleMismatchException("초대는 WORKER만 수락할 수 있습니다.");
         }
+        // Key 형식을 Token 조회보다 먼저 봅니다. 승인 순서가 "Key 형식 -> Token 존재"라,
+        // 순서를 바꾸면 Key도 Token도 잘못된 요청이 400 대신 404로 끝납니다.
+        IdempotencyKeys.validate(rawKey);
+
         // 형식 오류·미존재는 Claim을 만들지 않고 끝냅니다. 저장하면 같은 Key로 올바른
         // Token을 다시 시도할 수 없습니다.
         if (!tokenCodec.isWellFormed(token)) {
