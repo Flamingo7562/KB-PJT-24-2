@@ -1,9 +1,13 @@
 /**
  * 근무(work_case) API 서비스 — 사장 근태관리 + 근무 상세/정산/신고.
  *
- * 상태 전이(7단계, @/constants/workCaseStatus):
- *   DRAFT→ACCEPTED→READY→IN_PROGRESS→COMPLETED / 확정 계열 NO_SHOW / CANCELED.
+ * 상태 전이(8단계, @/constants/workCaseStatus):
+ *   DRAFT→ACCEPTED→READY→IN_PROGRESS→(CHECK_OUT_MISSING)→COMPLETED / 확정 계열 NO_SHOW / CANCELED.
  * 수정·삭제·링크생성은 DRAFT 에서만(확정 후 409 WORK_CASE_LOCKED). 정산은 HOLD 일 때만(멱등).
+ *
+ * 근무 DRAFT CRUD·요약·목록·초대 발급(#158)은 실제 Session·CSRF HTTP로 연결되어 있다.
+ * 정산 즉시승인·사장 연락처·임금분쟁(M6)은 USE_MOCK_SETTLEMENT_DISPUTE로 별도 관리하며
+ * 이번 실연동 범위 밖이다.
  *
  * 관련 API(명세 WORK-001~006, INVITE-001, SETTLE-002, CONTACT-001, DISPUTE-001/002):
  *   GET  /api/workplaces/{workplaceId}/work-cases/summary
@@ -16,8 +20,11 @@
  *   GET  /api/work-cases/{workCaseId}/disputes   POST /api/work-cases/{workCaseId}/disputes
  */
 import http, { idempotentPost } from '@/services/http'
+import { USE_MOCK } from '@/services/mockFlag'
 
-const USE_MOCK = true
+// 정산 즉시승인·사장 연락처·임금분쟁은 M6 범위이며 #158에서 실연동하지 않는다.
+// 위 USE_MOCK(공용 mockFlag)과 별개로 항상 Mock을 유지한다.
+const USE_MOCK_SETTLEMENT_DISPUTE = true
 
 // 지점별 근무 목록. 실제 API 처럼 workplaceId·keyword 로 걸러서 응답한다.
 // status 는 7단계 enum(@/constants/workCaseStatus). 요약 6버킷을 골고루 보이도록 구성.
@@ -247,10 +254,13 @@ export async function listWorkCases(workplaceId, params = {}) {
       from: params.from,
       to: params.to
     }).map((s) => ({ ...s }))
-    return { content, totalPages: 1 }
+    return {
+      content,
+      page: { number: 0, size: content.length || 1, totalElements: content.length, totalPages: 1 }
+    }
   }
-  // 페이지 응답 { content, page, size, totalElements } 은 data 래핑이 없어 본문을 그대로 반환.
-  return http.get(`/workplaces/${workplaceId}/work-cases`, { params })
+  const { data } = await http.get(`/workplaces/${workplaceId}/work-cases`, { params })
+  return data
 }
 
 /**
@@ -281,11 +291,10 @@ export async function getWorkCase(workCaseId) {
   return data
 }
 
-/** 근무 수정 (WORK-005). DRAFT 만 허용, 확정 후 409 WORK_CASE_LOCKED */
+/** 근무 수정 (WORK-005). DRAFT 만 허용, 확정 후 409 WORK_CASE_LOCKED. 성공은 204 로 Body 가 없다. */
 export async function updateWorkCase(workCaseId, payload) {
-  if (USE_MOCK) return { workCaseId, ...payload }
-  const { data } = await http.patch(`/work-cases/${workCaseId}`, payload)
-  return data
+  if (USE_MOCK) return
+  await http.patch(`/work-cases/${workCaseId}`, payload)
 }
 
 /** 근무 삭제 (WORK-006). DRAFT 만 허용, 확정 후 409 WORK_CASE_LOCKED */
@@ -294,15 +303,38 @@ export async function deleteWorkCase(workCaseId) {
   await http.delete(`/work-cases/${workCaseId}`)
 }
 
-/** 근무 연결 링크 생성 → { inviteUrl, expiresAt } (INVITE-001). DRAFT 만, 1회성 토큰 */
+/**
+ * 근무 연결 링크 발급 → { inviteUrl, expiresAt } (INVITE-001).
+ *
+ * 활성 초대가 이미 있으면 서버가 그 링크를 그대로 돌려준다(새 발급 201, 재사용 200).
+ * 공통 Client 가 Body 만 넘겨주므로 화면은 둘을 구분하지 않는다 — 어느 쪽이든 "지금 유효한
+ * 링크"라는 의미가 같다. 링크를 바꾸려면 reissueInvite 를 쓴다.
+ */
 export async function createInvite(workCaseId) {
   if (USE_MOCK) {
     return {
       inviteUrl: `${location.origin}/invitations/mock-token-${workCaseId}`,
-      expiresAt: '2026-07-23T23:59:59'
+      expiresAt: '2026-07-23T23:59:59Z'
     }
   }
   const { data } = await http.post(`/work-cases/${workCaseId}/invitations`)
+  return data
+}
+
+/**
+ * 연결 링크 재발급 → { inviteUrl, expiresAt } (INVITE-001).
+ *
+ * 현재 활성 초대를 철회하고 새 Token 으로 교체한다. 이전 링크는 즉시 사용할 수 없게 되므로
+ * 링크를 잘못 보냈을 때만 쓴다. 항상 새 초대를 만들어 성공은 언제나 201 이다.
+ */
+export async function reissueInvite(workCaseId) {
+  if (USE_MOCK) {
+    return {
+      inviteUrl: `${location.origin}/invitations/mock-token-${workCaseId}-reissued`,
+      expiresAt: '2026-07-23T23:59:59Z'
+    }
+  }
+  const { data } = await http.post(`/work-cases/${workCaseId}/invitations/reissue`)
   return data
 }
 
@@ -311,7 +343,7 @@ export async function createInvite(workCaseId) {
  * Idempotency-Key(UUID) 필수 — 재시도 시 동일 키로 중복 지급 방지.
  */
 export async function approveSettlement(workCaseId) {
-  if (USE_MOCK) {
+  if (USE_MOCK_SETTLEMENT_DISPUTE) {
     return { settlementId: 1, status: 'COMPLETED', completedAt: new Date().toISOString() }
   }
   const { data } = await idempotentPost(`/work-cases/${workCaseId}/settlement/approve`)
@@ -323,14 +355,14 @@ export async function approveSettlement(workCaseId) {
  * phone 은 승인 계약대로 구분 문자 없는 숫자다. 표시 형식은 화면에서 만든다.
  */
 export async function getOwnerContact(workCaseId) {
-  if (USE_MOCK) return { ownerName: '김사장', phone: '01012345678' }
+  if (USE_MOCK_SETTLEMENT_DISPUTE) return { ownerName: '김사장', phone: '01012345678' }
   const { data } = await http.get(`/work-cases/${workCaseId}/workplace-contact`)
   return data
 }
 
 /** 신고 내역 조회 → { content[] } (DISPUTE-002). 당사자만 */
 export async function listReports(workCaseId) {
-  if (USE_MOCK) return { content: [] }
+  if (USE_MOCK_SETTLEMENT_DISPUTE) return { content: [] }
   // 페이지 응답 { content, ... } 은 data 래핑이 없어 본문을 그대로 반환.
   return http.get(`/work-cases/${workCaseId}/disputes`)
 }
@@ -340,7 +372,7 @@ export async function listReports(workCaseId) {
  * @param {object} payload content(경위서)
  */
 export async function createReport(workCaseId, { content }) {
-  if (USE_MOCK) return { reportId: Date.now() }
+  if (USE_MOCK_SETTLEMENT_DISPUTE) return { reportId: Date.now() }
   const { data } = await http.post(`/work-cases/${workCaseId}/disputes`, { content })
   return data
 }

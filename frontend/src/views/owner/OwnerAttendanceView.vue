@@ -43,6 +43,7 @@ import {
   monthRange
 } from '@/utils/calendar'
 import { copyText } from '@/utils/clipboard'
+import { formatSeoulDateTime } from '@/utils/format'
 import { readPreference, writePreference } from '@/utils/storage'
 
 const router = useRouter()
@@ -52,6 +53,9 @@ const workplaceStore = useWorkplaceStore()
 const summary = ref(emptyWorkCaseSummary())
 const workCases = ref([])
 const loading = ref(false)
+const loadingMore = ref(false)
+const page = ref({ number: 0, size: 20, totalElements: 0, totalPages: 0 })
+const hasNextPage = computed(() => page.value.number + 1 < page.value.totalPages)
 
 /* ---- 검색·필터 -----------------------------------------------------------
  * 적용 중인 필터를 **서버 파라미터 형태 그대로** 들고 있다(사장 홈의 송금상세와 같은 방식).
@@ -74,6 +78,10 @@ const isCalendar = computed(() => viewMode.value === 'calendar')
 const monthKey = ref(currentMonthKey()) // 캘린더가 보고 있는 달 'YYYY-MM'
 const selectedDate = ref(null) // 캘린더에서 고른 날짜 'YYYY-MM-DD' | null
 
+// 캘린더는 달 전체를 한 번에 보여줘야 하므로 목록형보다 큰 Page를 요청한다(승인 상한 100).
+const LIST_PAGE_SIZE = 20
+const CALENDAR_PAGE_SIZE = 100
+
 /**
  * 선택 지점 기준으로 요약·리스트를 다시 조회한다.
  * 필터는 서버 파라미터로만 넘긴다 — 프론트에서 목록을 재계산하지 않는다.
@@ -88,19 +96,43 @@ async function load() {
   // range 를 뒤에 펼쳐 캘린더에서는 보고 있는 달이 필터의 from/to 를 덮는다
   // (그래서 시트도 캘린더에서는 기간 항목을 잠근다).
   const range = isCalendar.value ? monthRange(monthKey.value) : {}
+  const size = isCalendar.value ? CALENDAR_PAGE_SIZE : LIST_PAGE_SIZE
 
   loading.value = true
   try {
     const [summaryRes, listRes] = await Promise.all([
       getWorkCaseSummary(workplaceId),
-      listWorkCases(workplaceId, { ...appliedFilter.value, ...range })
+      listWorkCases(workplaceId, { ...appliedFilter.value, ...range, page: 0, size })
     ])
     summary.value = summaryRes
     workCases.value = listRes.content ?? []
+    page.value = listRes.page ?? { number: 0, size, totalElements: 0, totalPages: 0 }
   } catch {
     ui.toast('근태 정보를 불러오지 못했어요.', { type: 'danger' })
   } finally {
     loading.value = false
+  }
+}
+
+/** 목록형 뷰에서 다음 Page를 이어 붙인다. 캘린더는 한 번에 큰 Page를 받으므로 대상이 아니다. */
+async function loadMore() {
+  if (isCalendar.value || !hasNextPage.value || loadingMore.value) return
+  const workplaceId = workplaceStore.selectedId
+  if (workplaceId == null) return
+
+  loadingMore.value = true
+  try {
+    const listRes = await listWorkCases(workplaceId, {
+      ...appliedFilter.value,
+      page: page.value.number + 1,
+      size: LIST_PAGE_SIZE
+    })
+    workCases.value = [...workCases.value, ...(listRes.content ?? [])]
+    page.value = listRes.page ?? page.value
+  } catch {
+    ui.toast('다음 목록을 불러오지 못했어요.', { type: 'danger' })
+  } finally {
+    loadingMore.value = false
   }
 }
 
@@ -154,7 +186,7 @@ const selectedDayWorkCases = computed(() => {
   if (!selectedDate.value) return []
   return workCases.value
     .filter((workCase) => workCase.workDate === selectedDate.value)
-    .sort((a, b) => String(a.startTime).localeCompare(String(b.startTime)))
+    .sort((a, b) => String(a.startsAt).localeCompare(String(b.startsAt)))
 })
 
 /** 선택한 날짜 제목: "2026.07.22 (수) · 2건" */
@@ -176,19 +208,40 @@ const copyingId = ref(null) // 링크 생성 중인 근무(중복 클릭 방지)
  * 복사에 실패한 경우 다시 발급할 수 있어야 한다. 발급 가능 여부의 권위는 서버이고,
  * 다음 조회(load)에서 갱신된 capability 로 버튼 노출이 결정된다.
  */
+/** 초대 발급 실패를 승인 오류 Code 별로 구분해 안내한다. */
+function inviteErrorMessage(err) {
+  switch (err?.code) {
+    case 'WORK_CASE_LOCKED':
+      // 서버는 DRAFT·미매칭·시작 전 세 조건을 하나의 오류로 합친다(정보 노출 방지).
+      return '이미 수락됐거나 시작 시각이 지난 근무는 링크를 발급할 수 없어요.'
+    case 'CONFLICT':
+      return '링크를 발급할 수 없는 상태예요. 목록을 새로고침한 뒤 다시 시도해주세요.'
+    case 'ROLE_MISMATCH':
+    case 'FORBIDDEN':
+      return '이 근무의 링크를 발급할 권한이 없어요.'
+    case 'RESOURCE_NOT_FOUND':
+      return '근무를 찾을 수 없어요. 목록을 새로고침해주세요.'
+    default:
+      return '링크를 만들지 못했어요. 잠시 후 다시 시도해주세요.'
+  }
+}
+
 async function onCopyInvite(workCaseId) {
   copyingId.value = workCaseId
   try {
-    const { inviteUrl } = await createInvite(workCaseId)
+    const { inviteUrl, expiresAt } = await createInvite(workCaseId)
+    // 만료 시각은 근무 시작 시각이다 — 언제까지 유효한지 알려야 전송 시점을 판단할 수 있다.
+    const expiryText = expiresAt ? ` ${formatSeoulDateTime(expiresAt)}까지 유효해요.` : ''
 
     if (await copyText(inviteUrl)) {
-      ui.toast('연결 링크를 복사했어요.', { type: 'success' })
+      ui.toast(`연결 링크를 복사했어요.${expiryText}`, { type: 'success', duration: 6000 })
     } else {
       // 브라우저가 복사를 막은 경우 — 링크를 띄워 직접 복사할 수 있게 한다.
-      ui.toast(`복사가 막혔어요. 링크: ${inviteUrl}`, { type: 'warning', duration: 6000 })
+      // Token 은 화면에만 노출하고 Console·Analytics 로는 내보내지 않는다.
+      ui.toast(`복사가 막혔어요. 링크: ${inviteUrl}`, { type: 'warning', duration: 8000 })
     }
-  } catch {
-    ui.toast('링크를 만들지 못했어요.', { type: 'danger' })
+  } catch (err) {
+    ui.toast(inviteErrorMessage(err), { type: 'danger' })
   } finally {
     copyingId.value = null
   }
@@ -272,6 +325,16 @@ const goNew = () => router.push('/owner/attendance/work-cases/new')
         @select="goDetail"
         @copy-invite="onCopyInvite"
       />
+
+      <button
+        v-if="!isCalendar && hasNextPage"
+        type="button"
+        class="load-more"
+        :disabled="loadingMore"
+        @click="loadMore"
+      >
+        {{ loadingMore ? '불러오는 중…' : '더 보기' }}
+      </button>
     </section>
 
     <!-- ② 캘린더 뷰 — 월 그리드 + 선택한 날짜의 근무 목록 -->
@@ -452,6 +515,19 @@ const goNew = () => router.push('/owner/attendance/work-cases/new')
   text-align: center;
   font-size: var(--text-md);
   color: var(--color-text-sub);
+}
+
+.load-more {
+  width: 100%;
+  margin-top: var(--space-md);
+  padding: var(--space-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  color: var(--color-text-sub);
+}
+.load-more:disabled {
+  opacity: 0.6;
 }
 
 /* ---- 캘린더 뷰(달력 + 선택한 날짜 목록) ---- */

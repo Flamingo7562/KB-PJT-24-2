@@ -20,7 +20,34 @@ export const SETTLE_STATUS = {
   NONE: { label: '정산대기', color: 'var(--color-text-sub)' },
   HOLD: { label: '예치중', color: 'var(--color-brand)' },
   SETTLED: { label: '정산완료', color: 'var(--color-success)' },
-  REFUNDED: { label: '환불완료', color: 'var(--color-text-sub)' }
+  REFUNDED: { label: '환불완료', color: 'var(--color-text-sub)' },
+
+  // settlements.status 저장 값(ck_settlements_status). 위 네 값은 아직 실연동 전인 화면들이
+  // 쓰는 표시 전용 값이라 그대로 두고, 서버가 실제로 내려주는 6종을 함께 매핑한다.
+  // 매핑이 없으면 StatusChip 이 원문("WAITING")을 그대로 노출한다.
+  WAITING: { label: '정산대기', color: 'var(--color-text-sub)' },
+  SCHEDULED: { label: '정산예정', color: 'var(--color-brand)' },
+  PROCESSING: { label: '정산중', color: 'var(--color-brand)' },
+  COMPLETED: { label: '정산완료', color: 'var(--color-success)' },
+  FAILED: { label: '정산실패', color: 'var(--color-danger)' },
+  ON_HOLD: { label: '정산보류', color: 'var(--color-warning)' }
+}
+
+/**
+ * 에스크로(escrows.status) 표기 — ck_escrows_status 의 5개.
+ * 정산(settlements.status)과 다른 축이라 SETTLE_STATUS 와 섞지 않는다.
+ */
+export const ESCROW_STATUS = {
+  UNFUNDED: { label: '미예치' },
+  HELD: { label: '예치중' },
+  RELEASED: { label: '지급완료' },
+  REFUNDED: { label: '환불완료' },
+  ON_HOLD: { label: '보류' }
+}
+
+/** 에스크로 상태 → 표기 라벨(없으면 원문 반환). */
+export function escrowStatusLabel(status) {
+  return ESCROW_STATUS[status]?.label ?? status
 }
 
 /* ---- 거래 상태 칩 ---- */
