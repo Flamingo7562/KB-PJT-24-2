@@ -12,7 +12,6 @@ import javax.sql.DataSource;
 
 import com.gighub.auth.dto.LoginRequest;
 import com.gighub.auth.dto.SignupRequest;
-import com.gighub.auth.mapper.WorkplaceCountMapper;
 import com.gighub.auth.service.impl.AuthServiceImpl;
 import com.gighub.common.exception.AuthRequiredException;
 import com.gighub.common.exception.ConflictException;
@@ -20,6 +19,7 @@ import com.gighub.config.RootConfig;
 import com.gighub.member.domain.UserRole;
 import com.gighub.member.mapper.UserMapper;
 import com.gighub.wallet.mapper.WalletMapper;
+import com.gighub.workplace.mapper.WorkplaceMapper;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -116,7 +116,7 @@ class AuthFlowDatabaseIntegrationTest {
         WalletMapper failingWalletMapper = mock(WalletMapper.class);
         when(failingWalletMapper.insertKrwWallet(any())).thenReturn(0);
         AuthServiceImpl target = new AuthServiceImpl(
-                context.getBean(WorkplaceCountMapper.class),
+                context.getBean(WorkplaceMapper.class),
                 context.getBean(UserMapper.class),
                 failingWalletMapper,
                 context.getBean(PasswordEncoder.class)

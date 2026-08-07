@@ -4,7 +4,6 @@ import java.util.List;
 
 import com.gighub.auth.dto.SignupRequest;
 import com.gighub.auth.dto.LoginRequest;
-import com.gighub.auth.mapper.WorkplaceCountMapper;
 import com.gighub.auth.security.AuthPrincipal;
 import com.gighub.auth.service.impl.AuthServiceImpl;
 import com.gighub.common.exception.ConflictException;
@@ -15,6 +14,7 @@ import com.gighub.member.domain.UserRole;
 import com.gighub.member.domain.UserStatus;
 import com.gighub.member.mapper.UserMapper;
 import com.gighub.wallet.mapper.WalletMapper;
+import com.gighub.workplace.mapper.WorkplaceMapper;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.dao.DuplicateKeyException;
@@ -33,12 +33,12 @@ import static org.mockito.Mockito.when;
 
 class AuthServiceImplTest {
 
-    private final WorkplaceCountMapper workplaceCountMapper = mock(WorkplaceCountMapper.class);
+    private final WorkplaceMapper workplaceMapper = mock(WorkplaceMapper.class);
     private final UserMapper userMapper = mock(UserMapper.class);
     private final WalletMapper walletMapper = mock(WalletMapper.class);
     private final PasswordEncoder passwordEncoder = mock(PasswordEncoder.class);
     private final AuthServiceImpl service = new AuthServiceImpl(
-            workplaceCountMapper,
+            workplaceMapper,
             userMapper,
             walletMapper,
             passwordEncoder
@@ -47,7 +47,7 @@ class AuthServiceImplTest {
     @Test
     void ownerWithoutActiveWorkplaceNeedsSetup() {
         AuthPrincipal principal = new AuthPrincipal(1L, UserRole.OWNER, "김사장");
-        when(workplaceCountMapper.countActiveByOwnerUserId(1L)).thenReturn(0);
+        when(workplaceMapper.countActiveByOwnerUserId(1L)).thenReturn(0);
 
         assertTrue(service.needsWorkplaceSetup(principal));
     }
@@ -55,7 +55,7 @@ class AuthServiceImplTest {
     @Test
     void ownerWithActiveWorkplaceDoesNotNeedSetup() {
         AuthPrincipal principal = new AuthPrincipal(1L, UserRole.OWNER, "김사장");
-        when(workplaceCountMapper.countActiveByOwnerUserId(1L)).thenReturn(1);
+        when(workplaceMapper.countActiveByOwnerUserId(1L)).thenReturn(1);
 
         assertFalse(service.needsWorkplaceSetup(principal));
     }
@@ -65,7 +65,7 @@ class AuthServiceImplTest {
         AuthPrincipal principal = new AuthPrincipal(2L, UserRole.WORKER, "김근로");
 
         assertFalse(service.needsWorkplaceSetup(principal));
-        verify(workplaceCountMapper, never()).countActiveByOwnerUserId(2L);
+        verify(workplaceMapper, never()).countActiveByOwnerUserId(2L);
     }
 
     @Test
@@ -143,7 +143,7 @@ class AuthServiceImplTest {
         User user = user(51L, UserRole.OWNER, UserStatus.ACTIVE);
         when(userMapper.findByLoginId("owner01")).thenReturn(user);
         when(passwordEncoder.matches("secret123", "bcrypt-hash")).thenReturn(true);
-        when(workplaceCountMapper.countActiveByOwnerUserId(51L)).thenReturn(0);
+        when(workplaceMapper.countActiveByOwnerUserId(51L)).thenReturn(0);
 
         LoginResult result = service.login(request);
 
@@ -196,7 +196,7 @@ class AuthServiceImplTest {
 
         assertThrows(RoleMismatchException.class, () -> service.login(request));
 
-        verify(workplaceCountMapper, never()).countActiveByOwnerUserId(any());
+        verify(workplaceMapper, never()).countActiveByOwnerUserId(any());
     }
 
     private SignupRequest signupRequest() {
