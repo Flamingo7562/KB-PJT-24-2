@@ -9,6 +9,9 @@ import com.gighub.contract.dto.ContractTermsSnapshot;
 import com.gighub.invitation.dto.InvitationAcceptResponse;
 import org.springframework.stereotype.Component;
 
+import java.math.BigDecimal;
+import java.time.Instant;
+
 /**
  * 수락이 저장하는 두 JSON을 한 규칙으로 만듭니다.
  *
@@ -24,6 +27,41 @@ public class AcceptJson {
     /** 계약 Snapshot을 {@code work_contracts.terms_snapshot}에 넣을 문자열로 만듭니다. */
     public String writeSnapshot(ContractTermsSnapshot snapshot) {
         return write(snapshot, "계약 조건 Snapshot을 직렬화하지 못했습니다.");
+    }
+
+    /**
+     * 저장된 계약 Snapshot JSON을 되돌립니다.
+     *
+     * <p>계약서 파일 생성이 근무 행을 다시 읽지 않고 이 Snapshot만으로 계약 내용을 복원하기
+     * 위해 씁니다({@link ContractTermsSnapshot} 참고).</p>
+     */
+    public ContractTermsSnapshot readSnapshot(String storedJson) {
+        try {
+            JsonNode root = objectMapper.readTree(storedJson);
+            return ContractTermsSnapshot.builder()
+                    .schemaVersion(root.get("schemaVersion").asInt())
+                    .termsVersion(root.get("termsVersion").asInt())
+                    .title(root.get("title").asText())
+                    .startsAt(Instant.parse(root.get("startsAt").asText()))
+                    .endsAt(Instant.parse(root.get("endsAt").asText()))
+                    .breakMinutes(root.get("breakMinutes").asInt())
+                    .breakPaid(root.get("breakPaid").asBoolean())
+                    .workplaceName(root.get("workplaceName").asText())
+                    .workplaceAddress(root.get("workplaceAddress").asText())
+                    .workplaceLatitude(decimalOrNull(root.get("workplaceLatitude")))
+                    .workplaceLongitude(decimalOrNull(root.get("workplaceLongitude")))
+                    .allowedRadiusMeters(decimalOrNull(root.get("allowedRadiusMeters")))
+                    .dailyWage(root.get("dailyWage").asLong())
+                    .owner(root.get("owner").get("userId").asLong(), root.get("owner").get("name").asText())
+                    .worker(root.get("worker").get("userId").asLong(), root.get("worker").get("name").asText())
+                    .build();
+        } catch (JsonProcessingException exception) {
+            throw new IllegalStateException("저장된 계약 조건 Snapshot을 읽지 못했습니다.", exception);
+        }
+    }
+
+    private static BigDecimal decimalOrNull(JsonNode node) {
+        return node == null || node.isNull() ? null : new BigDecimal(node.asText());
     }
 
     /** 최초 성공 응답 전체를 Claim에 저장할 문자열로 만듭니다. */

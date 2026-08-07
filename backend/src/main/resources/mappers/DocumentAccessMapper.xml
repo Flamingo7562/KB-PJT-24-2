@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.gighub.document.mapper.DocumentAccessMapper">
+
+    <resultMap id="documentFileVersionResult"
+               type="com.gighub.document.dto.DocumentFileVersion">
+        <constructor>
+            <idArg column="id" javaType="java.lang.Long"/>
+            <arg column="document_id" javaType="java.lang.Long"/>
+            <arg column="work_case_id" javaType="java.lang.Long"/>
+            <arg column="version_no" javaType="java.lang.Integer"/>
+            <arg column="version_type" javaType="java.lang.String"/>
+            <arg column="storage_key" javaType="java.lang.String"/>
+            <arg column="mime_type" javaType="java.lang.String"/>
+            <arg column="checksum" javaType="_byte[]"/>
+        </constructor>
+    </resultMap>
+
+    <!-- ORIGINAL은 사용자에게 내리지 않고 승인된 SIGNED Version 2만 고른다. -->
+    <select id="findSignedVersionForAccess" resultMap="documentFileVersionResult">
+        SELECT dv.id, dv.document_id, d.work_case_id, dv.version_no,
+               dv.version_type, dv.storage_key, dv.mime_type, dv.checksum
+        FROM document_versions dv
+        JOIN documents d ON d.id = dv.document_id
+        WHERE dv.document_id = #{documentId}
+          AND dv.version_type = 'SIGNED'
+          AND dv.version_no = 2
+    </select>
+
+    <select id="isContractParty" resultType="boolean">
+        SELECT COUNT(*) > 0
+        FROM documents d
+        JOIN work_contracts wc ON wc.work_case_id = d.work_case_id
+        WHERE d.id = #{documentId}
+          AND (wc.employer_id = #{userId} OR wc.worker_id = #{userId})
+    </select>
+
+    <insert id="insertAccessLog"
+            parameterType="com.gighub.document.mapper.param.DocumentAccessLogParam">
+        INSERT INTO document_access_logs (
+            document_id, document_version_id, actor_user_id, action, result, denial_reason
+        ) VALUES (
+            #{documentId}, #{documentVersionId}, #{actorUserId},
+            #{action}, #{result}, #{denialReason}
+        )
+    </insert>
+
+</mapper>
