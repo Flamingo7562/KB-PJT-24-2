@@ -92,11 +92,25 @@ public interface WorkCaseMapper {
     /**
      * 사업장의 상태별 근무 건수를 집계합니다.
      *
-     * <p>소유권 조건을 집계 SQL 자체에 두어 다른 OWNER의 근무가 건수에 섞이지 않게 합니다.</p>
+     * <p>소유권 조건을 집계 SQL 자체에 두어 다른 OWNER의 근무가 건수에 섞이지 않게 합니다. 이
+     * 조건만으로는 "소유하지 않음"과 "소유했지만 근무가 0건"을 구분할 수 없어, 호출부가 먼저
+     * {@link #existsOwnedManageableWorkplace}로 소유권을 확인합니다.</p>
      *
      * @return 건수가 1 이상인 상태만. 0건 상태는 호출부가 채웁니다
      */
     List<WorkCaseStatusCountRow> countByStatus(
+            @Param("workplaceId") Long workplaceId,
+            @Param("ownerUserId") Long ownerUserId);
+
+    /**
+     * 인증 OWNER가 소유하고 관리 대상인 사업장인지 확인합니다.
+     *
+     * <p>{@code ACTIVE}·{@code INACTIVE}만 허용하고 {@code DELETED}는 제외합니다. 제외 조건을
+     * {@code <> 'DELETED'}로 쓰지 않는 이유는 나중에 상태가 추가될 때 그 값이 검토 없이
+     * 조회 가능한 것으로 노출되기 때문입니다. 허용 목록으로 두면 새 상태는 기본적으로
+     * 숨겨집니다.</p>
+     */
+    boolean existsOwnedManageableWorkplace(
             @Param("workplaceId") Long workplaceId,
             @Param("ownerUserId") Long ownerUserId);
 }

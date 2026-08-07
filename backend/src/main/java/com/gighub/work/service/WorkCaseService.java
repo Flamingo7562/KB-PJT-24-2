@@ -1,10 +1,11 @@
 package com.gighub.work.service;
 
 import com.gighub.auth.security.AuthPrincipal;
+import com.gighub.work.dto.WorkCaseSummaryResponse;
 import com.gighub.work.service.command.WorkCaseCreateCommand;
 import com.gighub.work.service.command.WorkCaseUpdateCommand;
 
-/** OWNER 근무 {@code DRAFT} 생성·조건 수정·삭제의 승인 규칙을 적용합니다. */
+/** OWNER 근무 {@code DRAFT} 생성·조건 수정·삭제·조회의 승인 규칙을 적용합니다. */
 public interface WorkCaseService {
 
     /**
@@ -36,4 +37,13 @@ public interface WorkCaseService {
      * @param workCaseId 대상 근무 Case 식별자
      */
     void delete(AuthPrincipal principal, Long workCaseId);
+
+    /**
+     * 인증 OWNER가 소유·관리하는 사업장의 상태별 근무 건수를 요약합니다.
+     *
+     * @param principal   소유권을 결정하는 인증 Principal
+     * @param workplaceId 대상 사업장 식별자
+     * @return 8개 상태를 모두 포함하는 요약. 데이터가 없는 상태는 0
+     */
+    WorkCaseSummaryResponse summary(AuthPrincipal principal, Long workplaceId);
 }

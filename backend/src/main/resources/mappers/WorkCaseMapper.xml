@@ -146,4 +146,12 @@
         GROUP BY status
     </select>
 
+    <select id="existsOwnedManageableWorkplace" resultType="boolean">
+        SELECT COUNT(*) > 0
+        FROM workplaces
+        WHERE id = #{workplaceId}
+          AND owner_user_id = #{ownerUserId}
+          AND status IN ('ACTIVE', 'INACTIVE')
+    </select>
+
 </mapper>

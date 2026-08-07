@@ -15,6 +15,7 @@ import com.gighub.work.domain.WorkCaseTimes;
 import com.gighub.work.mapper.WorkCaseMapper;
 import com.gighub.work.mapper.param.WorkCaseInsertParam;
 import com.gighub.work.mapper.param.WorkCaseTermsUpdateParam;
+import com.gighub.work.dto.WorkCaseSummaryResponse;
 import com.gighub.work.mapper.result.OwnedWorkplaceSnapshotRow;
 import com.gighub.work.mapper.result.WorkCaseLockRow;
 import com.gighub.work.service.WorkCaseService;
@@ -121,6 +122,20 @@ public class WorkCaseServiceImpl implements WorkCaseService {
         // CANCELED 전이는 status 등 일부 컬럼만 바꾸는 UPDATE라 자식 테이블의 FK RESTRICT를
         // 건드리지 않습니다. 행 자체를 지우는 DELETE만 참조 무결성 위반 가능성이 있습니다.
         workCaseMapper.cancelDraft(workCaseId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public WorkCaseSummaryResponse summary(AuthPrincipal principal, Long workplaceId) {
+        requireOwner(principal);
+        // 소유하지 않은 사업장과 근무 0건인 소유 사업장을 구분해야 하므로, 집계 전에 소유권을
+        // 먼저 확인합니다. countByStatus만으로는 두 경우가 똑같이 빈 결과로 보입니다.
+        if (!workCaseMapper.existsOwnedManageableWorkplace(workplaceId, principal.getUserId())) {
+            throw new ResourceNotFoundException("사업장을 찾을 수 없습니다.");
+        }
+
+        return WorkCaseSummaryResponse.from(
+                workCaseMapper.countByStatus(workplaceId, principal.getUserId()));
     }
 
     /**
