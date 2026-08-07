@@ -7,22 +7,28 @@ import WorkerWithdrawView from '@/views/worker/wallet/WorkerWithdrawView.vue'
 const back = vi.fn()
 vi.mock('vue-router', () => ({ useRouter: () => ({ back }) }))
 
-vi.mock('@/services/wallet', () => ({ withdrawWallet: vi.fn() }))
-vi.mock('@/services/worker', () => ({ getWorkerHome: vi.fn() }))
+vi.mock('@/services/wallet', () => ({
+  fetchTransactions: vi.fn(),
+  fetchWallet: vi.fn(),
+  withdrawWallet: vi.fn()
+}))
 
-import { withdrawWallet } from '@/services/wallet'
-import { getWorkerHome } from '@/services/worker'
+import { fetchWallet, withdrawWallet } from '@/services/wallet'
 
 describe('WorkerWithdrawView', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     back.mockClear()
     withdrawWallet.mockReset()
-    withdrawWallet.mockResolvedValue({ availableBalance: 220000, txId: 1 })
-    getWorkerHome.mockResolvedValue({
-      wallet: { availableBalance: 320000 },
-      todayWorkCase: { status: 'NONE' },
-      earning: null
+    withdrawWallet.mockResolvedValue({
+      withdrawalRequestId: 11,
+      status: 'COMPLETED',
+      bankTransactionId: 21
+    })
+    fetchWallet.mockReset().mockResolvedValue({
+      currency: 'KRW',
+      availableBalance: 320000,
+      lockedBalance: 0
     })
   })
 
@@ -36,7 +42,7 @@ describe('WorkerWithdrawView', () => {
     await wrapper.find('button.bank').trigger('click') // 은행 선택(첫 은행)
     // 입력 필드: [0] 계좌번호, [1] 금액
     const [accountInput, amountInput] = wrapper.findAll('input')
-    await accountInput.setValue('110222333') // 계좌번호(8자리 이상)
+    await accountInput.setValue('170000000001')
 
     await amountInput.setValue('500000') // 잔액 초과
     expect(submit().attributes('disabled')).toBeDefined()
@@ -52,7 +58,7 @@ describe('WorkerWithdrawView', () => {
 
     await wrapper.find('button.bank').trigger('click')
     const [accountInput, amountInput] = wrapper.findAll('input')
-    await accountInput.setValue('110222333')
+    await accountInput.setValue('170-0000-00001')
     await amountInput.setValue('100000')
 
     // 출금하기 → 아직 API 호출 없이 확인 모달만 연다.
@@ -66,8 +72,9 @@ describe('WorkerWithdrawView', () => {
     await flushPromises()
 
     expect(withdrawWallet).toHaveBeenCalledWith(
-      expect.objectContaining({ bankCode: 'KB', accountNo: '110222333', amount: 100000 })
+      expect.objectContaining({ bankCode: '004', accountNo: '170000000001', amount: 100000 })
     )
+    expect(fetchWallet).toHaveBeenCalledTimes(2)
     expect(back).toHaveBeenCalled()
   })
 })

@@ -9,25 +9,10 @@
  *
  * 근무(work_case) 7단계 상태 매핑은 여기가 아니라 `@/constants/workCaseStatus` 단일 소스에 있다.
  */
-import bankBusan from '@/assets/images/banks/busan.png'
-import bankCity from '@/assets/images/banks/city.png'
-import bankCu from '@/assets/images/banks/cu.png'
-import bankDgb from '@/assets/images/banks/dgb.png'
-import bankGwangju from '@/assets/images/banks/gwangju.png'
 import bankHana from '@/assets/images/banks/hana.png'
-import bankIbk from '@/assets/images/banks/ibk.png'
-import bankIm from '@/assets/images/banks/im.png'
-import bankK from '@/assets/images/banks/k.png'
-import bankKakao from '@/assets/images/banks/kakao.png'
 import bankKb from '@/assets/images/banks/kb.png'
-import bankKdb from '@/assets/images/banks/kdb.png'
-import bankMg from '@/assets/images/banks/mg.png'
 import bankNh from '@/assets/images/banks/nh.png'
-import bankPost from '@/assets/images/banks/post.png'
-import bankSc from '@/assets/images/banks/sc.png'
-import bankSh from '@/assets/images/banks/sh.png'
 import bankShinhan from '@/assets/images/banks/shinhan.png'
-import bankToss from '@/assets/images/banks/toss.png'
 import bankWoori from '@/assets/images/banks/woori.png'
 
 /* ---- 정산·에스크로 상태 ---- */
@@ -36,15 +21,6 @@ export const SETTLE_STATUS = {
   HOLD: { label: '예치중', color: 'var(--color-brand)' },
   SETTLED: { label: '정산완료', color: 'var(--color-success)' },
   REFUNDED: { label: '환불완료', color: 'var(--color-text-sub)' }
-}
-
-/* ---- 거래(wallet_transaction) 유형 ---- */
-export const TX_TYPE = {
-  CHARGE: { label: '충전' },
-  WITHDRAW: { label: '출금' },
-  SETTLEMENT: { label: '정산 입금' }, // 알바생 안심지갑 임금 정산(+)
-  ESCROW_HOLD: { label: '예치' },
-  ESCROW_REFUND: { label: '환불' }
 }
 
 /* ---- 거래 상태 칩 ---- */
@@ -126,38 +102,18 @@ export const SCAN_TYPE = {
  * 은행 목록(충전·출금 은행 선택).
  * `logo`: assets/images/banks/*.png 로고. `chip`: 로고 로드 실패 시 폴백 색.
  *
- * BANKS       = 은행 선택 그리드에 바로 노출하는 주요 은행.
- * BANKS_EXTRA = "기타 은행" 시트에서만 추가로 노출하는 은행.
- * BANKS_ALL   = 전체(주요 + 기타). 코드→은행 조회는 이 전체 목록에서 한다.
+ * 승인 계약은 아래 다섯 은행만 허용한다. 화면 라벨과 API 전송값을 분리하고,
+ * `KB`나 `SHINHAN` 같은 별칭을 전송값으로 다시 도입하지 않는다.
  */
 export const BANKS = [
-  { code: 'KB', name: '국민은행', logo: bankKb, chip: '#FFCC00' },
-  { code: 'SHINHAN', name: '신한은행', logo: bankShinhan, chip: '#0046FF' },
-  { code: 'WOORI', name: '우리은행', logo: bankWoori, chip: '#0067AC' },
-  { code: 'HANA', name: '하나은행', logo: bankHana, chip: '#008485' },
-  { code: 'NH', name: '농협은행', logo: bankNh, chip: '#19A94B' },
-  { code: 'IBK', name: '기업은행', logo: bankIbk, chip: '#004C97' },
-  { code: 'KAKAO', name: '카카오뱅크', logo: bankKakao, chip: '#FFE300' },
-  { code: 'TOSS', name: '토스뱅크', logo: bankToss, chip: '#0064FF' }
+  { code: '004', name: 'KB국민은행', logo: bankKb, chip: '#FFCC00' },
+  { code: '088', name: '신한은행', logo: bankShinhan, chip: '#0046FF' },
+  { code: '020', name: '우리은행', logo: bankWoori, chip: '#0067AC' },
+  { code: '081', name: '하나은행', logo: bankHana, chip: '#008485' },
+  { code: '011', name: 'NH농협은행', logo: bankNh, chip: '#19A94B' }
 ]
 
-/* 기타 은행 — "기타 은행" 시트에서 노출. dgb/im/cu 는 로고 매핑이 확실치 않아 추후 확인 필요. */
-export const BANKS_EXTRA = [
-  { code: 'KBANK', name: '케이뱅크', logo: bankK, chip: '#2A2A2A' },
-  { code: 'BUSAN', name: '부산은행', logo: bankBusan, chip: '#E60012' },
-  { code: 'DGB', name: 'DGB대구은행', logo: bankDgb, chip: '#005BAC' }, // ⚠️ iM뱅크로 리브랜딩 — im 과 중복 확인
-  { code: 'IM', name: 'iM뱅크', logo: bankIm, chip: '#E4002B' }, // ⚠️ dgb 와 동일 은행일 수 있음
-  { code: 'GWANGJU', name: '광주은행', logo: bankGwangju, chip: '#009999' },
-  { code: 'SC', name: 'SC제일은행', logo: bankSc, chip: '#0B7A75' },
-  { code: 'CITI', name: '씨티은행', logo: bankCity, chip: '#003B70' },
-  { code: 'KDB', name: 'KDB산업은행', logo: bankKdb, chip: '#003DA5' },
-  { code: 'SH', name: '수협은행', logo: bankSh, chip: '#0089CF' },
-  { code: 'MG', name: '새마을금고', logo: bankMg, chip: '#00A6E2' },
-  { code: 'CU', name: '신협', logo: bankCu, chip: '#0069B4' }, // ⚠️ 로고가 신협인지 확인 필요
-  { code: 'POST', name: '우체국', logo: bankPost, chip: '#E5001E' }
-]
-
-export const BANKS_ALL = [...BANKS, ...BANKS_EXTRA]
+export const BANKS_ALL = BANKS
 
 /** 은행 코드 → 은행 객체 조회(전체 목록 기준) */
 export function findBank(code) {

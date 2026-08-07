@@ -13,11 +13,21 @@ import TransactionFilterSheet from '@/components/wallet/TransactionFilterSheet.v
 import TransactionList from '@/components/wallet/TransactionList.vue'
 import WalletBalanceCard from '@/components/wallet/WalletBalanceCard.vue'
 import { useWalletStore } from '@/stores/wallet'
+import { useWorkplaceStore } from '@/stores/workplace'
 import { formatKRW } from '@/utils/format'
 
 const router = useRouter()
 const walletStore = useWalletStore()
-const { availableBalance, lockedBalance, transactions, loading } = storeToRefs(walletStore)
+const workplaceStore = useWorkplaceStore()
+const {
+  availableBalance,
+  lockedBalance,
+  transactions,
+  transactionPage,
+  loading,
+  transactionsLoading
+} = storeToRefs(walletStore)
+const { activeWorkplaces } = storeToRefs(workplaceStore)
 
 const filterOpen = ref(false)
 const appliedFilter = ref({}) // 현재 적용 중인 송금상세 필터(서버 파라미터)
@@ -39,6 +49,8 @@ function onApplyFilter(params) {
   appliedFilter.value = params
   walletStore.loadTransactions(params)
 }
+
+const onLoadMore = () => walletStore.loadNextTransactions()
 </script>
 
 <template>
@@ -62,11 +74,18 @@ function onApplyFilter(params) {
       </div>
     </div>
 
-    <TransactionList :transactions="transactions" :loading="loading" @open-filter="onOpenFilter" />
+    <TransactionList
+      :transactions="transactions"
+      :page="transactionPage"
+      :loading="loading || transactionsLoading"
+      @open-filter="onOpenFilter"
+      @load-more="onLoadMore"
+    />
 
     <TransactionFilterSheet
       :open="filterOpen"
       :model-value="appliedFilter"
+      :workplaces="activeWorkplaces"
       @close="filterOpen = false"
       @apply="onApplyFilter"
     />
