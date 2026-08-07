@@ -1,14 +1,22 @@
 /**
- * 회원가입 폼 오류 표면 테스트.
- * 가입이 이 브랜치에서 실 서버로 연결되면서, 중복확인·제출 실패가 조용히 삼켜지면
- * (try/finally 뿐이던 원래 코드) 버튼만 다시 눌리고 사용자는 왜 실패했는지 알 수 없다.
- * 로그인 화면과 같은 수준(서버 message 토스트, 실패 없음)의 안내가 있어야 한다.
+ * 회원가입 폼 실시간 검증 계약 테스트(#238).
+ *
+ * 손대지 않은 필드는 조용하고, 필드를 떠나면 형식 오류가 뜨고, 고치면 즉시 사라진다.
+ * 서버만 아는 답(중복확인·제출 실패 시 서버가 지목한 필드 오류)은 형식 오류와 다른
+ * 슬롯(serverErrors)을 쓴다 — 성공은 필드 아래 success 문구로, 실패는 계속 필드 오류로
+ * 표시하고 토스트는 쓰지 않는다. serverErrors 는 그 필드 자신의 값이 바뀔 때만 지워지므로,
+ * 관계없는 다른 필드를 고쳐도 서버 메시지는 남아 있어야 한다(Finding 1).
+ *
+ * 아래쪽 4개(중복확인·가입 실패 관련) 테스트는 #146 이 추가한, 서버 오류를 조용히
+ * 삼키지 않고 토스트·필드로 표면화하는 계약을 그대로 이어받는다.
  */
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('vue-router', () => ({ useRouter: () => ({ push: vi.fn() }) }))
+const push = vi.fn()
+vi.mock('vue-router', () => ({ useRouter: () => ({ push }) }))
+
 vi.mock('@/services/auth', () => ({
   checkLoginId: vi.fn(),
   checkEmail: vi.fn(),
@@ -18,9 +26,22 @@ vi.mock('@/services/auth', () => ({
 import AuthSignupForm from '@/components/auth/AuthSignupForm.vue'
 import { checkEmail, checkLoginId, signup } from '@/services/auth'
 import { useUiStore } from '@/stores/ui'
+import { PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH } from '@/utils/validators'
 
-function mountForm() {
-  return mount(AuthSignupForm, { props: { role: 'OWNER' } })
+// placeholder 로 필드를 특정한다 — label 텍스트는 '비밀번호'/'비밀번호 확인'처럼 서로를
+// 포함해 접두어 매칭이 애매하지만, placeholder 는 필드마다 고유하다.
+function getInput(wrapper, placeholder) {
+  return wrapper.find(`input[placeholder="${placeholder}"]`)
+}
+
+// 아이디·이메일 두 필드가 모두 '중복확인' 버튼을 갖는다. 템플릿 순서(아이디가 먼저)대로
+// [0]=아이디, [1]=이메일. 확인완료 상태에서는 버튼이 사라지므로 남은 버튼만 잡힌다.
+function checkButtons(wrapper) {
+  return wrapper.findAll('button').filter((b) => b.text().includes('중복확인'))
+}
+
+function factory(role = 'OWNER') {
+  return mount(AuthSignupForm, { props: { role } })
 }
 
 /** [0] 아이디 [1] 비밀번호 [2] 비밀번호 확인 [3] 이름 [4] 이메일 [5] 전화번호 */
@@ -33,23 +54,201 @@ async function fillValidForm(wrapper) {
   await inputs[4].setValue('owner@test.com')
 }
 
-// 중복확인 통과 후에는 버튼이 '확인완료' 문구로 바뀌어 사라지므로, 전역 버튼 목록에서
-// 텍스트로 찾으면 다른 필드 확인 후 인덱스가 밀린다. 필드 위치로 범위를 좁혀서 찾는다.
-// [0] 아이디 [4] 이메일 (.field 순서는 fillValidForm 주석과 동일)
-function checkLoginIdButton(wrapper) {
-  return wrapper.findAll('.field')[0].find('button')
-}
-
-function checkEmailButton(wrapper) {
-  return wrapper.findAll('.field')[4].find('button')
-}
-
 describe('AuthSignupForm', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
+    push.mockClear()
     checkLoginId.mockReset().mockResolvedValue({ available: true })
     checkEmail.mockReset().mockResolvedValue({ available: true })
     signup.mockReset().mockResolvedValue({ userId: 1 })
+  })
+
+  it('입력 중에는 조용하다', async () => {
+    const wrapper = factory()
+
+    await getInput(wrapper, 'example@gighub.com').setValue('abc')
+
+    expect(wrapper.find('.msg.error').exists()).toBe(false)
+  })
+
+  it('고치면 오류가 즉시 사라진다', async () => {
+    const wrapper = factory()
+    const email = getInput(wrapper, 'example@gighub.com')
+
+    await email.setValue('abc')
+    await email.trigger('blur')
+    expect(wrapper.text()).toContain('올바른 이메일 형식이 아닙니다.')
+
+    await email.setValue('test@example.com')
+
+    expect(wrapper.text()).not.toContain('올바른 이메일 형식이 아닙니다.')
+  })
+
+  it('비밀번호를 고치면 확인란 오류도 사라진다', async () => {
+    const wrapper = factory()
+    const password = getInput(wrapper, `${PASSWORD_MIN_LENGTH}~${PASSWORD_MAX_LENGTH}자`)
+    const confirm = getInput(wrapper, '비밀번호를 한 번 더 입력')
+
+    await password.setValue('abcdefgh')
+    await confirm.setValue('mismatch1')
+    await confirm.trigger('blur')
+    expect(wrapper.text()).toContain('비밀번호가 일치하지 않습니다.')
+
+    // 확인란이 아니라 비밀번호 쪽을 고쳤다.
+    await password.setValue('mismatch1')
+
+    expect(wrapper.text()).not.toContain('비밀번호가 일치하지 않습니다.')
+  })
+
+  // 6개 필드 모두 @blur 배선이 살아 있는지 필드별로 고정한다. 예전에 name 필드에서
+  // @blur 를 빼도 전체 테스트가 통과했던 사고가 있었다 — 필드 하나라도 배선이 빠지면
+  // 그 필드의 케이스만 정확히 실패해야 한다.
+  it.each([
+    ['loginId', '4~20자 영문·숫자', 'ab', '아이디는 4~20자 영문·숫자입니다.'],
+    [
+      'password',
+      `${PASSWORD_MIN_LENGTH}~${PASSWORD_MAX_LENGTH}자`,
+      'abc',
+      `비밀번호는 ${PASSWORD_MIN_LENGTH}~${PASSWORD_MAX_LENGTH}자여야 합니다.`
+    ],
+    ['passwordConfirm', '비밀번호를 한 번 더 입력', 'abc', '비밀번호가 일치하지 않습니다.'],
+    ['name', '이름', '   ', '이름을 입력해주세요.'],
+    ['email', 'example@gighub.com', 'abc', '올바른 이메일 형식이 아닙니다.'],
+    ['phone', '010-0000-0000 (선택)', '123', '올바른 전화번호 형식이 아닙니다.']
+  ])('%s 필드를 떠나면 형식 오류를 보여준다', async (_field, placeholder, value, message) => {
+    const wrapper = factory()
+    const input = getInput(wrapper, placeholder)
+
+    await input.setValue(value)
+    await input.trigger('blur')
+
+    expect(wrapper.text()).toContain(message)
+  })
+
+  it('중복확인 성공은 필드 아래에 표시한다', async () => {
+    checkLoginId.mockResolvedValue({ available: true })
+    const wrapper = factory()
+
+    await getInput(wrapper, '4~20자 영문·숫자').setValue('newuser1')
+    await checkButtons(wrapper)[0].trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('.msg.success').text()).toBe('사용 가능한 아이디입니다.')
+    // 토스트가 아니라 필드로 옮겼다 — 토스트 큐에는 아무것도 없어야 한다.
+    const ui = useUiStore()
+    expect(ui.toasts).toHaveLength(0)
+  })
+
+  it('중복확인 실패는 필드 오류로 표시한다', async () => {
+    checkLoginId.mockResolvedValue({ available: false })
+    const wrapper = factory()
+
+    await getInput(wrapper, '4~20자 영문·숫자').setValue('taken')
+    await checkButtons(wrapper)[0].trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('이미 사용 중인 아이디입니다.')
+  })
+
+  // Important 1: 응답이 오는 동안 값이 바뀌면, 그 응답은 지금 화면에 있는 값에 대한
+  // 답이 아니다. 무시하지 않으면 서버가 보지도 못한 값에 대해 '확인완료'가 되살아난다.
+  it('중복확인 응답이 오기 전에 값이 바뀌면 그 응답은 무시한다', async () => {
+    let resolveCheck
+    checkLoginId.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveCheck = resolve
+        })
+    )
+    const wrapper = factory()
+    const loginIdInput = getInput(wrapper, '4~20자 영문·숫자')
+
+    await loginIdInput.setValue('checked1')
+    await checkButtons(wrapper)[0].trigger('click') // 'checked1' 로 요청 시작, 아직 응답 없음
+
+    await loginIdInput.setValue('changed2') // 응답 전에 값을 바꿈
+
+    resolveCheck({ available: true })
+    await flushPromises()
+
+    // 서버는 'checked1' 에 대해서만 답했다 — 'changed2' 에 대해 확인완료로 보이면 안 된다.
+    expect(wrapper.find('.msg.success').exists()).toBe(false)
+    expect(checkButtons(wrapper).some((b) => b.text().includes('중복확인'))).toBe(true)
+  })
+
+  // Important 1(리뷰): 성공 응답뿐 아니라 실패(거부) 응답도 같은 방식으로 무시해야 한다.
+  // checkAvailabilityBeforeSubmit 의 가드(아래)와는 다른 지점이다 — 이건 응답이 오는
+  // '동안' 값이 바뀐 경우를 막는다. onCheckLoginId/onCheckEmail 은 구조가 동일해서(캡처한
+  // 값과 비교하는 가드가 성공·실패 분기에 각각 하나씩) loginId 쪽만 검증하고 email 은
+  // 같은 코드 경로를 그대로 복제한 것이므로 생략한다.
+  it('중복확인이 실패로 응답하기 전에 값이 바뀌면 그 응답도 무시한다', async () => {
+    let rejectCheck
+    checkLoginId.mockImplementation(
+      () =>
+        new Promise((_resolve, reject) => {
+          rejectCheck = reject
+        })
+    )
+    const wrapper = factory()
+    const loginIdInput = getInput(wrapper, '4~20자 영문·숫자')
+
+    await loginIdInput.setValue('checked1')
+    await checkButtons(wrapper)[0].trigger('click') // 'checked1' 로 요청 시작, 아직 응답 없음
+
+    await loginIdInput.setValue('changed2') // 실패 응답이 오기 전에 값을 바꿈
+
+    rejectCheck({
+      response: {
+        data: { fieldErrors: [{ field: 'loginId', reason: '이미 사용 중인 아이디입니다.' }] }
+      },
+      fieldErrors: [{ field: 'loginId', reason: '이미 사용 중인 아이디입니다.' }]
+    })
+    await flushPromises()
+
+    // 서버는 'checked1' 에 대해 거부했을 뿐 'changed2' 에는 아무 말도 하지 않았다.
+    expect(wrapper.text()).not.toContain('이미 사용 중인 아이디입니다.')
+  })
+
+  // Minor 3(리뷰): errors 와 checkErrors 가 동시에 채워지는 상태를 만들어 우선순위를
+  // 고정한다. checkAvailabilityBeforeSubmit 은 형식이 무효면 checkErrors 를 건드리지
+  // 않도록 가드를 두므로(호출 순서에 기대지 않기 위해), 그 함수만으로는 두 슬롯을 동시에
+  // 채울 수 없다. 대신 실제로 있을 수 있는 경합을 쓴다: 제출(signup) 응답이 오는 동안
+  // 사용자가 이미 통과했던 아이디를 지워 형식을 깨고, 그 뒤에 서버가 그 필드에 대한
+  // 거부(fieldErrors)로 응답한다 — onSubmit 의 catch 라우팅에는 이 가드가 없어서
+  // (Finding 1 에서 고친 라우팅 자체와는 별개로) 두 슬롯이 실제로 동시에 채워진다.
+  it('형식 오류가 중복확인 관련 서버 메시지보다 먼저 보인다', async () => {
+    let rejectSignup
+    signup.mockImplementation(
+      () =>
+        new Promise((_resolve, reject) => {
+          rejectSignup = reject
+        })
+    )
+    const wrapper = factory()
+    await fillValidForm(wrapper)
+    await checkButtons(wrapper)[0].trigger('click')
+    await flushPromises()
+    await checkButtons(wrapper)[0].trigger('click')
+    await flushPromises()
+
+    await wrapper.find('form').trigger('submit') // signup() 호출, 아직 응답 없음
+
+    // 응답이 오기 전에 아이디를 지워 형식을 깨뜨린다 — errors.loginId 가 채워진다.
+    await getInput(wrapper, '4~20자 영문·숫자').setValue('')
+
+    rejectSignup({
+      response: {
+        data: { fieldErrors: [{ field: 'loginId', reason: '이미 사용 중인 아이디입니다.' }] }
+      },
+      fieldErrors: [{ field: 'loginId', reason: '이미 사용 중인 아이디입니다.' }]
+    })
+    await flushPromises()
+
+    // 지금 errors.loginId(형식 오류)와 checkErrors.loginId(서버 거부)가 동시에 채워졌다.
+    // 이미 지워버린 값에 대해 "이미 사용 중"이라고 말하는 건 사용자를 혼란시키므로
+    // 형식 오류가 항상 먼저 보여야 한다.
+    expect(wrapper.text()).toContain('아이디를 입력해주세요.')
+    expect(wrapper.text()).not.toContain('이미 사용 중인 아이디입니다.')
   })
 
   it('아이디 중복확인이 실패하면 서버 메시지를 토스트로 보여준다', async () => {
@@ -59,9 +258,9 @@ describe('AuthSignupForm', () => {
     const ui = useUiStore()
     const toastSpy = vi.spyOn(ui, 'toast')
 
-    const wrapper = mountForm()
-    await wrapper.findAll('input')[0].setValue('owner01')
-    await checkLoginIdButton(wrapper).trigger('click')
+    const wrapper = factory()
+    await getInput(wrapper, '4~20자 영문·숫자').setValue('owner01')
+    await checkButtons(wrapper)[0].trigger('click')
     await flushPromises()
 
     expect(toastSpy).toHaveBeenCalledWith('잠시 후 다시 시도해주세요.', { type: 'danger' })
@@ -72,9 +271,9 @@ describe('AuthSignupForm', () => {
     const ui = useUiStore()
     const toastSpy = vi.spyOn(ui, 'toast')
 
-    const wrapper = mountForm()
-    await wrapper.findAll('input')[4].setValue('owner@test.com')
-    await checkEmailButton(wrapper).trigger('click')
+    const wrapper = factory()
+    await getInput(wrapper, 'example@gighub.com').setValue('owner@test.com')
+    await checkButtons(wrapper)[1].trigger('click')
     await flushPromises()
 
     expect(toastSpy).toHaveBeenCalledWith('잠시 후 다시 시도해주세요.', { type: 'danger' })
@@ -93,11 +292,11 @@ describe('AuthSignupForm', () => {
     const ui = useUiStore()
     const toastSpy = vi.spyOn(ui, 'toast')
 
-    const wrapper = mountForm()
+    const wrapper = factory()
     await fillValidForm(wrapper)
-    await checkLoginIdButton(wrapper).trigger('click')
+    await checkButtons(wrapper)[0].trigger('click')
     await flushPromises()
-    await checkEmailButton(wrapper).trigger('click')
+    await checkButtons(wrapper)[0].trigger('click')
     await flushPromises()
     await wrapper.find('form').trigger('submit')
     await flushPromises()
@@ -109,16 +308,110 @@ describe('AuthSignupForm', () => {
     )
   })
 
+  // Finding 1(리뷰): 화면은 errors.loginId || serverErrors.loginId 로 합쳐 보여주기 때문에
+  // 메시지가 "보인다"는 것만으로는 어느 슬롯에 들어갔는지 증명하지 못한다 — errors 로
+  // 잘못 들어가도 똑같이 보인다. 결과(consequence)로 검증한다: errors 에 잘못 들어갔다면
+  // useFieldValidation 의 watcher 가 touched 된 다른 필드를 고칠 때 loginId 규칙도 함께
+  // 재평가되어 형식은 여전히 유효하므로 메시지가 지워진다. serverErrors 에 제대로 들어갔다면
+  // loginId 자신의 값을 건드리지 않는 한 절대 지워지지 않는다.
+  it('가입 요청의 아이디 필드 오류는 다른 필드를 고쳐도 사라지지 않는다', async () => {
+    const conflict = {
+      response: {
+        data: { fieldErrors: [{ field: 'loginId', reason: '이미 사용 중인 아이디입니다.' }] }
+      },
+      fieldErrors: [{ field: 'loginId', reason: '이미 사용 중인 아이디입니다.' }]
+    }
+    signup.mockRejectedValue(conflict)
+
+    const wrapper = factory()
+    await fillValidForm(wrapper)
+    await checkButtons(wrapper)[0].trigger('click')
+    await flushPromises()
+    await checkButtons(wrapper)[0].trigger('click')
+    await flushPromises()
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+    expect(wrapper.text()).toContain('이미 사용 중인 아이디입니다.')
+
+    // loginId 가 아닌, 이미 touched 된 다른 필드(비밀번호)를 고친다. loginId 자신의 값은
+    // 그대로다 — 그런데도 잘못된 슬롯이면 재검증 watcher 가 메시지를 지운다.
+    await getInput(wrapper, `${PASSWORD_MIN_LENGTH}~${PASSWORD_MAX_LENGTH}자`).setValue('newpass1')
+
+    expect(wrapper.text()).toContain('이미 사용 중인 아이디입니다.')
+  })
+
+  // Finding 1: 가용성(아이디·이메일)이 아닌 필드의 서버 거부도 serverErrors 로 가야 한다.
+  // errors 에 쓰면 validateAll() 이 이미 모든 필드를 touched 로 올린 뒤라, 관계없는 다른
+  // 필드(name)를 고치는 순간 재검증 watcher 가 password 규칙(형식은 여전히 유효)을 다시
+  // 평가해 메시지를 지워버린다 — 비밀번호 변경 화면(F1)과 동일한 모양의 버그다.
+  it('가입 요청의 비밀번호 필드 오류는 다른 필드를 고쳐도 사라지지 않는다', async () => {
+    const conflict = {
+      response: {
+        data: { fieldErrors: [{ field: 'password', reason: '유출된 비밀번호입니다.' }] }
+      },
+      fieldErrors: [{ field: 'password', reason: '유출된 비밀번호입니다.' }]
+    }
+    signup.mockRejectedValue(conflict)
+
+    const wrapper = factory()
+    await fillValidForm(wrapper)
+    await checkButtons(wrapper)[0].trigger('click')
+    await flushPromises()
+    await checkButtons(wrapper)[0].trigger('click')
+    await flushPromises()
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+    expect(wrapper.text()).toContain('유출된 비밀번호입니다.')
+
+    // password 가 아닌, 이미 touched 된 다른 필드(이름)를 고친다. password 자신의 값은
+    // 그대로다 — 그런데도 errors 슬롯에 잘못 들어갔다면 재검증 watcher 가 메시지를 지운다.
+    await getInput(wrapper, '이름').setValue('다른이름')
+
+    expect(wrapper.text()).toContain('유출된 비밀번호입니다.')
+  })
+
+  // Finding 5: 중복확인을 통과해 '확인완료' 배지가 뜬 뒤, 제출 시점에 경합(다른 사용자가
+  // 먼저 같은 아이디로 가입)으로 서버가 그 필드를 거부하면 배지와 거부 메시지가 동시에
+  // 보이는 모순이 생긴다 — setServerError 가 이 경우 중복확인 완료 상태도 함께 지운다.
+  it('중복확인 완료 배지는 서버 거부 메시지와 동시에 표시되지 않는다', async () => {
+    const conflict = {
+      response: {
+        data: { fieldErrors: [{ field: 'loginId', reason: '이미 사용 중인 아이디입니다.' }] }
+      },
+      fieldErrors: [{ field: 'loginId', reason: '이미 사용 중인 아이디입니다.' }]
+    }
+    signup.mockRejectedValue(conflict)
+
+    const wrapper = factory()
+    await fillValidForm(wrapper)
+    await checkButtons(wrapper)[0].trigger('click')
+    await flushPromises()
+    await checkButtons(wrapper)[0].trigger('click')
+    await flushPromises()
+    // 아이디·이메일 모두 중복확인을 통과해 배지 두 개가 보이는 상태를 만든다.
+    expect(wrapper.findAll('.verified')).toHaveLength(2)
+
+    // 통과 뒤 실제 제출에서 경합으로 거부된다.
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('이미 사용 중인 아이디입니다.')
+    // 아이디의 확인완료 배지는 사라지고(이메일 배지 하나만 남고) 다시 '중복확인' 버튼이
+    // 보여야 한다 — 배지와 거부 메시지가 함께 보이면 사용자에게 모순된 신호를 준다.
+    expect(wrapper.findAll('.verified')).toHaveLength(1)
+    expect(checkButtons(wrapper)).toHaveLength(1)
+  })
+
   it('가입 요청 실패에 매칭되는 필드가 없으면 토스트로 대체한다', async () => {
     signup.mockRejectedValue({ response: { data: { message: '서버 오류가 발생했습니다.' } } })
     const ui = useUiStore()
     const toastSpy = vi.spyOn(ui, 'toast')
 
-    const wrapper = mountForm()
+    const wrapper = factory()
     await fillValidForm(wrapper)
-    await checkLoginIdButton(wrapper).trigger('click')
+    await checkButtons(wrapper)[0].trigger('click')
     await flushPromises()
-    await checkEmailButton(wrapper).trigger('click')
+    await checkButtons(wrapper)[0].trigger('click')
     await flushPromises()
     await wrapper.find('form').trigger('submit')
     await flushPromises()
