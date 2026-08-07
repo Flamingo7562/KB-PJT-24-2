@@ -1,0 +1,7 @@
+Pretendard-Regular.ttf, Pretendard-Bold.ttf
+
+Font: Pretendard (https://github.com/orioncactus/pretendard)
+License: SIL Open Font License 1.1 (permits embedding in generated documents)
+
+Reused from frontend/src/assets/fonts/ so the server-generated contract PDF
+(DEC-DOCUMENT-STORAGE) renders the same Korean glyphs as the web UI.

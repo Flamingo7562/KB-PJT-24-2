@@ -4,22 +4,32 @@ import com.gighub.auth.security.AuthPrincipal;
 import com.gighub.common.exception.ConflictException;
 import com.gighub.common.exception.RoleMismatchException;
 import com.gighub.config.RootConfig;
+import com.gighub.document.service.DocumentFileAccessService;
+import com.gighub.document.service.DocumentFileResult;
+import com.gighub.document.storage.ContractStorageKeys;
+import com.gighub.document.storage.Sha256;
 import com.gighub.idempotency.exception.IdempotencyClaimKeyReusedException;
 import com.gighub.invitation.exception.InvitationAlreadyAcceptedException;
 import com.gighub.invitation.service.InvitationAcceptResult;
 import com.gighub.invitation.service.InvitationAcceptService;
 import com.gighub.invitation.service.InvitationIssueService;
 import com.gighub.member.domain.UserRole;
+import com.gighub.document.storage.DocumentStorageProperties;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 import javax.sql.DataSource;
 
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.io.IOException;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -32,6 +42,7 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -58,6 +69,9 @@ class InvitationAcceptDatabaseIntegrationTest {
             JdbcTemplate jdbcTemplate = new JdbcTemplate(context.getBean(DataSource.class));
             InvitationIssueService issueService = context.getBean(InvitationIssueService.class);
             InvitationAcceptService acceptService = context.getBean(InvitationAcceptService.class);
+            DocumentFileAccessService fileAccessService =
+                    context.getBean(DocumentFileAccessService.class);
+            Path storageBasePath = context.getBean(DocumentStorageProperties.class).getBasePath();
 
             String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 8);
             Fixture fixture = insertFixture(jdbcTemplate, suffix, INITIAL_AVAILABLE);
@@ -67,11 +81,12 @@ class InvitationAcceptDatabaseIntegrationTest {
                 verifyInsufficientBalanceLeavesNothing(
                         jdbcTemplate, issueService, acceptService, fixture);
                 verifyAcceptWritesEveryAggregate(
-                        jdbcTemplate, issueService, acceptService, fixture);
+                        jdbcTemplate, issueService, acceptService, fileAccessService,
+                        storageBasePath, fixture);
                 verifyReplayDoesNotMoveMoneyAgain(jdbcTemplate, acceptService, fixture);
                 verifyReusedKeyOnAnotherTokenIsRejected(issueService, acceptService, fixture);
             } finally {
-                cleanUp(jdbcTemplate, fixture);
+                cleanUp(jdbcTemplate, fixture, storageBasePath);
             }
         }
     }
@@ -84,6 +99,7 @@ class InvitationAcceptDatabaseIntegrationTest {
             JdbcTemplate jdbcTemplate = new JdbcTemplate(context.getBean(DataSource.class));
             InvitationIssueService issueService = context.getBean(InvitationIssueService.class);
             InvitationAcceptService acceptService = context.getBean(InvitationAcceptService.class);
+            Path storageBasePath = context.getBean(DocumentStorageProperties.class).getBasePath();
 
             String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 8);
             Fixture fixture = insertFixture(jdbcTemplate, suffix, INITIAL_AVAILABLE);
@@ -114,6 +130,10 @@ class InvitationAcceptDatabaseIntegrationTest {
                                 Integer.class,
                                 fixture.workCaseId)
                 );
+                assertEquals(1, countRows(jdbcTemplate, "documents", fixture));
+                assertEquals(2, countDocumentRows(jdbcTemplate, "document_versions", fixture));
+                assertEquals(1, countDocumentRows(jdbcTemplate, "document_signatures", fixture));
+                assertEquals(1, countDocumentRows(jdbcTemplate, "document_shares", fixture));
                 // 진 쪽의 예치가 남으면 사장님 잔액이 두 번 잠깁니다.
                 assertEquals(
                         INITIAL_AVAILABLE - WAGE,
@@ -121,7 +141,7 @@ class InvitationAcceptDatabaseIntegrationTest {
                 );
             } finally {
                 executor.shutdownNow();
-                cleanUp(jdbcTemplate, fixture);
+                cleanUp(jdbcTemplate, fixture, storageBasePath);
             }
         }
     }
@@ -189,6 +209,8 @@ class InvitationAcceptDatabaseIntegrationTest {
             JdbcTemplate jdbcTemplate,
             InvitationIssueService issueService,
             InvitationAcceptService acceptService,
+            DocumentFileAccessService fileAccessService,
+            Path storageBasePath,
             Fixture fixture) {
         String token = issueToken(issueService, fixture);
 
@@ -223,6 +245,74 @@ class InvitationAcceptDatabaseIntegrationTest {
                 fixture.workCaseId);
         assertEquals(WAGE, ((Number) contract.get("agreed_wage")).longValue());
         assertNotNull(contract.get("terms_snapshot"));
+
+        Map<String, Object> document = jdbcTemplate.queryForMap(
+                "SELECT id, owner_user_id, status FROM documents"
+                        + " WHERE work_case_id = ? AND document_type = 'EMPLOYMENT_CONTRACT'",
+                fixture.workCaseId);
+        long documentId = ((Number) document.get("id")).longValue();
+        assertEquals(fixture.ownerUserId, ((Number) document.get("owner_user_id")).longValue());
+        assertEquals("ACTIVE", document.get("status"));
+        assertEquals(2, jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM document_versions WHERE document_id = ?",
+                Integer.class, documentId));
+        assertEquals(1, jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM document_signatures WHERE document_id = ?",
+                Integer.class, documentId));
+        assertEquals(1, jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM document_shares"
+                        + " WHERE document_id = ? AND shared_with_user_id = ?"
+                        + " AND purpose = 'CONTRACT_PARTY' AND status = 'ACTIVE'",
+                Integer.class, documentId, fixture.workerUserId));
+
+        List<Map<String, Object>> versions = jdbcTemplate.queryForList(
+                "SELECT id, version_no, version_type, storage_key, size_bytes, checksum"
+                        + " FROM document_versions WHERE document_id = ? ORDER BY version_no",
+                documentId);
+        assertEquals(2, versions.size());
+        assertEquals("ORIGINAL", versions.get(0).get("version_type"));
+        assertEquals("SIGNED", versions.get(1).get("version_type"));
+        assertEquals(
+                ContractStorageKeys.finalKey(fixture.workCaseId, documentId, 1),
+                versions.get(0).get("storage_key"));
+        assertEquals(
+                ContractStorageKeys.finalKey(fixture.workCaseId, documentId, 2),
+                versions.get(1).get("storage_key"));
+        assertTrue(Files.exists(storageBasePath.resolve(
+                versions.get(0).get("storage_key").toString())));
+        assertTrue(Files.exists(storageBasePath.resolve(
+                versions.get(1).get("storage_key").toString())));
+
+        Map<String, Object> signature = jdbcTemplate.queryForMap(
+                "SELECT source_version_id, signed_version_id, signer_user_id,"
+                        + " source_checksum, signed_checksum, typed_name, signature_method,"
+                        + " consented_at, signed_at FROM document_signatures"
+                        + " WHERE document_id = ?",
+                documentId);
+        assertEquals(
+                ((Number) versions.get(0).get("id")).longValue(),
+                ((Number) signature.get("source_version_id")).longValue());
+        assertEquals(
+                ((Number) versions.get(1).get("id")).longValue(),
+                ((Number) signature.get("signed_version_id")).longValue());
+        assertEquals(fixture.workerUserId,
+                ((Number) signature.get("signer_user_id")).longValue());
+        assertEquals("수락검증알바", signature.get("typed_name"));
+        assertEquals("TYPED_NAME", signature.get("signature_method"));
+        assertArrayEquals((byte[]) versions.get(0).get("checksum"),
+                (byte[]) signature.get("source_checksum"));
+        assertArrayEquals((byte[]) versions.get(1).get("checksum"),
+                (byte[]) signature.get("signed_checksum"));
+
+        DocumentFileResult ownerFile =
+                fileAccessService.loadFile(documentId, fixture.ownerUserId, "view");
+        DocumentFileResult workerFile =
+                fileAccessService.loadFile(documentId, fixture.workerUserId, "download");
+        assertArrayEquals(ownerFile.getContent(), workerFile.getContent());
+        assertArrayEquals((byte[]) versions.get(1).get("checksum"),
+                Sha256.digest(ownerFile.getContent()));
+        assertDocumentUniqueness(jdbcTemplate, documentId,
+                ((Number) versions.get(0).get("id")).longValue());
 
         // 계약·에스크로·초대가 모두 같은 순간을 가리켜야 합니다.
         LocalDateTime acceptedAt = toLocalDateTime(contract.get("accepted_at"));
@@ -437,9 +527,65 @@ class InvitationAcceptDatabaseIntegrationTest {
                 "SELECT id FROM users WHERE login_id = ?", Long.class, loginId);
     }
 
-    private void cleanUp(JdbcTemplate jdbcTemplate, Fixture fixture) {
+    private int countDocumentRows(
+            JdbcTemplate jdbcTemplate, String tableName, Fixture fixture) {
+        return jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM " + tableName
+                        + " WHERE document_id IN (SELECT id FROM documents WHERE work_case_id = ?)",
+                Integer.class, fixture.workCaseId);
+    }
+
+    private void assertDocumentUniqueness(
+            JdbcTemplate jdbcTemplate, long documentId, long originalVersionId) {
+        assertThrows(DataIntegrityViolationException.class, () -> jdbcTemplate.update(
+                "INSERT INTO documents"
+                        + " (created_by_user_id, owner_user_id, work_case_id, document_type,"
+                        + " status, issued_on)"
+                        + " SELECT created_by_user_id, owner_user_id, work_case_id, document_type,"
+                        + " status, issued_on FROM documents WHERE id = ?",
+                documentId));
+        assertThrows(DataIntegrityViolationException.class, () -> jdbcTemplate.update(
+                "INSERT INTO document_versions"
+                        + " (document_id, version_no, version_type, storage_key, mime_type,"
+                        + " size_bytes, checksum)"
+                        + " SELECT document_id, version_no, version_type, CONCAT(storage_key, '.dup'),"
+                        + " mime_type, size_bytes, checksum FROM document_versions WHERE id = ?",
+                originalVersionId));
+        assertThrows(DataIntegrityViolationException.class, () -> jdbcTemplate.update(
+                "INSERT INTO document_signatures"
+                        + " (document_id, source_version_id, signed_version_id, signer_user_id,"
+                        + " source_checksum, signed_checksum, typed_name, signature_method,"
+                        + " consented_at, signed_at)"
+                        + " SELECT document_id, source_version_id, signed_version_id, signer_user_id,"
+                        + " source_checksum, signed_checksum, typed_name, signature_method,"
+                        + " consented_at, signed_at FROM document_signatures WHERE document_id = ?",
+                documentId));
+        assertThrows(DataIntegrityViolationException.class, () -> jdbcTemplate.update(
+                "INSERT INTO document_shares"
+                        + " (document_id, work_case_id, shared_with_user_id, purpose, status,"
+                        + " expires_at, revoked_at)"
+                        + " SELECT document_id, work_case_id, shared_with_user_id, purpose, status,"
+                        + " expires_at, revoked_at FROM document_shares WHERE document_id = ?",
+                documentId));
+    }
+
+    private void cleanUp(
+            JdbcTemplate jdbcTemplate, Fixture fixture, Path storageBasePath) throws IOException {
         List<Long> workCaseIds = List.of(fixture.workCaseId, fixture.otherWorkCaseId);
         for (Long workCaseId : workCaseIds) {
+            List<Long> documentIds = jdbcTemplate.queryForList(
+                    "SELECT id FROM documents WHERE work_case_id = ?", Long.class, workCaseId);
+            for (Long documentId : documentIds) {
+                jdbcTemplate.update(
+                        "DELETE FROM document_access_logs WHERE document_id = ?", documentId);
+                jdbcTemplate.update(
+                        "DELETE FROM document_shares WHERE document_id = ?", documentId);
+                jdbcTemplate.update(
+                        "DELETE FROM document_signatures WHERE document_id = ?", documentId);
+                jdbcTemplate.update(
+                        "DELETE FROM document_versions WHERE document_id = ?", documentId);
+                jdbcTemplate.update("DELETE FROM documents WHERE id = ?", documentId);
+            }
             jdbcTemplate.update(
                     "DELETE FROM wallet_transactions WHERE work_case_id = ?", workCaseId);
             jdbcTemplate.update("DELETE FROM settlements WHERE work_case_id = ?", workCaseId);
@@ -447,6 +593,7 @@ class InvitationAcceptDatabaseIntegrationTest {
             jdbcTemplate.update("DELETE FROM work_contracts WHERE work_case_id = ?", workCaseId);
             jdbcTemplate.update("DELETE FROM work_invitations WHERE work_case_id = ?", workCaseId);
             jdbcTemplate.update("DELETE FROM work_cases WHERE id = ?", workCaseId);
+            deleteStorageFixture(storageBasePath, workCaseId);
         }
         jdbcTemplate.update(
                 "DELETE FROM idempotency_requests WHERE user_id IN (?, ?, ?)",
@@ -460,6 +607,24 @@ class InvitationAcceptDatabaseIntegrationTest {
                 fixture.ownerUserId,
                 fixture.workerUserId,
                 fixture.otherWorkerId);
+    }
+
+    private void deleteStorageFixture(Path storageBasePath, long workCaseId) throws IOException {
+        Path workCasePath = storageBasePath.resolve("contracts").resolve(Long.toString(workCaseId));
+        if (!Files.exists(workCasePath)) {
+            return;
+        }
+        try (java.util.stream.Stream<Path> paths = Files.walk(workCasePath)) {
+            paths.sorted(Comparator.reverseOrder()).forEach(path -> {
+                try {
+                    Files.deleteIfExists(path);
+                } catch (IOException failure) {
+                    throw new java.io.UncheckedIOException(failure);
+                }
+            });
+        } catch (java.io.UncheckedIOException failure) {
+            throw failure.getCause();
+        }
     }
 
     /** 검증에 필요한 Fixture 식별자 묶음입니다. */

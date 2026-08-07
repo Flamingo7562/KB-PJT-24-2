@@ -82,6 +82,7 @@
 - Spring Framework, Spring Security, Jackson, Log4j2, JUnit 모듈은 각 BOM의 버전선으로 정렬한다.
 - Servlet API와 Annotation API는 Tomcat이 제공하므로 운영 WAR에 중복 포함하지 않는다.
 - Connector/J 버전을 변경하면 `backend/build.gradle`과 `compose.yaml`의 Flyway driver mount 파일명을 같은 PR에서 변경한다.
+- 계약 PDF의 한글 Font는 `frontend/src/assets/fonts/`의 Pretendard(SIL Open Font License 1.1)를 `backend/src/main/resources/fonts/`에 복제해 재사용한다. 별도 Font 라이선스 구매나 신규 패키지 의존성이 아니며, PDFBox가 WAR에 Embed한다.
 - Hibernate Validator는 Bean Validation 구현체이며 금지된 Hibernate ORM에 해당하지 않는다.
 - Springfox는 현재 구현을 탐색하는 Runtime 도구이며 `docs/specs/API_SPEC.md`를 대체하지 않는다. Springfox 버전을 올릴 때는 사용 중인 `EnableOpenApi`(OAS 3.0) 경계와 호환되는지 먼저 확인한다.
 

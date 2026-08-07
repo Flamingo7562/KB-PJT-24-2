@@ -20,8 +20,6 @@ package com.gighub.contract;
  * 이미 확정된 수락을 뒤집을 수 없으므로 실패를 밖으로 던지지 않고 구현이 스스로 기록합니다.
  * 승격에 실패해도 계약과 수락 200은 그대로 유지되고, 조회 시점에 임시 Object로 Fallback해
  * 사용자는 같은 파일을 받습니다.</p>
- *
- * <p>구현은 #157에서 채웁니다. 그 전까지는 파일 없이 나머지 Aggregate가 완결됩니다.</p>
  */
 public interface ContractArtifactPort {
 

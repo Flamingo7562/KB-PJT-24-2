@@ -17,4 +17,8 @@ public final class ApiTimes {
     public static Instant toInstant(LocalDateTime value) {
         return value == null ? null : value.atZone(DATABASE_ZONE).toInstant();
     }
+
+    public static LocalDateTime toLocalDateTime(Instant value) {
+        return value == null ? null : LocalDateTime.ofInstant(value, DATABASE_ZONE);
+    }
 }

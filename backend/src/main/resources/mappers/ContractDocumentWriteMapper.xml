@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.gighub.document.mapper.ContractDocumentWriteMapper">
+
+    <insert id="insertDocument" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO documents
+            (created_by_user_id, owner_user_id, work_case_id, document_type, status, issued_on)
+        VALUES
+            (#{createdByUserId}, #{ownerUserId}, #{workCaseId}, #{documentType}, #{status}, #{issuedOn})
+    </insert>
+
+    <insert id="insertVersion" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO document_versions
+            (document_id, version_no, version_type, storage_key, mime_type, size_bytes, checksum)
+        VALUES
+            (#{documentId}, #{versionNo}, #{versionType}, #{storageKey}, #{mimeType}, #{sizeBytes}, #{checksum})
+    </insert>
+
+    <insert id="insertSignature">
+        INSERT INTO document_signatures
+            (document_id, source_version_id, signed_version_id, signer_user_id,
+             source_checksum, signed_checksum, typed_name, signature_method,
+             consented_at, signed_at)
+        VALUES
+            (#{documentId}, #{sourceVersionId}, #{signedVersionId}, #{signerUserId},
+             #{sourceChecksum}, #{signedChecksum}, #{typedName}, #{signatureMethod},
+             #{consentedAt}, #{signedAt})
+    </insert>
+
+    <insert id="insertShare">
+        INSERT INTO document_shares
+            (document_id, work_case_id, shared_with_user_id, purpose)
+        VALUES
+            (#{documentId}, #{workCaseId}, #{sharedWithUserId}, #{purpose})
+    </insert>
+
+    <update id="updateDocumentStatus">
+        UPDATE documents
+        SET status = #{status}
+        WHERE id = #{documentId}
+          AND status = #{expectedStatus}
+    </update>
+
+    <select id="findPromotionRowsByWorkCaseId"
+            resultType="com.gighub.document.mapper.result.ContractVersionPromotionRow">
+        SELECT dv.document_id  AS documentId,
+               dv.version_no   AS versionNo,
+               dv.version_type AS versionType,
+               dv.storage_key  AS storageKey,
+               dv.checksum     AS checksum
+        FROM documents d
+                 JOIN document_versions dv ON dv.document_id = d.id
+        WHERE d.work_case_id = #{workCaseId}
+          AND d.document_type = 'EMPLOYMENT_CONTRACT'
+    </select>
+
+</mapper>
