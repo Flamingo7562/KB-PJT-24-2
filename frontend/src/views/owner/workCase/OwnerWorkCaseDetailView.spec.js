@@ -19,7 +19,13 @@ vi.mock('@/services/workCases', () => ({
 }))
 vi.mock('@/utils/clipboard', () => ({ copyText: vi.fn().mockResolvedValue(true) }))
 
-import { createInvite, deleteWorkCase, getWorkCase, reissueInvite } from '@/services/workCases'
+import {
+  createInvite,
+  deleteWorkCase,
+  getWorkCase,
+  reissueInvite,
+  updateWorkCase
+} from '@/services/workCases'
 import { useUiStore } from '@/stores/ui'
 
 // startsAt 2026-08-01T00:00:00Z = KST 09:00. 아래 고정 시각(7/22)은 그보다 앞이라 "시작 전"이다.
@@ -64,6 +70,7 @@ describe('OwnerWorkCaseDetailView', () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-07-22T00:00:00Z'))
     getWorkCase.mockReset().mockResolvedValue({ ...DRAFT_DETAIL })
+    updateWorkCase.mockReset().mockResolvedValue(undefined)
     deleteWorkCase.mockReset().mockResolvedValue(undefined)
     createInvite.mockReset().mockResolvedValue({
       inviteUrl: 'https://app/invitations/abc',
@@ -85,6 +92,28 @@ describe('OwnerWorkCaseDetailView', () => {
 
     expect(wrapper.text()).toContain('09:00 ~ 18:00')
     expect(wrapper.text()).toContain('v3')
+  })
+
+  it('수정 실패의 breakMinutes 서버 오류를 휴게시간 필드에 표시한다', async () => {
+    updateWorkCase.mockRejectedValue({
+      response: {
+        data: {
+          fieldErrors: [{ field: 'breakMinutes', reason: '휴게시간은 0분 이상이어야 합니다.' }]
+        }
+      }
+    })
+    const wrapper = mountView()
+    await flushPromises()
+
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === '수정')
+      .trigger('click')
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+
+    expect(updateWorkCase).toHaveBeenCalled()
+    expect(wrapper.text()).toContain('휴게시간은 0분 이상이어야 합니다.')
   })
 
   it('초대·계약·예치·근태 근거가 없으면 진행 현황을 감춘다', async () => {

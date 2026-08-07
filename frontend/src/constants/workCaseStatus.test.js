@@ -59,16 +59,42 @@ describe('work-case status contract', () => {
     expect(summary).not.toHaveProperty('invited')
   })
 
-  // 실제 API는 목록 Item에 canIssueInvitation을 두지 않는다(AttendanceWorkCaseList가
-  // status===DRAFT로 판단). 이 Mock 데이터의 필드는 UI가 더 이상 읽지 않지만, 시나리오
-  // 다양성(발급 가능/이미 발급됨 DRAFT)을 남겨 향후 재도입 시 참고할 수 있게 둔다.
-  it('keeps distinct DRAFT scenarios in the mock fixture', async () => {
+  it('keeps the mock list aligned with the live API item contract', async () => {
     const { listWorkCases } = await importWithMock()
     const { content } = await listWorkCases(1)
-    const issuableDraft = content.find(({ workCaseId }) => workCaseId === 102)
-    const draftWithActiveInvitation = content.find(({ workCaseId }) => workCaseId === 104)
 
-    expect(issuableDraft).toMatchObject({ status: 'DRAFT' })
-    expect(draftWithActiveInvitation).toMatchObject({ status: 'DRAFT' })
+    for (const item of content) {
+      expect(item).toEqual(
+        expect.objectContaining({
+          workCaseId: expect.any(Number),
+          workDate: expect.any(String),
+          startsAt: expect.stringMatching(/Z$/),
+          endsAt: expect.stringMatching(/Z$/),
+          dailyWage: expect.any(Number),
+          status: expect.any(String)
+        })
+      )
+      expect(item).not.toHaveProperty('startTime')
+      expect(item).not.toHaveProperty('endTime')
+      expect(item).not.toHaveProperty('workerName')
+      expect(item).not.toHaveProperty('workplaceId')
+      if (item.worker) {
+        expect(item.worker).toEqual({ workerId: expect.any(Number), name: expect.any(String) })
+      }
+    }
+
+    const { content: workerMatches } = await listWorkCases(1, { keyword: '이알바' })
+    expect(workerMatches.map(({ workCaseId }) => workCaseId)).toEqual([101])
+  })
+
+  // 실제 API는 목록 Item에 capability를 두지 않으므로 Mock도 별도 필드 없이 DRAFT 항목만 둔다.
+  it('keeps multiple DRAFT items in the mock fixture', async () => {
+    const { listWorkCases } = await importWithMock()
+    const { content } = await listWorkCases(1)
+    const firstDraft = content.find(({ workCaseId }) => workCaseId === 102)
+    const secondDraft = content.find(({ workCaseId }) => workCaseId === 104)
+
+    expect(firstDraft).toMatchObject({ status: 'DRAFT' })
+    expect(secondDraft).toMatchObject({ status: 'DRAFT' })
   })
 })

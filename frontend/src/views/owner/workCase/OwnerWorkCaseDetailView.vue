@@ -108,7 +108,14 @@ const form = reactive({
   breakPaid: false,
   dailyWage: ''
 })
-const errors = reactive({ title: '', workDate: '', startTime: '', endTime: '', dailyWage: '' })
+const errors = reactive({
+  title: '',
+  workDate: '',
+  startTime: '',
+  endTime: '',
+  breakMinutes: '',
+  dailyWage: ''
+})
 
 async function load() {
   loading.value = true
@@ -139,6 +146,8 @@ function startEdit() {
 }
 
 function validate() {
+  // 직전 서버 검증 오류가 다음 제출을 막지 않도록 다시 검증할 때 비운다.
+  errors.breakMinutes = ''
   errors.title = isRequired(form.title, '제목').message
   errors.workDate = isRequired(form.workDate, '근무 날짜').message
   errors.startTime = isRequired(form.startTime, '시작시간').message
@@ -456,6 +465,7 @@ async function onReissueInvite() {
             type="number"
             label="휴게시간(분)"
             placeholder="0"
+            :error="errors.breakMinutes"
           />
 
           <div class="field">

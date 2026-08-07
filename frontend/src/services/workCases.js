@@ -28,142 +28,139 @@ const USE_MOCK_SETTLEMENT_DISPUTE = true
 
 // 지점별 근무 목록. 실제 API 처럼 workplaceId·keyword 로 걸러서 응답한다.
 // status 는 7단계 enum(@/constants/workCaseStatus). 요약 6버킷을 골고루 보이도록 구성.
-// canIssueInvitation은 status와 활성 work_invitations를 함께 본 서버 계산 capability다.
+// 목록 UI가 Mock에서도 실 API와 같은 필드 계약(startsAt/endsAt/worker)을 사용하도록 맞춘다.
 const mockWorkCaseList = [
   {
     workCaseId: 101,
     workplaceId: 1,
-    workerName: '이알바',
+    worker: { workerId: 1001, name: '이알바' },
     title: '주말 홀 서빙',
     workDate: '2026-07-22',
-    startTime: '10:00',
-    endTime: '18:00',
-    status: 'IN_PROGRESS',
-    matched: true
+    startsAt: '2026-07-22T01:00:00Z',
+    endsAt: '2026-07-22T09:00:00Z',
+    dailyWage: 90000,
+    status: 'IN_PROGRESS'
   },
   {
     workCaseId: 102,
     workplaceId: 1,
-    workerName: null,
+    worker: null,
     title: '평일 주방 보조',
     workDate: '2026-07-23',
-    startTime: '09:00',
-    endTime: '15:00',
-    status: 'DRAFT',
-    matched: false,
-    canIssueInvitation: true
+    startsAt: '2026-07-23T00:00:00Z',
+    endsAt: '2026-07-23T06:00:00Z',
+    dailyWage: 72000,
+    status: 'DRAFT'
   },
   {
     workCaseId: 103,
     workplaceId: 1,
-    workerName: '박알바',
+    worker: { workerId: 1002, name: '박알바' },
     title: '마감 청소',
     workDate: '2026-07-21',
-    startTime: '20:00',
-    endTime: '23:00',
-    status: 'COMPLETED',
-    matched: true
+    startsAt: '2026-07-21T11:00:00Z',
+    endsAt: '2026-07-21T14:00:00Z',
+    dailyWage: 45000,
+    status: 'COMPLETED'
   },
   {
     workCaseId: 104,
     workplaceId: 1,
-    workerName: null,
+    worker: null,
     title: '금요일 저녁 서빙',
     workDate: '2026-07-25',
-    startTime: '17:00',
-    endTime: '22:00',
-    status: 'DRAFT',
-    matched: false,
-    canIssueInvitation: false
+    startsAt: '2026-07-25T08:00:00Z',
+    endsAt: '2026-07-25T13:00:00Z',
+    dailyWage: 65000,
+    status: 'DRAFT'
   },
   {
     workCaseId: 105,
     workplaceId: 1,
-    workerName: '한알바',
+    worker: { workerId: 1003, name: '한알바' },
     title: '토요일 브런치',
     workDate: '2026-07-26',
-    startTime: '09:00',
-    endTime: '14:00',
-    status: 'READY',
-    matched: true
+    startsAt: '2026-07-26T00:00:00Z',
+    endsAt: '2026-07-26T05:00:00Z',
+    dailyWage: 65000,
+    status: 'READY'
   },
   {
     workCaseId: 106,
     workplaceId: 1,
-    workerName: '한알바2',
+    worker: { workerId: 1004, name: '한알바2' },
     title: '토요일 브런치',
     workDate: '2026-07-26',
-    startTime: '09:00',
-    endTime: '14:00',
-    status: 'ACCEPTED',
-    matched: true
+    startsAt: '2026-07-26T00:00:00Z',
+    endsAt: '2026-07-26T05:00:00Z',
+    dailyWage: 65000,
+    status: 'ACCEPTED'
   },
   {
     workCaseId: 107,
     workplaceId: 1,
-    workerName: '한알바3',
+    worker: { workerId: 1005, name: '한알바3' },
     title: '토요일 브런치',
     workDate: '2026-07-26',
-    startTime: '09:00',
-    endTime: '14:00',
-    status: 'COMPLETED',
-    matched: true
+    startsAt: '2026-07-26T00:00:00Z',
+    endsAt: '2026-07-26T05:00:00Z',
+    dailyWage: 65000,
+    status: 'COMPLETED'
   },
   {
     workCaseId: 108,
     workplaceId: 1,
-    workerName: '박알바2',
+    worker: { workerId: 1006, name: '박알바2' },
     title: '마감 청소',
     workDate: '2026-07-21',
-    startTime: '20:00',
-    endTime: '23:00',
-    status: 'COMPLETED',
-    matched: true
+    startsAt: '2026-07-21T11:00:00Z',
+    endsAt: '2026-07-21T14:00:00Z',
+    dailyWage: 45000,
+    status: 'COMPLETED'
   },
   {
     workCaseId: 109,
     workplaceId: 1,
-    workerName: '한알바4',
+    worker: { workerId: 1007, name: '한알바4' },
     title: '토요일 브런치',
     workDate: '2026-07-26',
-    startTime: '09:00',
-    endTime: '14:00',
-    status: 'IN_PROGRESS',
-    matched: true
+    startsAt: '2026-07-26T00:00:00Z',
+    endsAt: '2026-07-26T05:00:00Z',
+    dailyWage: 65000,
+    status: 'IN_PROGRESS'
   },
   {
     workCaseId: 201,
     workplaceId: 2,
-    workerName: '최알바',
+    worker: { workerId: 2001, name: '최알바' },
     title: '홍대 오픈 캐셔',
     workDate: '2026-07-24',
-    startTime: '08:00',
-    endTime: '14:00',
-    status: 'IN_PROGRESS',
-    matched: true
+    startsAt: '2026-07-23T23:00:00Z',
+    endsAt: '2026-07-24T05:00:00Z',
+    dailyWage: 78000,
+    status: 'IN_PROGRESS'
   },
   {
     workCaseId: 202,
     workplaceId: 2,
-    workerName: null,
+    worker: null,
     title: '주말 디저트 보조',
     workDate: '2026-07-25',
-    startTime: '13:00',
-    endTime: '19:00',
-    status: 'DRAFT',
-    matched: false,
-    canIssueInvitation: true
+    startsAt: '2026-07-25T04:00:00Z',
+    endsAt: '2026-07-25T10:00:00Z',
+    dailyWage: 78000,
+    status: 'DRAFT'
   },
   {
     workCaseId: 203,
     workplaceId: 2,
-    workerName: '김알바',
+    worker: { workerId: 2002, name: '김알바' },
     title: '평일 마감 정리',
     workDate: '2026-07-20',
-    startTime: '18:00',
-    endTime: '23:00',
-    status: 'NO_SHOW',
-    matched: true
+    startsAt: '2026-07-20T09:00:00Z',
+    endsAt: '2026-07-20T14:00:00Z',
+    dailyWage: 65000,
+    status: 'NO_SHOW'
   }
 ]
 
@@ -185,15 +182,29 @@ function filterMockWorkCases(workplaceId, { keyword = '', status = '', from = ''
       (s) =>
         q === '' ||
         s.title.toLowerCase().includes(q) ||
-        (s.workerName ?? '').toLowerCase().includes(q)
+        (s.worker?.name ?? '').toLowerCase().includes(q)
     )
     .sort(
       (a, b) =>
         -(
           String(a.workDate).localeCompare(String(b.workDate)) ||
-          String(a.startTime).localeCompare(String(b.startTime))
+          String(a.startsAt).localeCompare(String(b.startsAt))
         )
     )
+}
+
+/** Mock 내부 필터용 workplaceId는 숨기고 실제 목록 응답 필드만 복사한다. */
+function toMockWorkCaseListItem(item) {
+  return {
+    workCaseId: item.workCaseId,
+    title: item.title,
+    workDate: item.workDate,
+    startsAt: item.startsAt,
+    endsAt: item.endsAt,
+    dailyWage: item.dailyWage,
+    status: item.status,
+    worker: item.worker ? { ...item.worker } : null
+  }
 }
 
 // 지점 이름(mock 표시용). 실제 API 는 상세 응답에 workplaceName 을 담아준다.
@@ -205,14 +216,19 @@ const mockWorkCaseDetail = {
   workplaceName: '강남점',
   title: '주말 홀 서빙',
   workDate: '2026-07-22',
-  startTime: '10:00',
-  endTime: '18:00',
+  startsAt: '2026-07-22T01:00:00Z',
+  endsAt: '2026-07-22T09:00:00Z',
   breakMinutes: 60,
   breakPaid: false,
   dailyWage: 90000,
   status: 'IN_PROGRESS',
-  settleStatus: 'HOLD',
-  worker: { name: '이알바', badgeLevel: 2 } // 매칭된 알바생 + 성실 뱃지
+  termsVersion: 1,
+  latestInvitation: null,
+  contract: null,
+  attendance: { checkedInAt: null, checkedOutAt: null },
+  escrow: null,
+  settlement: null,
+  worker: { workerId: 1001, name: '이알바' }
 }
 
 /**
@@ -242,7 +258,7 @@ export async function getWorkCaseSummary(workplaceId) {
  *
  * 목록 뷰·캘린더 뷰가 **같은 엔드포인트**를 쓴다. 캘린더 뷰일 때만 보고 있는 달을
  * from/to 로 좁혀서 요청하고, 결과를 날짜별로 묶어 그린다(@/utils/calendar).
- * content 항목의 canIssueInvitation은 일회성 연결 링크 신규 발급 가능 여부다.
+ * content 항목은 실 API의 WorkCaseListItemResponse 필드 계약을 그대로 따른다.
  * @param {number} workplaceId
  * @param {object} params keyword, status, from, to, page, size
  */
@@ -253,7 +269,7 @@ export async function listWorkCases(workplaceId, params = {}) {
       status: params.status,
       from: params.from,
       to: params.to
-    }).map((s) => ({ ...s }))
+    }).map(toMockWorkCaseListItem)
     return {
       content,
       page: { number: 0, size: content.length || 1, totalElements: content.length, totalPages: 1 }
@@ -284,7 +300,7 @@ export async function getWorkCase(workCaseId) {
       ...listItem,
       workCaseId: Number(workCaseId),
       workplaceName: MOCK_WORKPLACE_NAMES[listItem.workplaceId] ?? mockWorkCaseDetail.workplaceName,
-      worker: listItem.workerName ? { name: listItem.workerName, badgeLevel: 2 } : null
+      worker: listItem.worker ? { ...listItem.worker } : null
     }
   }
   const { data } = await http.get(`/work-cases/${workCaseId}`)
