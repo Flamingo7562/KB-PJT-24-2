@@ -2,7 +2,7 @@
 
 | 항목        | 값              |
 | ----------- | --------------- |
-| 명세 릴리스 | `4.1.0`         |
+| 명세 릴리스 | `4.2.0`         |
 | 승인일      | 2026-08-07      |
 | 소유자      | PM/Admin Master |
 | Base Path   | `/api`          |
@@ -76,9 +76,10 @@
   예외 메시지, SQL, Stack Trace와 민감 정보는 서버 로그에서만 다루고 응답에는 노출하지
   않습니다. 단, PIN 원문이나 파생값은 오류·감사·SQL 바인딩을 포함한 어떤 로그에도 기록하지
   않습니다.
-- Mock 계좌·지갑 금융 오류는 "지갑과 거래" 절의 표(`DEC-BANK-ERROR-CATALOG`)를 따르며
-  위 공통 오류 Code만 사용합니다. QR, 초대, 근태, 문서와 정산의 추가 도메인 오류 Code는
-  `DEC-OPEN-ERROR-CATALOG`가 승인하기 전까지 새 규범 값으로 확정하지 않습니다.
+- Mock 계좌·지갑 금융 오류는 `DEC-BANK-ERROR-CATALOG`, 초대 오류는
+  `DEC-INVITE-ERROR-CATALOG`, 고정 QR 조회·재발급 오류는 `DEC-QR-ERROR-CATALOG`를
+  따릅니다. 근태·문서·정산의 추가 도메인 오류 Code는 `DEC-OPEN-ERROR-CATALOG`가
+  승인하기 전까지 새 규범 값으로 확정하지 않습니다.
 
 ### Session, CSRF와 로컬 CORS
 
@@ -340,6 +341,8 @@ PATCH Body는 `phone`만 허용합니다. `loginId`, `email`, `name`, `role`, `s
 - 위도와 경도는 함께 보내거나 모두 생략합니다.
 - `radiusMeters`, `radiusM`은 받지 않으며 서버가 100m를 적용합니다.
 - `phone`은 공통 전화번호 정규화 후 숫자 문자열로 저장·반환합니다.
+- 등록 성공 시 같은 트랜잭션에서 그 사업장의 활성 고정 QR 한 건을 발급합니다. 발급자는
+  사업장 OWNER이며, 사업장 또는 QR 저장 중 하나라도 실패하면 둘 다 Rollback합니다.
 
 ### OWNER 사업장 목록
 
@@ -435,11 +438,11 @@ Mock 은행계좌는 서비스 회원보다 먼저 Demo/Disposable Seed로 생�
 
 | `bankCode` | 은행명      |
 | ---------- | ----------- |
-| `004`      | 국민은행    |
+| `004`      | KB국민은행  |
 | `088`      | 신한은행    |
 | `020`      | 우리은행    |
 | `081`      | 하나은행    |
-| `011`      | 농협은행    |
+| `011`      | NH농협은행  |
 | `003`      | 기업은행    |
 | `090`      | 카카오뱅크  |
 | `092`      | 토스뱅크    |
@@ -1034,20 +1037,47 @@ Aggregate Transaction은 다음 순서로 처리합니다. 검증 실패는 성�
 
 ## 사업장 고정 QR과 근태
 
-QR은 사업장별로 활성 Token이 최대 하나인 비만료 고정 QR입니다. 공개 nonce와 외부 HMAC
-Key로 `workplaceId`를 포함한 Token을 검증하며 HMAC Key와 완성된 Token 원문은 DB에
-저장하지 않습니다.
+QR은 사업장별로 활성 Token이 정확히 하나인 비만료 고정 QR입니다. 사업장 등록 성공 시 같은
+트랜잭션에서 최초 QR을 발급하며 조회는 QR을 만들거나 교체하지 않습니다. `ACTIVE` 사업장에
+활성 QR이 없는 상태는 저장소 무결성 오류이며 재발급은 기존 활성 QR이 없어도 복구할 수
+있습니다.
+
+Token은 다음 다섯 세그먼트를 `.`으로 연결합니다.
+
+```text
+v1.k1.42.AQIDBAUGBwgJCgsMDQ4PEA.qZ7XcO1nB2sV4hK9pR0tYuI3wE5aM6dF7gH8jL2xN0c
+```
+
+| 순서 | 내용                                                                           |
+| ---: | ------------------------------------------------------------------------------ |
+|    1 | 고정 문자열 `v1`                                                               |
+|    2 | 서명 키 식별자. `[A-Za-z0-9_-]{1,16}`                                          |
+|    3 | 사업장 식별자의 10진 표기                                                      |
+|    4 | 16byte nonce를 Padding 없는 Base64 URL-safe로 인코딩한 값                      |
+|    5 | 앞 네 세그먼트 전체의 HMAC-SHA256을 Padding 없는 Base64 URL-safe로 인코딩한 값 |
+
+검증은 다섯 세그먼트의 구조와 MAC이 모두 일치할 때만 성공합니다. 키 식별자를 Token에 담아
+키 교체 기간에도 현장에 인쇄된 QR이 참조하는 구 키를 검증 집합에 유지할 수 있게 합니다.
+
+- HMAC Key는 저장소와 WAR에 포함하지 않고 외부 Properties로 주입하며 필수 Key가 없으면
+  애플리케이션 기동에 실패합니다.
+- DB에는 공개 식별자인 nonce만 저장합니다. HMAC Key와 완성 Token 원문은 DB, 일반 로그와
+  분석에 저장하지 않습니다.
+- 서명 검증은 Token이 등록된 Key로 위조되지 않았는지만 판정합니다. 폐기된 nonce인지는
+  실제 스캔이 DB의 현재 QR 상태를 확인해 거절합니다.
+- QR을 만들거나 바꾸는 흐름은 `workplaces`를 먼저 잠그고 `qr_tokens`를 처리합니다.
 
 ### `GET /api/workplaces/{workplaceId}/qr`
 
 - 해당 사업장 OWNER만 호출합니다.
-- 조회는 QR을 교체하지 않습니다.
+- 조회는 QR을 생성하거나 교체하지 않습니다.
+- 같은 사업장을 반복 조회하면 항상 같은 Token 문자열을 반환합니다.
 
 ```json
 {
   "data": {
-    "workplaceId": 1,
-    "qrToken": "signed-token",
+    "workplaceId": 42,
+    "qrToken": "v1.k1.42.AQIDBAUGBwgJCgsMDQ4PEA.qZ7XcO1nB2sV4hK9pR0tYuI3wE5aM6dF7gH8jL2xN0c",
     "createdAt": "2026-07-31T00:00:00Z"
   }
 }
@@ -1056,19 +1086,38 @@ Key로 `workplaceId`를 포함한 Token을 검증하며 HMAC Key와 완성된 To
 ### `POST /api/workplaces/{workplaceId}/qr/reissue`
 
 - 해당 사업장 OWNER만 호출합니다.
-- 기존 활성 QR을 즉시 `REVOKED` 처리하고 새 nonce를 발급합니다.
+- 사업장 행을 잠근 뒤 기존 활성 QR을 `REVOKED`와 폐기 시각으로 전이하고 새 nonce를
+  발급합니다. 기존 활성 QR이 없어도 새 QR 발급은 성공합니다.
+- 동시 요청이 겹쳐도 활성 QR은 하나만 남으며 응답 Token은 해당 요청이 저장한 nonce로
+  서명합니다.
 
 ```json
 {
   "data": {
-    "workplaceId": 1,
-    "qrToken": "new-signed-token",
+    "workplaceId": 42,
+    "qrToken": "v1.k1.42.ERITFBUWFxgZGhscHR4fIA.8eVvD4xP4TjV7N2cZ0aWq9sLk3mH6fY1bR5uC2iQ7oA",
     "reissuedAt": "2026-07-31T00:10:00Z"
   }
 }
 ```
 
-재시도와 멱등 Header 계약은 `DEC-OPEN-QR-REISSUE-IDEMPOTENCY`를 따릅니다.
+현재 재발급은 `Idempotency-Key` Header를 요구하지 않습니다. 응답은 완료 시점의 현재 활성
+QR을 나타냅니다. 요청이 여러 번 도달해도 활성 QR은 하나이며 마지막 완료 응답이 현재 상태의
+권위 있는 표현입니다. 후속 재시도 식별 방식은 `DEC-OPEN-QR-REISSUE-IDEMPOTENCY`의 열린
+결정으로 유지합니다.
+
+고정 QR 조회·재발급 오류는 다음과 같습니다.
+
+| 상황                                     | HTTP | Code                 |
+| ---------------------------------------- | ---: | -------------------- |
+| 인증 없음                                |  401 | `AUTH_REQUIRED`      |
+| OWNER 역할이 아님                        |  403 | `ROLE_MISMATCH`      |
+| 없는 사업장 또는 다른 OWNER의 사업장     |  404 | `RESOURCE_NOT_FOUND` |
+| `ACTIVE` 사업장에 활성 QR 없음(조회)     |  500 | `INTERNAL_ERROR`     |
+| 동시 재발급 경쟁에서 활성 QR 유일성 충돌 |  409 | `CONFLICT`           |
+
+없는 사업장과 다른 OWNER의 사업장을 구분하지 않습니다. 조회의 무결성 오류는 공통 안전 메시지와
+`traceId`를 반환하며 내부 상태나 Token 원문을 노출하지 않습니다.
 
 ### `POST /api/attendance/scans`
 

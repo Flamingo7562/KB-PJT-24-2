@@ -1,6 +1,6 @@
 ---
 patch_id: SPEC-162-01
-status: draft
+status: accepted
 issue: 162
 base_spec_version: 4.1.0
 targets:
