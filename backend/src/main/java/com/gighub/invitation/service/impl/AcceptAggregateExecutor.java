@@ -5,6 +5,9 @@ import com.gighub.common.api.ApiTimes;
 import com.gighub.common.exception.ForbiddenException;
 import com.gighub.common.exception.ConflictException;
 import com.gighub.common.exception.WorkCaseLockedException;
+import com.gighub.contract.ContractArtifactCommand;
+import com.gighub.contract.ContractArtifactHandle;
+import com.gighub.contract.ContractArtifactPort;
 import com.gighub.contract.dto.ContractTermsSnapshot;
 import com.gighub.contract.mapper.WorkContractMapper;
 import com.gighub.contract.mapper.param.WorkContractInsertParam;
@@ -62,6 +65,7 @@ public class AcceptAggregateExecutor {
     private final AcceptEscrowHold escrowHold;
     private final IdempotencyClaimService claimService;
     private final AcceptJson acceptJson;
+    private final ContractArtifactPort contractArtifactPort;
     private final Clock clock;
 
     @org.springframework.beans.factory.annotation.Autowired
@@ -71,7 +75,8 @@ public class AcceptAggregateExecutor {
             SettlementMapper settlementMapper,
             AcceptEscrowHold escrowHold,
             IdempotencyClaimService claimService,
-            AcceptJson acceptJson) {
+            AcceptJson acceptJson,
+            ContractArtifactPort contractArtifactPort) {
         this(
                 invitationMapper,
                 workContractMapper,
@@ -79,6 +84,7 @@ public class AcceptAggregateExecutor {
                 escrowHold,
                 claimService,
                 acceptJson,
+                contractArtifactPort,
                 Clock.system(DATABASE_ZONE));
     }
 
@@ -90,6 +96,7 @@ public class AcceptAggregateExecutor {
             AcceptEscrowHold escrowHold,
             IdempotencyClaimService claimService,
             AcceptJson acceptJson,
+            ContractArtifactPort contractArtifactPort,
             Clock clock) {
         this.invitationMapper = invitationMapper;
         this.workContractMapper = workContractMapper;
@@ -97,6 +104,7 @@ public class AcceptAggregateExecutor {
         this.escrowHold = escrowHold;
         this.claimService = claimService;
         this.acceptJson = acceptJson;
+        this.contractArtifactPort = contractArtifactPort;
         this.clock = clock;
     }
 
@@ -108,7 +116,7 @@ public class AcceptAggregateExecutor {
      * @param claimId      선점한 멱등 Claim 식별자
      */
     @Transactional(noRollbackFor = InvitationExpiredException.class)
-    public InvitationAcceptResponse execute(
+    public AcceptAggregateOutcome execute(
             AuthPrincipal principal,
             long invitationId,
             long workCaseId,
@@ -136,7 +144,12 @@ public class AcceptAggregateExecutor {
             throw new InvitationAlreadyAcceptedException();
         }
 
-        insertContract(workCase, principal, acceptedAt);
+        long contractId = insertContract(workCase, principal, acceptedAt);
+        // 파일은 Commit 전에 임시 Key까지만 씁니다. 여기서 실패하면 수락 전체가 Rollback되고,
+        // 최종 위치로 옮기는 것은 Commit 뒤입니다.
+        ContractArtifactHandle artifact = contractArtifactPort.prepare(
+                ContractArtifactCommand.of(workCaseId, contractId, acceptedAt));
+
         escrowHold.hold(
                 workCase.getEmployerId(),
                 workCaseId,
@@ -152,7 +165,7 @@ public class AcceptAggregateExecutor {
         // 않으면 자금은 움직였는데 Replay할 결과가 없는 상태가 생깁니다.
         claimService.complete(claimId, 200, acceptJson.writeResponseBody(response));
 
-        return response;
+        return new AcceptAggregateOutcome(response, artifact);
     }
 
     /**
@@ -228,8 +241,12 @@ public class AcceptAggregateExecutor {
         }
     }
 
-    /** 확정 순간의 조건을 계약 Snapshot으로 굳힙니다. */
-    private void insertContract(
+    /**
+     * 확정 순간의 조건을 계약 Snapshot으로 굳힙니다.
+     *
+     * @return 생성된 계약 식별자
+     */
+    private long insertContract(
             AcceptWorkCaseLockRow workCase,
             AuthPrincipal principal,
             LocalDateTime acceptedAt) {
@@ -278,5 +295,6 @@ public class AcceptAggregateExecutor {
         if (workContractMapper.insert(contract) != 1) {
             throw new IllegalStateException("계약 Snapshot을 저장하지 못했습니다.");
         }
+        return Objects.requireNonNull(contract.getId(), "생성된 계약 식별자");
     }
 }

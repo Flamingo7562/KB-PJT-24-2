@@ -3,6 +3,9 @@ package com.gighub.invitation.service.impl;
 import com.gighub.auth.security.AuthPrincipal;
 import com.gighub.common.exception.RoleMismatchException;
 import com.gighub.common.exception.ValidationException;
+import com.gighub.contract.ContractArtifactCommand;
+import com.gighub.contract.ContractArtifactHandle;
+import com.gighub.contract.ContractArtifactPort;
 import com.gighub.idempotency.IdempotencyClaimResult;
 import com.gighub.idempotency.IdempotencyClaimService;
 import com.gighub.idempotency.IdempotencyKeys;
@@ -49,6 +52,7 @@ class InvitationAcceptServiceImplTest {
     private final StubInvitationMapper mapper = new StubInvitationMapper();
     private final StubClaimService claimService = new StubClaimService();
     private final StubAggregateExecutor executor = new StubAggregateExecutor();
+    private final StubArtifactPort artifactPort = new StubArtifactPort();
 
     @Test
     void firstSuccessRunsTheAggregateAndKeepsTheCompletedClaim() {
@@ -88,6 +92,33 @@ class InvitationAcceptServiceImplTest {
         );
 
         assertEquals(List.of(CLAIM_ID), claimService.abandoned);
+    }
+
+    @Test
+    void contractFileIsPromotedOnlyAfterTheTransactionCommits() {
+        mapper.invitation = pendingInvitation(3);
+
+        service().accept(worker(), token, KEY);
+
+        // 승격은 Commit 뒤 단계입니다. Transaction 안에서 부르면 Rollback된 계약의 파일이
+        // 최종 위치에 남습니다.
+        assertEquals(List.of(WORK_CASE_ID), artifactPort.promoted);
+        assertTrue(artifactPort.discarded.isEmpty());
+    }
+
+    @Test
+    void failedAggregateDiscardsPendingFilesBeforeAbandoningTheClaim() {
+        mapper.invitation = pendingInvitation(3);
+        executor.failure = new InvitationTermsChangedException();
+
+        assertThrows(
+                InvitationTermsChangedException.class,
+                () -> service().accept(worker(), token, KEY)
+        );
+
+        // 파일 쓰기는 Rollback되지 않으므로 남은 임시 Object를 따로 지웁니다.
+        assertEquals(List.of(WORK_CASE_ID), artifactPort.discarded);
+        assertTrue(artifactPort.promoted.isEmpty());
     }
 
     @Test
@@ -155,7 +186,7 @@ class InvitationAcceptServiceImplTest {
 
     private InvitationAcceptServiceImpl service() {
         return new InvitationAcceptServiceImpl(
-                mapper, codec, claimService, executor, new AcceptJson());
+                mapper, codec, claimService, executor, new AcceptJson(), artifactPort);
     }
 
     private InvitationRow pendingInvitation(int expectedTermsVersion) {
@@ -248,11 +279,11 @@ class InvitationAcceptServiceImplTest {
         private RuntimeException failure;
 
         private StubAggregateExecutor() {
-            super(null, null, null, null, null, null);
+            super(null, null, null, null, null, null, null);
         }
 
         @Override
-        public InvitationAcceptResponse execute(
+        public AcceptAggregateOutcome execute(
                 AuthPrincipal principal,
                 long invitationId,
                 long workCaseId,
@@ -262,7 +293,31 @@ class InvitationAcceptServiceImplTest {
             if (failure != null) {
                 throw failure;
             }
-            return InvitationAcceptResponse.held(workCaseId);
+            return new AcceptAggregateOutcome(
+                    InvitationAcceptResponse.held(workCaseId),
+                    ContractArtifactHandle.of(workCaseId, 900L));
+        }
+    }
+
+    /** 승격·정리 호출 순서를 관찰합니다. */
+    private static final class StubArtifactPort implements ContractArtifactPort {
+
+        private final List<Long> promoted = new ArrayList<>();
+        private final List<Long> discarded = new ArrayList<>();
+
+        @Override
+        public ContractArtifactHandle prepare(ContractArtifactCommand command) {
+            throw new UnsupportedOperationException("본 처리 Transaction 안에서만 부릅니다.");
+        }
+
+        @Override
+        public void promote(ContractArtifactHandle handle) {
+            promoted.add(handle.getWorkCaseId());
+        }
+
+        @Override
+        public void discardPending(long workCaseId) {
+            discarded.add(workCaseId);
         }
     }
 }

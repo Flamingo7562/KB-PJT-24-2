@@ -2,6 +2,7 @@ package com.gighub.invitation.service.impl;
 
 import com.gighub.auth.security.AuthPrincipal;
 import com.gighub.common.exception.RoleMismatchException;
+import com.gighub.contract.ContractArtifactPort;
 import com.gighub.idempotency.IdempotencyClaimResult;
 import com.gighub.idempotency.IdempotencyClaimService;
 import com.gighub.invitation.dto.InvitationAcceptResponse;
@@ -38,18 +39,21 @@ public class InvitationAcceptServiceImpl implements InvitationAcceptService {
     private final IdempotencyClaimService claimService;
     private final AcceptAggregateExecutor aggregateExecutor;
     private final AcceptJson acceptJson;
+    private final ContractArtifactPort contractArtifactPort;
 
     public InvitationAcceptServiceImpl(
             InvitationMapper invitationMapper,
             InvitationTokenCodec tokenCodec,
             IdempotencyClaimService claimService,
             AcceptAggregateExecutor aggregateExecutor,
-            AcceptJson acceptJson) {
+            AcceptJson acceptJson,
+            ContractArtifactPort contractArtifactPort) {
         this.invitationMapper = invitationMapper;
         this.tokenCodec = tokenCodec;
         this.claimService = claimService;
         this.aggregateExecutor = aggregateExecutor;
         this.acceptJson = acceptJson;
+        this.contractArtifactPort = contractArtifactPort;
     }
 
     @Override
@@ -86,27 +90,36 @@ public class InvitationAcceptServiceImpl implements InvitationAcceptService {
     }
 
     /**
-     * 본 처리를 실행하고, 실패하면 Transaction이 끝난 뒤 Claim을 지웁니다.
+     * 본 처리를 실행하고 Transaction이 끝난 뒤의 뒷정리를 순서대로 수행합니다.
      *
-     * <p>Claim을 남기면 같은 Key로 다시 시도할 수 없습니다. 반대로 성공 Claim은 본 처리
-     * Transaction 안에서 이미 완료 상태로 Commit됐으므로 여기서 손대지 않습니다.</p>
+     * <p>성공하면 임시 저장된 계약서 파일을 최종 위치로 승격시킵니다. Commit이 끝난 뒤라
+     * 승격이 실패해도 수락을 되돌리지 않습니다.</p>
+     *
+     * <p>실패하면 남은 임시 파일을 정리하고 Claim을 지웁니다. Claim을 남기면 같은 Key로 다시
+     * 시도할 수 없습니다. 반대로 성공 Claim은 본 처리 Transaction 안에서 이미 완료 상태로
+     * Commit됐으므로 손대지 않습니다.</p>
      */
     private InvitationAcceptResponse runAggregate(
             AuthPrincipal principal,
             InvitationRow invitation,
             byte[] tokenHash,
             IdempotencyClaimResult claim) {
+        AcceptAggregateOutcome outcome;
         try {
-            return aggregateExecutor.execute(
+            outcome = aggregateExecutor.execute(
                     principal,
                     invitation.getId(),
                     invitation.getWorkCaseId(),
                     tokenHash,
                     claim.getClaimId());
         } catch (RuntimeException failure) {
+            contractArtifactPort.discardPending(invitation.getWorkCaseId());
             claimService.abandon(claim.getClaimId());
             throw failure;
         }
+
+        contractArtifactPort.promote(outcome.getArtifact());
+        return outcome.getResponse();
     }
 
     /**
