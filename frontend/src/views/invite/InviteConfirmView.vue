@@ -1,164 +1,245 @@
 <script setup>
 /**
- * [H] 근무 확정(초대 링크)  ·  /invitations/:token  ·  WORKER(로그인 필수, 딥링크)
- * 자동 입력된 근무 내역 확인 → 전자서명 → 근무 확정(=에스크로 예치). 사장 안심 뱃지 표시.
- * 만료·사용 토큰 410. OWNER 접근은 가드 G4가 차단.
- * 연계 API: GET /invitations/{token} · POST /invitations/{token}/accept
- *   →  @/services/invites (getInvite, confirmInvite)
- * route.params.token 사용. 공통: TrustBadge(role='owner') · BaseButton
- * 고정 경고 문구(변경 금지):
- *   '근로계약서 날인 완료 시점부터는 근무 변경 및 취소가 불가합니다. 신중하게 날인해주세요.'
+ * WORKER 초대 조건 확인과 Body 없는 최종 동의 화면.
+ *
+ * Token은 현재 경로에서만 사용하고 저장·로그하지 않는다. 한 번의 수락 의도에는 화면 메모리의
+ * 같은 멱등 Key를 사용하며, 결과가 불확실한 재확인에도 Key를 유지한다.
  */
-import { Eraser } from 'lucide-vue-next'
-import { nextTick, onMounted, ref } from 'vue'
+import { CheckCircle2, FileText, RefreshCw } from 'lucide-vue-next'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import AppBackHeader from '@/components/common/AppBackHeader.vue'
 import BaseButton from '@/components/common/BaseButton.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import TrustBadge from '@/components/common/TrustBadge.vue'
+import { contractFileUrl } from '@/services/documents'
+import { newIdempotencyKey } from '@/services/http'
 import { confirmInvite, getInvite } from '@/services/invites'
+import { getWorkCase } from '@/services/workCases'
+import { useWalletStore } from '@/stores/wallet'
 import { useUiStore } from '@/stores/ui'
-import { formatDate, formatDuration, formatKRW, formatTimeRange } from '@/utils/format'
+import {
+  formatDuration,
+  formatKRW,
+  formatSeoulDateTime,
+  formatSeoulTimeRange
+} from '@/utils/format'
+import {
+  invitationErrorMessage,
+  isInvitationForbidden,
+  shouldRetainAcceptanceKey
+} from '@/utils/invitation'
 
 const route = useRoute()
 const router = useRouter()
 const ui = useUiStore()
+const walletStore = useWalletStore()
 
-const token = route.params.token
+const token = computed(() => String(route.params.token ?? ''))
 const invite = ref(null)
 const loading = ref(true)
 const errorMsg = ref('')
+const agreed = ref(false)
 const confirming = ref(false)
+const retryAvailable = ref(false)
+const accepted = ref(null)
+const acceptedWorkCase = ref(null)
+const synchronizing = ref(false)
+const syncError = ref(false)
 
-/* ---- 전자서명 canvas ---- */
-const canvasRef = ref(null)
-const hasSignature = ref(false)
-let ctx = null
-let drawing = false
+// 비밀값을 반응형 Store나 Web Storage에 넣지 않는다. 이 화면 인스턴스가 사라지면 함께 폐기된다.
+let acceptanceKey = null
+let inviteLoadSequence = 0
 
-onMounted(async () => {
-  try {
-    invite.value = await getInvite(token)
-    await nextTick()
-    setupCanvas()
-  } catch (e) {
-    errorMsg.value =
-      e?.response?.status === 410
-        ? '만료되었거나 이미 사용된 초대 링크예요.'
-        : '초대 정보를 불러오지 못했어요.'
-  } finally {
-    loading.value = false
-  }
+const workDateText = computed(() => formatSeoulDateTime(invite.value?.startsAt).split(' ')[0])
+const contractDocumentId = computed(() => acceptedWorkCase.value?.contract?.documentId ?? null)
+const contractViewUrl = computed(() =>
+  contractDocumentId.value ? contractFileUrl(contractDocumentId.value, 'view') : ''
+)
+const contractDownloadUrl = computed(() =>
+  contractDocumentId.value ? contractFileUrl(contractDocumentId.value, 'download') : ''
+)
+
+onMounted(loadInvite)
+
+watch(token, () => {
+  // 같은 컴포넌트에서 다른 초대 경로로 이동하면 이전 Token의 의도와 응답을 완전히 버린다.
+  acceptanceKey = null
+  invite.value = null
+  agreed.value = false
+  confirming.value = false
+  retryAvailable.value = false
+  accepted.value = null
+  acceptedWorkCase.value = null
+  syncError.value = false
+  void loadInvite()
 })
 
-function setupCanvas() {
-  const canvas = canvasRef.value
-  if (!canvas) return
-  // width 설정이 컨텍스트를 초기화하므로 크기 지정 후 스타일을 잡는다.
-  canvas.width = canvas.offsetWidth
-  canvas.height = canvas.offsetHeight
-  ctx = canvas.getContext('2d')
-  ctx.lineWidth = 2
-  ctx.lineCap = 'round'
-  ctx.lineJoin = 'round'
-  const ink = window
-    .getComputedStyle(document.documentElement)
-    .getPropertyValue('--color-text')
-    .trim()
-  if (ink) ctx.strokeStyle = ink
-}
-
-function pointPos(e) {
-  const rect = canvasRef.value.getBoundingClientRect()
-  return { x: e.clientX - rect.left, y: e.clientY - rect.top }
-}
-
-function startDraw(e) {
-  if (!ctx) return
-  drawing = true
-  canvasRef.value.setPointerCapture(e.pointerId)
-  const { x, y } = pointPos(e)
-  ctx.beginPath()
-  ctx.moveTo(x, y)
-}
-
-function draw(e) {
-  if (!drawing || !ctx) return
-  const { x, y } = pointPos(e)
-  ctx.lineTo(x, y)
-  ctx.stroke()
-  hasSignature.value = true
-}
-
-function endDraw(e) {
-  if (!drawing) return
-  drawing = false
+async function loadInvite() {
+  const requestSequence = ++inviteLoadSequence
+  const requestToken = token.value
+  loading.value = true
+  errorMsg.value = ''
   try {
-    canvasRef.value.releasePointerCapture(e.pointerId)
-  } catch {
-    // pointer capture 미지원/이미 해제된 경우 무시
+    const result = await getInvite(requestToken)
+    if (requestSequence !== inviteLoadSequence) return
+    invite.value = result
+  } catch (error) {
+    if (requestSequence !== inviteLoadSequence) return
+    if (isInvitationForbidden(error)) {
+      await router.replace('/forbidden')
+      return
+    }
+    errorMsg.value = invitationErrorMessage(error)
+  } finally {
+    if (requestSequence === inviteLoadSequence) loading.value = false
   }
 }
 
-function clearSignature() {
-  if (!ctx) return
-  ctx.clearRect(0, 0, canvasRef.value.width, canvasRef.value.height)
-  hasSignature.value = false
+/** 수락 성공 뒤 권위 있는 근무·지갑·계약 연결을 다시 읽는다. */
+async function synchronizeAcceptedState() {
+  synchronizing.value = true
+  syncError.value = false
+
+  const [workCaseResult] = await Promise.allSettled([
+    getWorkCase(accepted.value.workCaseId),
+    walletStore.loadHome()
+  ])
+
+  if (workCaseResult.status === 'fulfilled') {
+    acceptedWorkCase.value = workCaseResult.value
+  }
+
+  // 수락 Aggregate는 계약 문서까지 원자 생성한다. 식별자가 없으면 성공을 되돌리지 않고
+  // 동기화 실패로만 표시해 사용자가 같은 수락을 새 Key로 다시 보내지 않게 한다.
+  syncError.value =
+    workCaseResult.status === 'rejected' ||
+    !acceptedWorkCase.value?.contract?.documentId ||
+    Boolean(walletStore.error)
+  synchronizing.value = false
 }
 
 async function confirm() {
-  if (!hasSignature.value) {
-    ui.toast('서명을 입력해 주세요.', { type: 'warning' })
+  if (confirming.value || accepted.value) return
+  if (!agreed.value) {
+    ui.toast('근무 조건과 근로계약서 자동 생성에 동의해주세요.', { type: 'warning' })
     return
   }
+
+  if (!acceptanceKey) acceptanceKey = newIdempotencyKey()
+  const requestToken = token.value
   confirming.value = true
   try {
-    const signatureImage = canvasRef.value.toDataURL('image/png')
-    await confirmInvite(token, { signatureImage })
+    const result = await confirmInvite(requestToken, { idempotencyKey: acceptanceKey })
+    if (requestToken !== token.value) return
+    accepted.value = result
+    acceptanceKey = null
+    retryAvailable.value = false
     ui.toast('근무가 확정됐어요.', { type: 'success' })
-    router.replace('/worker/home')
-  } catch (e) {
-    const status = e?.response?.status
-    if (status === 410) {
-      ui.toast('만료되었거나 이미 사용된 초대예요.', { type: 'warning' })
-    } else if (status === 409) {
-      ui.toast('사장님 잔액이 부족해 확정할 수 없어요.', { type: 'warning' })
-    } else {
-      ui.toast('근무 확정에 실패했어요.', { type: 'danger' })
+    await synchronizeAcceptedState()
+  } catch (error) {
+    if (requestToken !== token.value) return
+    const requestWasUncertain = retryAvailable.value
+    retryAvailable.value = shouldRetainAcceptanceKey(error, { requestWasUncertain })
+    if (!retryAvailable.value) acceptanceKey = null
+
+    if (isInvitationForbidden(error)) {
+      await router.replace('/forbidden')
+      return
     }
+    ui.toast(invitationErrorMessage(error, { sameIntentRetry: retryAvailable.value }), {
+      type: retryAvailable.value ? 'warning' : 'danger',
+      duration: 6000
+    })
   } finally {
     confirming.value = false
   }
+}
+
+function goWorkCase() {
+  router.push(`/worker/work/work-cases/${accepted.value.workCaseId}`)
 }
 </script>
 
 <template>
   <div class="sub-page">
-    <AppBackHeader title="근무 확정" to="/worker/home" />
+    <AppBackHeader :title="accepted ? '근무 확정 완료' : '근무 확정'" to="/worker/home" />
     <main class="screen-body">
       <p v-if="loading" class="loading">불러오는 중…</p>
 
       <EmptyState v-else-if="errorMsg" :message="errorMsg" />
 
-      <template v-else>
+      <template v-else-if="accepted">
+        <section class="success-card">
+          <CheckCircle2 :size="48" aria-hidden="true" />
+          <h1>근무가 확정됐어요</h1>
+          <p>근무와 임금 예치 상태를 서버 기준으로 다시 확인했습니다.</p>
+          <strong>{{ accepted.escrowStatus === 'HELD' ? '임금 예치 완료' : '확정 완료' }}</strong>
+        </section>
+
+        <p v-if="synchronizing" class="loading">근무·지갑·계약을 최신화하는 중…</p>
+
+        <section v-else-if="acceptedWorkCase" class="accepted-detail">
+          <h2>{{ acceptedWorkCase.title }}</h2>
+          <p>{{ acceptedWorkCase.workplaceName }} · {{ formatKRW(acceptedWorkCase.dailyWage) }}</p>
+          <p>{{ formatSeoulTimeRange(acceptedWorkCase.startsAt, acceptedWorkCase.endsAt) }}</p>
+        </section>
+
+        <section v-if="contractViewUrl" class="contract-section">
+          <div class="section-head">
+            <h2>최종 근로계약서</h2>
+            <span>서명 완료본</span>
+          </div>
+          <iframe :src="contractViewUrl" title="최종 근로계약서" class="contract-frame" />
+          <a :href="contractDownloadUrl" class="download-link">
+            <FileText :size="18" />
+            계약서 다운로드
+          </a>
+        </section>
+
+        <div v-if="syncError" class="sync-warning">
+          <p>근무는 확정됐지만 최신 정보를 모두 불러오지 못했어요.</p>
+          <BaseButton
+            variant="secondary"
+            block
+            :disabled="synchronizing"
+            @click="synchronizeAcceptedState"
+          >
+            <RefreshCw :size="17" />
+            다시 불러오기
+          </BaseButton>
+        </div>
+
+        <BaseButton variant="worker" size="lg" block @click="goWorkCase">
+          근무 상세 확인
+        </BaseButton>
+      </template>
+
+      <template v-else-if="invite">
         <section class="invite-head">
           <div class="head-info">
             <p class="workplace">{{ invite.workplaceName }}</p>
             <h1 class="title">{{ invite.title }}</h1>
           </div>
-          <TrustBadge role="owner" :level="invite.ownerBadge?.level ?? 0" :size="44" />
+          <TrustBadge
+            v-if="invite.ownerBadge"
+            role="owner"
+            :level="invite.ownerBadge.level"
+            :size="44"
+          />
+          <span v-else class="badge-empty">등록된 배지 없음</span>
         </section>
 
         <section class="detail-card">
           <dl class="info">
             <div class="row">
               <dt>근무일</dt>
-              <dd>{{ formatDate(invite.workDate) }}</dd>
+              <dd>{{ workDateText }}</dd>
             </div>
             <div class="row">
               <dt>근무 시간</dt>
-              <dd>{{ formatTimeRange(invite.startTime, invite.endTime) }}</dd>
+              <dd>{{ formatSeoulTimeRange(invite.startsAt, invite.endsAt) }}</dd>
             </div>
             <div class="row">
               <dt>휴게 시간</dt>
@@ -171,34 +252,38 @@ async function confirm() {
               <dt>일급</dt>
               <dd class="wage">{{ formatKRW(invite.dailyWage) }}</dd>
             </div>
+            <div class="row">
+              <dt>조건 버전</dt>
+              <dd>v{{ invite.termsVersion }}</dd>
+            </div>
+            <div class="row">
+              <dt>초대 만료</dt>
+              <dd>{{ formatSeoulDateTime(invite.expiresAt) }}</dd>
+            </div>
           </dl>
         </section>
 
-        <section class="sign-section">
-          <div class="sign-head">
-            <h2 class="sign-title">전자서명</h2>
-            <button type="button" class="clear-btn" @click="clearSignature">
-              <Eraser :size="15" />
-              지우기
-            </button>
-          </div>
-          <canvas
-            ref="canvasRef"
-            class="sign-canvas"
-            @pointerdown="startDraw"
-            @pointermove="draw"
-            @pointerup="endDraw"
-            @pointercancel="endDraw"
-          ></canvas>
-          <p class="sign-hint">위 영역에 손가락(또는 마우스)으로 서명해 주세요.</p>
-        </section>
+        <label class="consent">
+          <input v-model="agreed" type="checkbox" />
+          <span>위 근무 조건과 서버가 최종 근로계약서를 자동 생성하는 것에 동의합니다.</span>
+        </label>
+        <p class="consent-note">
+          확정 버튼을 누르면 현재 로그인한 알바생의 이름으로 최종 동의가 기록됩니다. 서명 이미지나
+          별도 파일은 전송하지 않습니다.
+        </p>
 
         <p class="warn">
-          근로계약서 날인 완료 시점부터는 근무 변경 및 취소가 불가합니다. 신중하게 날인해주세요.
+          근무 확정 시점부터는 근무 조건 변경 및 취소가 불가합니다. 내용을 신중하게 확인해주세요.
         </p>
 
         <BaseButton variant="worker" size="lg" block :disabled="confirming" @click="confirm">
-          {{ confirming ? '확정 중…' : '서명하고 근무 확정' }}
+          {{
+            confirming
+              ? '확정 중…'
+              : retryAvailable
+                ? '같은 요청으로 다시 확인'
+                : '동의하고 근무 확정'
+          }}
         </BaseButton>
       </template>
     </main>
@@ -232,8 +317,15 @@ async function confirm() {
   font-weight: var(--weight-bold);
   color: var(--color-text);
 }
+.badge-empty {
+  flex-shrink: 0;
+  font-size: var(--text-sm);
+  color: var(--color-text-sub);
+}
 
-.detail-card {
+.detail-card,
+.accepted-detail,
+.contract-section {
   margin-top: var(--space-lg);
   padding: var(--space-lg);
   background: var(--color-surface);
@@ -244,13 +336,16 @@ async function confirm() {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
+  gap: var(--space-md);
   padding: var(--space-sm) 0;
 }
-.row dt {
+.row dt,
+.accepted-detail p {
   font-size: var(--text-md);
   color: var(--color-text-sub);
 }
 .row dd {
+  text-align: right;
   font-size: var(--text-md);
   color: var(--color-text);
 }
@@ -263,42 +358,29 @@ async function confirm() {
   font-weight: var(--weight-bold);
 }
 
-.sign-section {
-  margin-top: var(--space-lg);
-}
-.sign-head {
+.consent {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-.sign-title {
-  font-size: var(--text-md);
-  font-weight: var(--weight-medium);
-  color: var(--color-text-sub);
-}
-.clear-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: var(--text-sm);
-  color: var(--color-text-sub);
-}
-.sign-canvas {
-  width: 100%;
-  height: 180px;
-  margin-top: var(--space-sm);
-  background: var(--color-surface);
-  border: 1px dashed var(--color-border);
+  align-items: flex-start;
+  gap: var(--space-sm);
+  margin-top: var(--space-lg);
+  padding: var(--space-md);
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
-  touch-action: none;
-  cursor: crosshair;
+  color: var(--color-text);
+  cursor: pointer;
 }
-.sign-hint {
-  margin-top: var(--space-xs);
+.consent input {
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
+  accent-color: var(--color-worker);
+}
+.consent-note {
+  margin-top: var(--space-sm);
   font-size: var(--text-sm);
+  line-height: 1.6;
   color: var(--color-text-sub);
 }
-
 .warn {
   margin: var(--space-lg) 0;
   padding: var(--space-md);
@@ -306,5 +388,71 @@ async function confirm() {
   color: var(--color-danger);
   background: var(--color-danger-bg);
   border-radius: var(--radius-sm);
+}
+
+.success-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-xl) var(--space-lg);
+  text-align: center;
+  color: var(--color-worker);
+  background: var(--color-worker-weak);
+  border-radius: var(--radius-md);
+}
+.success-card h1,
+.accepted-detail h2,
+.section-head h2 {
+  font-size: var(--text-lg);
+  font-weight: var(--weight-bold);
+  color: var(--color-text);
+}
+.success-card p {
+  color: var(--color-text-sub);
+}
+.accepted-detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+.section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-md);
+}
+.section-head span {
+  font-size: var(--text-sm);
+  color: var(--color-worker);
+}
+.contract-frame {
+  width: 100%;
+  height: 55vh;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: var(--color-bg);
+}
+.download-link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-xs);
+  margin-top: var(--space-md);
+  color: var(--color-worker);
+  font-weight: var(--weight-medium);
+}
+.sync-warning {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  margin: var(--space-lg) 0;
+  padding: var(--space-md);
+  color: var(--color-text-sub);
+  background: var(--color-bg);
+  border-radius: var(--radius-sm);
+}
+.screen-body > .btn {
+  margin-top: var(--space-lg);
 }
 </style>

@@ -11,8 +11,7 @@ import axios from 'axios'
  * - 오류 { code, message, traceId, fieldErrors } 필드를 axios error 에 부착(원본 error.response 보존).
  * - 401 AUTH_REQUIRED: 세션 상태를 버리고 온보딩(/)으로 이동(G5).
  *
- * ※ 인증·프로필·사업장 서비스는 이미 이 클라이언트로 실제 요청을 보낸다 — M3+ 서비스
- *   (documents/invites/wallet/workCases/notifications/worker)만 파일 단위 USE_MOCK 을 유지한다.
+ * ※ 도메인별 Mock 여부는 각 서비스가 관리한다. 이 클라이언트는 모든 실제 요청의 공통 경계다.
  */
 const http = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
@@ -21,6 +20,16 @@ const http = axios.create({
 })
 
 const MUTATING_METHODS = ['post', 'put', 'patch', 'delete']
+const INVITATION_PATH = /^\/invitations\/[A-Za-z0-9_-]+$/
+
+/** 401 발생 위치에 맞는 로그인 복귀 URL을 만든다. 초대 Token은 같은 Origin 경로만 보존한다. */
+export function authRequiredRedirect(pathname, search = '') {
+  const here = `${pathname}${search}`
+  const encoded = encodeURIComponent(here)
+  return INVITATION_PATH.test(pathname)
+    ? `/worker/login?redirect=${encoded}`
+    : `/?redirect=${encoded}`
+}
 
 /** document.cookie 에서 name 쿠키 값을 읽는다(없으면 null). */
 function readCookie(name) {
@@ -53,13 +62,15 @@ http.interceptors.response.use(
   (error) => {
     const res = error.response
 
-    // G5 — 401: 세션 상태를 버리고 온보딩으로. 복귀를 위해 현재 경로를 redirect 로 보존한다.
+    // G5 — 401: 새 문서 로드로 Pinia 상태를 비우고, 복귀를 위해 같은 Origin 경로만 보존한다.
+    // 초대 화면은 역할을 이미 알고 있으므로 WORKER 로그인으로 바로 보낸다.
     //   (저장 토큰이 없으므로 폐기할 것이 없다. 세션 부트스트랩 probe 는 skipAuthRedirect 로 제외.)
     //   순환 import(http ← services ← stores)를 피하려 하드 리다이렉트한다 — 이때 Pinia 상태도 초기화된다.
     if (res?.status === 401 && !error.config?.skipAuthRedirect && typeof window !== 'undefined') {
-      const here = window.location.pathname + window.location.search
       if (window.location.pathname !== '/') {
-        window.location.assign(`/?redirect=${encodeURIComponent(here)}`)
+        window.location.assign(
+          authRequiredRedirect(window.location.pathname, window.location.search)
+        )
       }
     }
 
@@ -105,7 +116,7 @@ export function newIdempotencyKey() {
  */
 export async function idempotentPost(
   url,
-  body = null,
+  body = undefined,
   { retries = 2, config = {}, idempotencyKey = null } = {}
 ) {
   // 결과가 불확실한 뒤 사용자가 같은 의도를 다시 확인해도 호출자가 보존한 키를 재사용한다.

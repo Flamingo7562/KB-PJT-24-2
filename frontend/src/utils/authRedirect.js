@@ -19,5 +19,10 @@ export function resolveOwnerLoginRedirect(loginResponse, redirectQuery) {
  * WORKER 는 사업장 등록으로 강제 이동하지 않는다.
  */
 export function resolveWorkerLoginRedirect(redirectQuery /* , loginResponse */) {
-  return redirectQuery || '/worker/home'
+  const candidate = Array.isArray(redirectQuery) ? redirectQuery[0] : redirectQuery
+  if (typeof candidate !== 'string') return '/worker/home'
+
+  // 초대 복귀는 승인된 내부 경로 하나만 허용한다. //host, scheme, Query·Fragment는 버린다.
+  if (!/^\/invitations\/[A-Za-z0-9_-]+$/.test(candidate)) return '/worker/home'
+  return candidate
 }

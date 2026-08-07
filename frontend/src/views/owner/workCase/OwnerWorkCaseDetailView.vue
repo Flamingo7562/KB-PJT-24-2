@@ -7,7 +7,7 @@
  *   →  @/services/workCases (getWorkCase, updateWorkCase, deleteWorkCase, createInvite)
  * route.params.workCaseId 사용. 공통: TrustBadge(알바생 뱃지) · StatusChip · BaseModal(삭제 확인)
  */
-import { Link2, Pencil, RefreshCw, Trash2 } from 'lucide-vue-next'
+import { FileText, Link2, Pencil, RefreshCw, Trash2 } from 'lucide-vue-next'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
@@ -24,6 +24,7 @@ import {
   isDraft,
   isInvitationUsable
 } from '@/constants/workCaseStatus'
+import { contractFileUrl } from '@/services/documents'
 import { fieldErrorMap } from '@/services/http'
 import {
   createInvite,
@@ -76,6 +77,10 @@ const canReissueInviteLink = computed(
  * 이미 받아 둔 상세로 미리 판별한다 — 두 경우 모두 응답은 204 라 구분할 수 없다.
  */
 const deleteKeepsHistory = computed(() => latestInvitation.value != null)
+const contractViewUrl = computed(() => {
+  const documentId = workCase.value?.contract?.documentId
+  return documentId ? contractFileUrl(documentId, 'view') : ''
+})
 
 /** 계약·예치·근태처럼 "이 근무가 왜 잠겼는지"를 보여주는 근거가 하나라도 있는지. */
 const hasProgressInfo = computed(
@@ -366,6 +371,16 @@ async function onReissueInvite() {
                 <dd>
                   {{ formatSeoulDateTime(workCase.contract.acceptedAt) }}
                   <span class="sub">(조건 v{{ workCase.contract.sourceTermsVersion }})</span>
+                  <a
+                    v-if="contractViewUrl"
+                    :href="contractViewUrl"
+                    target="_blank"
+                    rel="noopener"
+                    class="contract-link"
+                  >
+                    <FileText :size="15" />
+                    최종본 보기
+                  </a>
                 </dd>
               </div>
               <div v-if="workCase.escrow" class="detail-row">
@@ -592,6 +607,15 @@ async function onReissueInvite() {
 }
 .sub {
   color: var(--color-text-sub);
+}
+.contract-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: var(--space-xs);
+  color: var(--color-owner);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
 }
 
 /* ---- 진행 현황(초대·계약·예치·근태) ---- */

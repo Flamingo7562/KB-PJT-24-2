@@ -149,6 +149,7 @@ describe('OwnerWorkCaseDetailView', () => {
     expect(text).toContain('09:05') // 출근(KST)
     expect(text).toContain('정산대기') // settlements.status=WAITING 이 한글로 매핑돼야 한다
     expect(text).not.toContain('WAITING')
+    expect(wrapper.get('.contract-link').attributes('href')).toBe('/api/documents/9/file?mode=view')
   })
 
   it('기한이 지난 PENDING 초대는 상태만이 아니라 기한 경과를 함께 알린다', async () => {

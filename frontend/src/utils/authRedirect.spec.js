@@ -52,4 +52,20 @@ describe('resolveWorkerLoginRedirect', () => {
       '/worker/home'
     )
   })
+
+  it.each([
+    'https://evil.example/invitations/token',
+    '//evil.example/invitations/token',
+    '/owner/home',
+    '/invitations/token?next=/owner/home',
+    '/invitations/token#fragment'
+  ])('외부·다른 역할·변형 경로 %s는 복귀하지 않는다', (redirect) => {
+    expect(resolveWorkerLoginRedirect(redirect)).toBe('/worker/home')
+  })
+
+  it('복수 Query 값도 첫 번째 안전한 초대 경로만 사용한다', () => {
+    expect(resolveWorkerLoginRedirect(['/invitations/abc_123', '/owner/home'])).toBe(
+      '/invitations/abc_123'
+    )
+  })
 })
