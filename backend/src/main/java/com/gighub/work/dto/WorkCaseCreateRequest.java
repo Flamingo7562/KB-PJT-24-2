@@ -15,7 +15,11 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Getter;
 
 /**
- * 승인된 근무 {@code DRAFT} 등록 입력입니다.
+ * 승인된 근무 {@code DRAFT} 등록·조건 수정 입력입니다.
+ *
+ * <p>API_SPEC 4.0.0이 {@code POST}와 {@code PATCH} Body를 같은 일곱 필드로 고정해 이 DTO를
+ * 두 Endpoint가 함께 씁니다. {@code PATCH}도 일곱 필드를 모두 요구하며 생략·명시적
+ * {@code null}은 검증 실패입니다.</p>
  *
  * <p>API_SPEC이 등록 Body를 {@code title}, {@code workDate}, {@code startTime},
  * {@code endTime}, {@code breakMinutes}, {@code breakPaid}, {@code dailyWage} 7개로
