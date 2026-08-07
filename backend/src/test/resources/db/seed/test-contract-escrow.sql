@@ -115,6 +115,33 @@ ON DUPLICATE KEY UPDATE
     available_amount = 0,
     status = 'ACTIVE';
 
+-- canonical bank code마다 충전·출금에 재사용할 수 있는 ACTIVE 합성 계좌를 유지한다.
+INSERT INTO mock_bank_accounts (
+    bank_code, mock_account_number, pin, mock_fintech_use_num,
+    currency, balance, available_amount, status
+) VALUES
+    (
+        '088', '110245000088', '0000', 'TEST-FINTECH-SHINHAN-245',
+        'KRW', 1000000, 1000000, 'ACTIVE'
+    ),
+    (
+        '020', '1002245000020', '0000', 'TEST-FINTECH-WOORI-245',
+        'KRW', 1000000, 1000000, 'ACTIVE'
+    ),
+    (
+        '081', '24591000000081', '0000', 'TEST-FINTECH-HANA-245',
+        'KRW', 1000000, 1000000, 'ACTIVE'
+    ),
+    (
+        '011', '3010245000011', '0000', 'TEST-FINTECH-NH-245',
+        'KRW', 1000000, 1000000, 'ACTIVE'
+    )
+ON DUPLICATE KEY UPDATE
+    pin = '0000',
+    balance = 1000000,
+    available_amount = 1000000,
+    status = 'ACTIVE';
+
 SET @owner_account_id = (
     SELECT id
     FROM mock_bank_accounts
