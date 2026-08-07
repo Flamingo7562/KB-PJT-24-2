@@ -74,6 +74,16 @@ describe('AppField success', () => {
   })
 })
 
+describe('AppField 모델 동기화', () => {
+  it('부모가 값을 비우면 실제 DOM 입력값도 지운다', async () => {
+    const wrapper = mount(AppField, { props: { modelValue: '0000', type: 'password' } })
+
+    await wrapper.setProps({ modelValue: '' })
+
+    expect(wrapper.find('input').element.value).toBe('')
+  })
+})
+
 // F3: 이 브랜치(#238)가 blur 시 뜨는 메시지를 주된 피드백 채널로 만들었으니, 스크린리더
 // 사용자에게도 같은 신호가 가야 한다. 메시지는 input 의 형제 <p> 로만 렌더되고 있었다 —
 // DOM 상 연결이 없으면 시각적으로만 오류가 "보이고" 스크린리더는 아무 것도 알리지 않는다.
