@@ -34,6 +34,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
@@ -206,6 +207,18 @@ class WorkCaseServiceDatabaseIntegrationTest {
             Long otherOwnerId,
             Long workplaceId) {
         Long workerUserId = insertWorker(jdbc, "qa154d1" + UUID.randomUUID().toString().substring(0, 8));
+
+        // 출근 전 근무는 근태 기록이 없다. 집계 SQL이 전 컬럼 NULL 행을 돌려주고 MyBatis가 그
+        // 행을 null 객체로 매핑하므로, 이 경로를 함께 검증하지 않으면 상세 조회가 상시 실패해도
+        // 아래의 "기록이 다 있는" 검증만으로는 드러나지 않는다.
+        Long beforeAttendanceId =
+                insertMatchedWorkCase(jdbc, ownerId, workplaceId, workerUserId, "ACCEPTED");
+        WorkCaseDetailResponse beforeAttendance =
+                service.detail(owner(ownerId), beforeAttendanceId);
+        assertNotNull(beforeAttendance.getAttendance());
+        assertNull(beforeAttendance.getAttendance().getCheckedInAt());
+        assertNull(beforeAttendance.getAttendance().getCheckedOutAt());
+
         Long workCaseId = insertMatchedWorkCase(jdbc, ownerId, workplaceId, workerUserId, "COMPLETED");
 
         insertInvitation(jdbc, workCaseId, "ACCEPTED");

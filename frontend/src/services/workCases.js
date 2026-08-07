@@ -1,9 +1,13 @@
 /**
  * 근무(work_case) API 서비스 — 사장 근태관리 + 근무 상세/정산/신고.
  *
- * 상태 전이(7단계, @/constants/workCaseStatus):
- *   DRAFT→ACCEPTED→READY→IN_PROGRESS→COMPLETED / 확정 계열 NO_SHOW / CANCELED.
+ * 상태 전이(8단계, @/constants/workCaseStatus):
+ *   DRAFT→ACCEPTED→READY→IN_PROGRESS→(CHECK_OUT_MISSING)→COMPLETED / 확정 계열 NO_SHOW / CANCELED.
  * 수정·삭제·링크생성은 DRAFT 에서만(확정 후 409 WORK_CASE_LOCKED). 정산은 HOLD 일 때만(멱등).
+ *
+ * 근무 DRAFT CRUD·요약·목록·초대 발급(#158)은 실제 Session·CSRF HTTP로 연결되어 있다.
+ * 정산 즉시승인·사장 연락처·임금분쟁(M6)은 USE_MOCK_SETTLEMENT_DISPUTE로 별도 관리하며
+ * 이번 실연동 범위 밖이다.
  *
  * 관련 API(명세 WORK-001~006, INVITE-001, SETTLE-002, CONTACT-001, DISPUTE-001/002):
  *   GET  /api/workplaces/{workplaceId}/work-cases/summary
@@ -16,147 +20,147 @@
  *   GET  /api/work-cases/{workCaseId}/disputes   POST /api/work-cases/{workCaseId}/disputes
  */
 import http, { idempotentPost } from '@/services/http'
+import { USE_MOCK } from '@/services/mockFlag'
 
-const USE_MOCK = true
+// 정산 즉시승인·사장 연락처·임금분쟁은 M6 범위이며 #158에서 실연동하지 않는다.
+// 위 USE_MOCK(공용 mockFlag)과 별개로 항상 Mock을 유지한다.
+const USE_MOCK_SETTLEMENT_DISPUTE = true
 
 // 지점별 근무 목록. 실제 API 처럼 workplaceId·keyword 로 걸러서 응답한다.
 // status 는 7단계 enum(@/constants/workCaseStatus). 요약 6버킷을 골고루 보이도록 구성.
-// canIssueInvitation은 status와 활성 work_invitations를 함께 본 서버 계산 capability다.
+// 목록 UI가 Mock에서도 실 API와 같은 필드 계약(startsAt/endsAt/worker)을 사용하도록 맞춘다.
 const mockWorkCaseList = [
   {
     workCaseId: 101,
     workplaceId: 1,
-    workerName: '이알바',
+    worker: { workerId: 1001, name: '이알바' },
     title: '주말 홀 서빙',
     workDate: '2026-07-22',
-    startTime: '10:00',
-    endTime: '18:00',
-    status: 'IN_PROGRESS',
-    matched: true
+    startsAt: '2026-07-22T01:00:00Z',
+    endsAt: '2026-07-22T09:00:00Z',
+    dailyWage: 90000,
+    status: 'IN_PROGRESS'
   },
   {
     workCaseId: 102,
     workplaceId: 1,
-    workerName: null,
+    worker: null,
     title: '평일 주방 보조',
     workDate: '2026-07-23',
-    startTime: '09:00',
-    endTime: '15:00',
-    status: 'DRAFT',
-    matched: false,
-    canIssueInvitation: true
+    startsAt: '2026-07-23T00:00:00Z',
+    endsAt: '2026-07-23T06:00:00Z',
+    dailyWage: 72000,
+    status: 'DRAFT'
   },
   {
     workCaseId: 103,
     workplaceId: 1,
-    workerName: '박알바',
+    worker: { workerId: 1002, name: '박알바' },
     title: '마감 청소',
     workDate: '2026-07-21',
-    startTime: '20:00',
-    endTime: '23:00',
-    status: 'COMPLETED',
-    matched: true
+    startsAt: '2026-07-21T11:00:00Z',
+    endsAt: '2026-07-21T14:00:00Z',
+    dailyWage: 45000,
+    status: 'COMPLETED'
   },
   {
     workCaseId: 104,
     workplaceId: 1,
-    workerName: null,
+    worker: null,
     title: '금요일 저녁 서빙',
     workDate: '2026-07-25',
-    startTime: '17:00',
-    endTime: '22:00',
-    status: 'DRAFT',
-    matched: false,
-    canIssueInvitation: false
+    startsAt: '2026-07-25T08:00:00Z',
+    endsAt: '2026-07-25T13:00:00Z',
+    dailyWage: 65000,
+    status: 'DRAFT'
   },
   {
     workCaseId: 105,
     workplaceId: 1,
-    workerName: '한알바',
+    worker: { workerId: 1003, name: '한알바' },
     title: '토요일 브런치',
     workDate: '2026-07-26',
-    startTime: '09:00',
-    endTime: '14:00',
-    status: 'READY',
-    matched: true
+    startsAt: '2026-07-26T00:00:00Z',
+    endsAt: '2026-07-26T05:00:00Z',
+    dailyWage: 65000,
+    status: 'READY'
   },
   {
     workCaseId: 106,
     workplaceId: 1,
-    workerName: '한알바2',
+    worker: { workerId: 1004, name: '한알바2' },
     title: '토요일 브런치',
     workDate: '2026-07-26',
-    startTime: '09:00',
-    endTime: '14:00',
-    status: 'ACCEPTED',
-    matched: true
+    startsAt: '2026-07-26T00:00:00Z',
+    endsAt: '2026-07-26T05:00:00Z',
+    dailyWage: 65000,
+    status: 'ACCEPTED'
   },
   {
     workCaseId: 107,
     workplaceId: 1,
-    workerName: '한알바3',
+    worker: { workerId: 1005, name: '한알바3' },
     title: '토요일 브런치',
     workDate: '2026-07-26',
-    startTime: '09:00',
-    endTime: '14:00',
-    status: 'COMPLETED',
-    matched: true
+    startsAt: '2026-07-26T00:00:00Z',
+    endsAt: '2026-07-26T05:00:00Z',
+    dailyWage: 65000,
+    status: 'COMPLETED'
   },
   {
     workCaseId: 108,
     workplaceId: 1,
-    workerName: '박알바2',
+    worker: { workerId: 1006, name: '박알바2' },
     title: '마감 청소',
     workDate: '2026-07-21',
-    startTime: '20:00',
-    endTime: '23:00',
-    status: 'COMPLETED',
-    matched: true
+    startsAt: '2026-07-21T11:00:00Z',
+    endsAt: '2026-07-21T14:00:00Z',
+    dailyWage: 45000,
+    status: 'COMPLETED'
   },
   {
     workCaseId: 109,
     workplaceId: 1,
-    workerName: '한알바4',
+    worker: { workerId: 1007, name: '한알바4' },
     title: '토요일 브런치',
     workDate: '2026-07-26',
-    startTime: '09:00',
-    endTime: '14:00',
-    status: 'IN_PROGRESS',
-    matched: true
+    startsAt: '2026-07-26T00:00:00Z',
+    endsAt: '2026-07-26T05:00:00Z',
+    dailyWage: 65000,
+    status: 'IN_PROGRESS'
   },
   {
     workCaseId: 201,
     workplaceId: 2,
-    workerName: '최알바',
+    worker: { workerId: 2001, name: '최알바' },
     title: '홍대 오픈 캐셔',
     workDate: '2026-07-24',
-    startTime: '08:00',
-    endTime: '14:00',
-    status: 'IN_PROGRESS',
-    matched: true
+    startsAt: '2026-07-23T23:00:00Z',
+    endsAt: '2026-07-24T05:00:00Z',
+    dailyWage: 78000,
+    status: 'IN_PROGRESS'
   },
   {
     workCaseId: 202,
     workplaceId: 2,
-    workerName: null,
+    worker: null,
     title: '주말 디저트 보조',
     workDate: '2026-07-25',
-    startTime: '13:00',
-    endTime: '19:00',
-    status: 'DRAFT',
-    matched: false,
-    canIssueInvitation: true
+    startsAt: '2026-07-25T04:00:00Z',
+    endsAt: '2026-07-25T10:00:00Z',
+    dailyWage: 78000,
+    status: 'DRAFT'
   },
   {
     workCaseId: 203,
     workplaceId: 2,
-    workerName: '김알바',
+    worker: { workerId: 2002, name: '김알바' },
     title: '평일 마감 정리',
     workDate: '2026-07-20',
-    startTime: '18:00',
-    endTime: '23:00',
-    status: 'NO_SHOW',
-    matched: true
+    startsAt: '2026-07-20T09:00:00Z',
+    endsAt: '2026-07-20T14:00:00Z',
+    dailyWage: 65000,
+    status: 'NO_SHOW'
   }
 ]
 
@@ -178,15 +182,29 @@ function filterMockWorkCases(workplaceId, { keyword = '', status = '', from = ''
       (s) =>
         q === '' ||
         s.title.toLowerCase().includes(q) ||
-        (s.workerName ?? '').toLowerCase().includes(q)
+        (s.worker?.name ?? '').toLowerCase().includes(q)
     )
     .sort(
       (a, b) =>
         -(
           String(a.workDate).localeCompare(String(b.workDate)) ||
-          String(a.startTime).localeCompare(String(b.startTime))
+          String(a.startsAt).localeCompare(String(b.startsAt))
         )
     )
+}
+
+/** Mock 내부 필터용 workplaceId는 숨기고 실제 목록 응답 필드만 복사한다. */
+function toMockWorkCaseListItem(item) {
+  return {
+    workCaseId: item.workCaseId,
+    title: item.title,
+    workDate: item.workDate,
+    startsAt: item.startsAt,
+    endsAt: item.endsAt,
+    dailyWage: item.dailyWage,
+    status: item.status,
+    worker: item.worker ? { ...item.worker } : null
+  }
 }
 
 // 지점 이름(mock 표시용). 실제 API 는 상세 응답에 workplaceName 을 담아준다.
@@ -198,14 +216,19 @@ const mockWorkCaseDetail = {
   workplaceName: '강남점',
   title: '주말 홀 서빙',
   workDate: '2026-07-22',
-  startTime: '10:00',
-  endTime: '18:00',
+  startsAt: '2026-07-22T01:00:00Z',
+  endsAt: '2026-07-22T09:00:00Z',
   breakMinutes: 60,
   breakPaid: false,
   dailyWage: 90000,
   status: 'IN_PROGRESS',
-  settleStatus: 'HOLD',
-  worker: { name: '이알바', badgeLevel: 2 } // 매칭된 알바생 + 성실 뱃지
+  termsVersion: 1,
+  latestInvitation: null,
+  contract: null,
+  attendance: { checkedInAt: null, checkedOutAt: null },
+  escrow: null,
+  settlement: null,
+  worker: { workerId: 1001, name: '이알바' }
 }
 
 /**
@@ -235,7 +258,7 @@ export async function getWorkCaseSummary(workplaceId) {
  *
  * 목록 뷰·캘린더 뷰가 **같은 엔드포인트**를 쓴다. 캘린더 뷰일 때만 보고 있는 달을
  * from/to 로 좁혀서 요청하고, 결과를 날짜별로 묶어 그린다(@/utils/calendar).
- * content 항목의 canIssueInvitation은 일회성 연결 링크 신규 발급 가능 여부다.
+ * content 항목은 실 API의 WorkCaseListItemResponse 필드 계약을 그대로 따른다.
  * @param {number} workplaceId
  * @param {object} params keyword, status, from, to, page, size
  */
@@ -246,11 +269,14 @@ export async function listWorkCases(workplaceId, params = {}) {
       status: params.status,
       from: params.from,
       to: params.to
-    }).map((s) => ({ ...s }))
-    return { content, totalPages: 1 }
+    }).map(toMockWorkCaseListItem)
+    return {
+      content,
+      page: { number: 0, size: content.length || 1, totalElements: content.length, totalPages: 1 }
+    }
   }
-  // 페이지 응답 { content, page, size, totalElements } 은 data 래핑이 없어 본문을 그대로 반환.
-  return http.get(`/workplaces/${workplaceId}/work-cases`, { params })
+  const { data } = await http.get(`/workplaces/${workplaceId}/work-cases`, { params })
+  return data
 }
 
 /**
@@ -274,18 +300,17 @@ export async function getWorkCase(workCaseId) {
       ...listItem,
       workCaseId: Number(workCaseId),
       workplaceName: MOCK_WORKPLACE_NAMES[listItem.workplaceId] ?? mockWorkCaseDetail.workplaceName,
-      worker: listItem.workerName ? { name: listItem.workerName, badgeLevel: 2 } : null
+      worker: listItem.worker ? { ...listItem.worker } : null
     }
   }
   const { data } = await http.get(`/work-cases/${workCaseId}`)
   return data
 }
 
-/** 근무 수정 (WORK-005). DRAFT 만 허용, 확정 후 409 WORK_CASE_LOCKED */
+/** 근무 수정 (WORK-005). DRAFT 만 허용, 확정 후 409 WORK_CASE_LOCKED. 성공은 204 로 Body 가 없다. */
 export async function updateWorkCase(workCaseId, payload) {
-  if (USE_MOCK) return { workCaseId, ...payload }
-  const { data } = await http.patch(`/work-cases/${workCaseId}`, payload)
-  return data
+  if (USE_MOCK) return
+  await http.patch(`/work-cases/${workCaseId}`, payload)
 }
 
 /** 근무 삭제 (WORK-006). DRAFT 만 허용, 확정 후 409 WORK_CASE_LOCKED */
@@ -294,15 +319,38 @@ export async function deleteWorkCase(workCaseId) {
   await http.delete(`/work-cases/${workCaseId}`)
 }
 
-/** 근무 연결 링크 생성 → { inviteUrl, expiresAt } (INVITE-001). DRAFT 만, 1회성 토큰 */
+/**
+ * 근무 연결 링크 발급 → { inviteUrl, expiresAt } (INVITE-001).
+ *
+ * 활성 초대가 이미 있으면 서버가 그 링크를 그대로 돌려준다(새 발급 201, 재사용 200).
+ * 공통 Client 가 Body 만 넘겨주므로 화면은 둘을 구분하지 않는다 — 어느 쪽이든 "지금 유효한
+ * 링크"라는 의미가 같다. 링크를 바꾸려면 reissueInvite 를 쓴다.
+ */
 export async function createInvite(workCaseId) {
   if (USE_MOCK) {
     return {
       inviteUrl: `${location.origin}/invitations/mock-token-${workCaseId}`,
-      expiresAt: '2026-07-23T23:59:59'
+      expiresAt: '2026-07-23T23:59:59Z'
     }
   }
   const { data } = await http.post(`/work-cases/${workCaseId}/invitations`)
+  return data
+}
+
+/**
+ * 연결 링크 재발급 → { inviteUrl, expiresAt } (INVITE-001).
+ *
+ * 현재 활성 초대를 철회하고 새 Token 으로 교체한다. 이전 링크는 즉시 사용할 수 없게 되므로
+ * 링크를 잘못 보냈을 때만 쓴다. 항상 새 초대를 만들어 성공은 언제나 201 이다.
+ */
+export async function reissueInvite(workCaseId) {
+  if (USE_MOCK) {
+    return {
+      inviteUrl: `${location.origin}/invitations/mock-token-${workCaseId}-reissued`,
+      expiresAt: '2026-07-23T23:59:59Z'
+    }
+  }
+  const { data } = await http.post(`/work-cases/${workCaseId}/invitations/reissue`)
   return data
 }
 
@@ -311,7 +359,7 @@ export async function createInvite(workCaseId) {
  * Idempotency-Key(UUID) 필수 — 재시도 시 동일 키로 중복 지급 방지.
  */
 export async function approveSettlement(workCaseId) {
-  if (USE_MOCK) {
+  if (USE_MOCK_SETTLEMENT_DISPUTE) {
     return { settlementId: 1, status: 'COMPLETED', completedAt: new Date().toISOString() }
   }
   const { data } = await idempotentPost(`/work-cases/${workCaseId}/settlement/approve`)
@@ -323,14 +371,14 @@ export async function approveSettlement(workCaseId) {
  * phone 은 승인 계약대로 구분 문자 없는 숫자다. 표시 형식은 화면에서 만든다.
  */
 export async function getOwnerContact(workCaseId) {
-  if (USE_MOCK) return { ownerName: '김사장', phone: '01012345678' }
+  if (USE_MOCK_SETTLEMENT_DISPUTE) return { ownerName: '김사장', phone: '01012345678' }
   const { data } = await http.get(`/work-cases/${workCaseId}/workplace-contact`)
   return data
 }
 
 /** 신고 내역 조회 → { content[] } (DISPUTE-002). 당사자만 */
 export async function listReports(workCaseId) {
-  if (USE_MOCK) return { content: [] }
+  if (USE_MOCK_SETTLEMENT_DISPUTE) return { content: [] }
   // 페이지 응답 { content, ... } 은 data 래핑이 없어 본문을 그대로 반환.
   return http.get(`/work-cases/${workCaseId}/disputes`)
 }
@@ -340,7 +388,7 @@ export async function listReports(workCaseId) {
  * @param {object} payload content(경위서)
  */
 export async function createReport(workCaseId, { content }) {
-  if (USE_MOCK) return { reportId: Date.now() }
+  if (USE_MOCK_SETTLEMENT_DISPUTE) return { reportId: Date.now() }
   const { data } = await http.post(`/work-cases/${workCaseId}/disputes`, { content })
   return data
 }

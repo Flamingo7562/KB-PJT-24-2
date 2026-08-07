@@ -58,6 +58,61 @@ export function formatTimeRange(start, end) {
   return `${s} ~ ${e}`
 }
 
+/**
+ * API 의 UTC Instant → 근무지 기준(Asia/Seoul) 벽시계 "HH:mm".
+ *
+ * 근무 시각은 DB 에 Asia/Seoul 벽시계로 저장되고 서버가 경계에서 UTC Instant 로 바꿔 준다
+ * (docs/agent/ARCHITECTURE_OVERVIEW.md). 위 formatTime 은 브라우저 로컬 TZ 로 읽으므로
+ * 사용자의 기기 설정이 KST 가 아니면 근무 시각이 어긋난다. 근무 시각은 "그 사업장에서 몇 시"가
+ * 유일한 의미이므로 표시·편집 모두 Asia/Seoul 로 고정한다.
+ *
+ * 로컬 TZ 로 읽는 formatTime 은 "09:00" 같은 벽시계 문자열을 그대로 받는 다른 화면들이
+ * 쓰고 있어 그대로 둔다.
+ */
+const SEOUL_WALL_CLOCK_TIME = new Intl.DateTimeFormat('en-GB', {
+  timeZone: 'Asia/Seoul',
+  hour: '2-digit',
+  minute: '2-digit',
+  hourCycle: 'h23'
+})
+
+export function formatSeoulTime(value) {
+  if (value == null || value === '') return ''
+  const d = new Date(value)
+  if (Number.isNaN(d.getTime())) return ''
+  return SEOUL_WALL_CLOCK_TIME.format(d)
+}
+
+/** UTC Instant 시작·종료 → 근무지 기준 "09:00 ~ 18:00" */
+export function formatSeoulTimeRange(start, end) {
+  const s = formatSeoulTime(start)
+  const e = formatSeoulTime(end)
+  if (!s && !e) return ''
+  return `${s} ~ ${e}`
+}
+
+/** UTC Instant → 근무지 기준(Asia/Seoul) "2026.08.01 09:00" */
+const SEOUL_WALL_CLOCK_DATE_TIME = new Intl.DateTimeFormat('ko-KR', {
+  timeZone: 'Asia/Seoul',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  hourCycle: 'h23'
+})
+
+export function formatSeoulDateTime(value) {
+  if (value == null || value === '') return ''
+  const d = new Date(value)
+  if (Number.isNaN(d.getTime())) return ''
+  // ko-KR 은 "2026. 08. 01. 09:00" 처럼 마침표와 공백을 섞어 준다. 표기를 통일한다.
+  return SEOUL_WALL_CLOCK_DATE_TIME.format(d)
+    .replace(/\.\s*/g, '.')
+    .replace(/\.(\d{2}:)/, ' $1')
+    .replace(/\.$/, '')
+}
+
 /** 숫자 외 문자를 모두 제거한다(계좌번호·금액 등 숫자 전용 입력의 붙여넣기/IME 대비). */
 export function onlyDigits(value) {
   return String(value).replace(/\D/g, '')

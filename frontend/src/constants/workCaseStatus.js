@@ -38,12 +38,60 @@ export function workCaseStatusColor(status) {
   return WORK_CASE_STATUS[status]?.color ?? 'var(--color-text-sub)'
 }
 
-/**
- * 수정·삭제 가능 여부에 사용하는 DRAFT 판별이다.
- * 연결 링크 발급은 별도 canIssueInvitation capability를 사용한다.
- */
+/** 수정·삭제 가능 여부에 사용하는 DRAFT 판별이다(서버도 DRAFT 만 허용한다). */
 export function isDraft(status) {
   return status === 'DRAFT'
+}
+
+/**
+ * 초대 Link 를 새로 발급할 수 있는 근무인지 판별한다.
+ *
+ * 서버(InvitationIssueServiceImpl)는 DRAFT 여부만이 아니라 **세 조건을 모두** 본다.
+ *   DRAFT · 아직 매칭된 알바생 없음 · 근무 시작 시각 전
+ * 하나라도 어긋나면 409 WORK_CASE_LOCKED 다. 승인 응답(WorkCaseListItemResponse ·
+ * WorkCaseDetailResponse)에 capability 필드가 없으므로 같은 세 조건을 여기서 재현한다.
+ * DRAFT 만 보고 버튼을 노출하면 시작 시각이 지난 근무에서 항상 실패하는 버튼이 보인다.
+ *
+ * 최종 권한은 서버에 있다. 이 판별은 실패할 동작을 미리 감추기 위한 것이다.
+ *
+ * @param {object} workCase status, worker, startsAt 를 가진 근무 항목
+ * @param {Date} now 시작 시각 비교 기준(테스트에서 고정할 수 있게 주입한다)
+ */
+export function canIssueInvitation(workCase, now = new Date()) {
+  if (!isDraft(workCase?.status) || workCase?.worker) return false
+  const startsAt = new Date(workCase?.startsAt)
+  return !Number.isNaN(startsAt.getTime()) && startsAt.getTime() > now.getTime()
+}
+
+/**
+ * 초대(work_invitations) 상태 표기 — ck_work_invitations_status 의 5개.
+ *
+ * 근무(work_case) 상태와 별개다. 근무가 DRAFT 여도 초대는 PENDING·REVOKED·EXPIRED 일 수 있고,
+ * 사장이 조건을 수정하면 서버가 PENDING 초대를 REVOKED 로 철회한다.
+ */
+export const INVITATION_STATUS = {
+  PENDING: { label: '수락 대기' },
+  ACCEPTED: { label: '수락됨' },
+  REJECTED: { label: '거절됨' },
+  REVOKED: { label: '철회됨' },
+  EXPIRED: { label: '만료됨' }
+}
+
+/** 초대 상태 → 표기 라벨(없으면 원문 반환). */
+export function invitationStatusLabel(status) {
+  return INVITATION_STATUS[status]?.label ?? status
+}
+
+/**
+ * 지금 사용할 수 있는 초대인지 판별한다.
+ *
+ * 서버는 만료 시각을 근무 시작 시각으로 두고, 만료가 지나도 status 를 즉시 EXPIRED 로 바꾸지
+ * 않는다(수락 시점에 판정). 그래서 PENDING 이어도 만료 시각이 지났으면 쓸 수 없는 링크다.
+ */
+export function isInvitationUsable(invitation, now = new Date()) {
+  if (invitation?.status !== 'PENDING') return false
+  const expiresAt = new Date(invitation?.expiresAt)
+  return !Number.isNaN(expiresAt.getTime()) && expiresAt.getTime() > now.getTime()
 }
 
 /**

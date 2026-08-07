@@ -12,6 +12,7 @@ import { useRouter } from 'vue-router'
 import AppBackHeader from '@/components/common/AppBackHeader.vue'
 import AppField from '@/components/common/AppField.vue'
 import BaseButton from '@/components/common/BaseButton.vue'
+import { fieldErrorMap } from '@/services/http'
 import { createWorkCase } from '@/services/workCases'
 import { useUiStore } from '@/stores/ui'
 import { useWorkplaceStore } from '@/stores/workplace'
@@ -97,8 +98,15 @@ async function onSubmit() {
     })
     ui.toast('근무 포지션을 등록했어요.', { type: 'success' })
     router.push('/owner/attendance')
-  } catch {
-    ui.toast('근무 등록에 실패했어요.', { type: 'danger' })
+  } catch (err) {
+    // 서버 fieldErrors는 폼 필드명과 같은 이름(title/workDate/startTime/endTime/
+    // breakMinutes/dailyWage)을 쓴다 — 필드별 사유가 있으면 그 필드에, 없으면 토스트로.
+    const serverErrors = fieldErrorMap(err)
+    if (Object.keys(serverErrors).length > 0) {
+      Object.assign(errors, serverErrors)
+    } else {
+      ui.toast('근무 등록에 실패했어요.', { type: 'danger' })
+    }
   } finally {
     submitting.value = false
   }

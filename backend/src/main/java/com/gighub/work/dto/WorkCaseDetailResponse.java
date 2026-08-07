@@ -132,9 +132,20 @@ public final class WorkCaseDetailResponse {
         private final Instant checkedInAt;
         private final Instant checkedOutAt;
 
+        /**
+         * 근태 기록이 하나도 없는 근무를 빈 요약으로 받습니다.
+         *
+         * <p>{@code findAttendanceTimestamps}는 {@code MAX(...)} 집계라 행 자체는 항상
+         * 하나지만 두 컬럼이 모두 {@code NULL}입니다. MyBatis는 생성자 resultMap에서 모든
+         * 컬럼이 {@code NULL}인 행을 {@code null} 객체로 매핑하므로(기본
+         * {@code returnInstanceForEmptyRow=false}) 여기로 {@code null}이 들어옵니다.
+         * 출근 전 근무가 대부분이라 이를 막지 않으면 상세 조회가 상시 실패합니다.</p>
+         *
+         * <p>{@code attendance}만 항상 객체라는 응답 계약은 그대로 유지하고, 값만 비웁니다.</p>
+         */
         private AttendanceSummary(AttendanceSummaryRow row) {
-            this.checkedInAt = ApiTimes.toInstant(row.getCheckedInAt());
-            this.checkedOutAt = ApiTimes.toInstant(row.getCheckedOutAt());
+            this.checkedInAt = row == null ? null : ApiTimes.toInstant(row.getCheckedInAt());
+            this.checkedOutAt = row == null ? null : ApiTimes.toInstant(row.getCheckedOutAt());
         }
     }
 

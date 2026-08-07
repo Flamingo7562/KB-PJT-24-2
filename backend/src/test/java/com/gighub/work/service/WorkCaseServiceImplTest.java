@@ -373,6 +373,25 @@ class WorkCaseServiceImplTest {
         assertEquals(WORK_CASE_ID, response.getWorkCaseId());
     }
 
+    /**
+     * 근태 기록이 없으면 Mapper가 {@code null}을 돌려준다.
+     *
+     * <p>집계 SQL이라 행은 있지만 두 컬럼이 모두 {@code NULL}이고, MyBatis 생성자 resultMap은
+     * 그런 행을 {@code null} 객체로 매핑한다. 위 테스트들이 쓰는 빈 객체 stub은 이 실제 동작과
+     * 달라 출근 전 근무의 상세 조회 실패를 잡지 못했다.</p>
+     */
+    @Test
+    void detailReturnsEmptyAttendanceWhenNoRecordsExist() {
+        when(workCaseMapper.findDetailRow(WORK_CASE_ID)).thenReturn(detailRow(OWNER_ID, null));
+        when(workCaseMapper.findAttendanceTimestamps(WORK_CASE_ID)).thenReturn(null);
+
+        WorkCaseDetailResponse response = service.detail(owner(), WORK_CASE_ID);
+
+        assertNotNull(response.getAttendance());
+        assertNull(response.getAttendance().getCheckedInAt());
+        assertNull(response.getAttendance().getCheckedOutAt());
+    }
+
     @Test
     void detailAllowsMatchedWorker() {
         Long workerId = 42L;

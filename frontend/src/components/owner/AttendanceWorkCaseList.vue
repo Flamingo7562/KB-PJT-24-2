@@ -14,7 +14,8 @@
 import { Link2 } from 'lucide-vue-next'
 
 import StatusChip from '@/components/common/StatusChip.vue'
-import { formatDate, formatTimeRange } from '@/utils/format'
+import { canIssueInvitation } from '@/constants/workCaseStatus'
+import { formatDate, formatSeoulTimeRange } from '@/utils/format'
 
 defineProps({
   /** 표시할 근무 목록(서버 조회 결과 그대로) */
@@ -38,16 +39,17 @@ const emit = defineEmits(['select', 'copy-invite'])
         </div>
         <p class="item-when">
           <template v-if="showDate">{{ formatDate(workCase.workDate) }} · </template>
-          {{ formatTimeRange(workCase.startTime, workCase.endTime) }}
+          {{ formatSeoulTimeRange(workCase.startsAt, workCase.endsAt) }}
         </p>
         <p class="item-worker">
-          {{ workCase.workerName ?? '아직 매칭된 알바생이 없어요' }}
+          {{ workCase.worker?.name ?? '아직 매칭된 알바생이 없어요' }}
         </p>
       </button>
 
-      <!-- 서버가 계산한 capability가 true일 때만 일회성 연결 링크를 새로 발급한다. -->
+      <!-- 서버의 발급 허용 조건(DRAFT · 미매칭 · 시작 전)을 그대로 재현한다.
+           목록 Item 에 capability 필드가 없어 세 조건을 직접 본다(@/constants/workCaseStatus). -->
       <button
-        v-if="workCase.canIssueInvitation === true"
+        v-if="canIssueInvitation(workCase)"
         type="button"
         class="copy-btn"
         :disabled="copyingId === workCase.workCaseId"

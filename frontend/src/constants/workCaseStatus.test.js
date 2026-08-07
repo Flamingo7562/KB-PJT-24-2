@@ -1,11 +1,18 @@
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   WORK_CASE_STATUS,
   WORK_CASE_SUMMARY,
   emptyWorkCaseSummary
 } from '@/constants/workCaseStatus'
-import { getWorkCaseSummary, listWorkCases } from '@/services/workCases'
+
+// workCases 서비스는 #158부터 mockFlag(VITE_USE_MOCK) 기반 opt-in이라, Mock 데이터
+// 자체를 검증하는 아래 테스트는 mockFlag를 직접 주입해 실행 환경과 무관하게 고정한다.
+async function importWithMock() {
+  vi.resetModules()
+  vi.doMock('@/services/mockFlag', () => ({ USE_MOCK: true }))
+  return import('@/services/workCases')
+}
 
 // ck_work_cases_status(V202607311429) 가 허용하는 8개. 순서는 그 제약의 나열 순서다.
 const PERSISTED_WORK_CASE_STATUSES = [
@@ -20,6 +27,11 @@ const PERSISTED_WORK_CASE_STATUSES = [
 ]
 
 describe('work-case status contract', () => {
+  beforeEach(() => {
+    vi.resetModules()
+    vi.doUnmock('@/services/mockFlag')
+  })
+
   it('maps every persisted status without exposing INVITED', () => {
     expect(Object.keys(WORK_CASE_STATUS)).toEqual(PERSISTED_WORK_CASE_STATUSES)
     expect(WORK_CASE_STATUS).not.toHaveProperty('INVITED')
@@ -39,6 +51,7 @@ describe('work-case status contract', () => {
   })
 
   it('keeps mock list and summary responses free of INVITED', async () => {
+    const { getWorkCaseSummary, listWorkCases } = await importWithMock()
     const [{ content }, summary] = await Promise.all([listWorkCases(1), getWorkCaseSummary(1)])
 
     expect(content.map(({ status }) => status)).not.toContain('INVITED')
@@ -46,18 +59,42 @@ describe('work-case status contract', () => {
     expect(summary).not.toHaveProperty('invited')
   })
 
-  it('separates invitation issuance capability from DRAFT status', async () => {
+  it('keeps the mock list aligned with the live API item contract', async () => {
+    const { listWorkCases } = await importWithMock()
     const { content } = await listWorkCases(1)
-    const issuableDraft = content.find(({ workCaseId }) => workCaseId === 102)
-    const draftWithActiveInvitation = content.find(({ workCaseId }) => workCaseId === 104)
 
-    expect(issuableDraft).toMatchObject({
-      status: 'DRAFT',
-      canIssueInvitation: true
-    })
-    expect(draftWithActiveInvitation).toMatchObject({
-      status: 'DRAFT',
-      canIssueInvitation: false
-    })
+    for (const item of content) {
+      expect(item).toEqual(
+        expect.objectContaining({
+          workCaseId: expect.any(Number),
+          workDate: expect.any(String),
+          startsAt: expect.stringMatching(/Z$/),
+          endsAt: expect.stringMatching(/Z$/),
+          dailyWage: expect.any(Number),
+          status: expect.any(String)
+        })
+      )
+      expect(item).not.toHaveProperty('startTime')
+      expect(item).not.toHaveProperty('endTime')
+      expect(item).not.toHaveProperty('workerName')
+      expect(item).not.toHaveProperty('workplaceId')
+      if (item.worker) {
+        expect(item.worker).toEqual({ workerId: expect.any(Number), name: expect.any(String) })
+      }
+    }
+
+    const { content: workerMatches } = await listWorkCases(1, { keyword: '이알바' })
+    expect(workerMatches.map(({ workCaseId }) => workCaseId)).toEqual([101])
+  })
+
+  // 실제 API는 목록 Item에 capability를 두지 않으므로 Mock도 별도 필드 없이 DRAFT 항목만 둔다.
+  it('keeps multiple DRAFT items in the mock fixture', async () => {
+    const { listWorkCases } = await importWithMock()
+    const { content } = await listWorkCases(1)
+    const firstDraft = content.find(({ workCaseId }) => workCaseId === 102)
+    const secondDraft = content.find(({ workCaseId }) => workCaseId === 104)
+
+    expect(firstDraft).toMatchObject({ status: 'DRAFT' })
+    expect(secondDraft).toMatchObject({ status: 'DRAFT' })
   })
 })
