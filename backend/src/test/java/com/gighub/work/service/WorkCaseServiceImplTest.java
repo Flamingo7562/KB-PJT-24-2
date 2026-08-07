@@ -22,12 +22,14 @@ import com.gighub.work.service.command.WorkCaseUpdateCommand;
 import com.gighub.work.service.impl.WorkCaseServiceImpl;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.dao.DataIntegrityViolationException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -176,6 +178,17 @@ class WorkCaseServiceImplTest {
         verify(workCaseMapper).revokePendingInvitations(WORK_CASE_ID);
         verify(workCaseMapper).cancelDraft(WORK_CASE_ID);
         verify(workCaseMapper, never()).deleteDraft(anyLong());
+    }
+
+    @Test
+    void deleteConvertsForeignKeyRestrictIntoWorkCaseLocked() {
+        when(workCaseMapper.lockById(WORK_CASE_ID))
+                .thenReturn(lockRow(OWNER_ID, WorkCaseStatus.DRAFT));
+        when(workCaseMapper.countInvitations(WORK_CASE_ID)).thenReturn(0);
+        doThrow(new DataIntegrityViolationException("fk violation"))
+                .when(workCaseMapper).deleteDraft(WORK_CASE_ID);
+
+        assertThrows(WorkCaseLockedException.class, () -> service.delete(owner(), WORK_CASE_ID));
     }
 
     @Test

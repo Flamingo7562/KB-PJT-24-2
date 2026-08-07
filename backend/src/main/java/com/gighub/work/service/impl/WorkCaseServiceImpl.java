@@ -20,6 +20,7 @@ import com.gighub.work.mapper.result.WorkCaseLockRow;
 import com.gighub.work.service.WorkCaseService;
 import com.gighub.work.service.command.WorkCaseCreateCommand;
 import com.gighub.work.service.command.WorkCaseUpdateCommand;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -112,12 +113,26 @@ public class WorkCaseServiceImpl implements WorkCaseService {
         // DRAFT는 ACCEPTED 이후에만 만들어지는 계약·에스크로를 가질 수 없습니다. 상태 확인이
         // 곧 "계약·에스크로가 없음"의 증명이라 별도 존재 조회를 추가하지 않습니다.
         if (workCaseMapper.countInvitations(workCaseId) == 0) {
-            workCaseMapper.deleteDraft(workCaseId);
+            deleteOrReportLocked(workCaseId);
             return;
         }
 
         workCaseMapper.revokePendingInvitations(workCaseId);
+        // CANCELED 전이는 status 등 일부 컬럼만 바꾸는 UPDATE라 자식 테이블의 FK RESTRICT를
+        // 건드리지 않습니다. 행 자체를 지우는 DELETE만 참조 무결성 위반 가능성이 있습니다.
         workCaseMapper.cancelDraft(workCaseId);
+    }
+
+    /**
+     * DRAFT는 계약·에스크로를 가질 수 없어 FK RESTRICT를 정상적으로 만나지 않지만, 그 불변식이
+     * 나중에 깨지더라도 원시 SQL 예외가 그대로 노출되지 않도록 승인 오류로 변환합니다.
+     */
+    private void deleteOrReportLocked(Long workCaseId) {
+        try {
+            workCaseMapper.deleteDraft(workCaseId);
+        } catch (DataIntegrityViolationException referenced) {
+            throw new WorkCaseLockedException("참조 중인 근무는 삭제할 수 없습니다.");
+        }
     }
 
     /**
