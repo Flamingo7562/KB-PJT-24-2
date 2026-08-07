@@ -29,6 +29,7 @@ import org.springframework.transaction.annotation.EnableTransactionManagement;
         "com.gighub.member.mapper",
         "com.gighub.wallet.mapper",
         "com.gighub.work.mapper",
+        "com.gighub.contract.mapper",
         "com.gighub.document.mapper",
         "com.gighub.idempotency.mapper",
         "com.gighub.invitation.mapper",
