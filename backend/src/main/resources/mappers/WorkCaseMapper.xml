@@ -1,0 +1,149 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.gighub.work.mapper.WorkCaseMapper">
+
+    <!-- DTO가 setter를 갖지 않으므로 생성자 인자로 매핑한다. 인자 순서는 필드 선언 순서를 따른다 -->
+    <resultMap id="ownedWorkplaceSnapshotResult"
+               type="com.gighub.work.mapper.result.OwnedWorkplaceSnapshotRow">
+        <constructor>
+            <idArg column="workplaceId" javaType="java.lang.Long"/>
+            <arg column="workplaceName" javaType="java.lang.String"/>
+            <arg column="roadAddress" javaType="java.lang.String"/>
+            <arg column="detailAddress" javaType="java.lang.String"/>
+            <arg column="latitude" javaType="java.math.BigDecimal"/>
+            <arg column="longitude" javaType="java.math.BigDecimal"/>
+            <arg column="radiusMeters" javaType="java.math.BigDecimal"/>
+        </constructor>
+    </resultMap>
+
+    <resultMap id="workCaseLockResult" type="com.gighub.work.mapper.result.WorkCaseLockRow">
+        <constructor>
+            <idArg column="workCaseId" javaType="java.lang.Long"/>
+            <arg column="employerId" javaType="java.lang.Long"/>
+            <arg column="workplaceId" javaType="java.lang.Long"/>
+            <arg column="workerId" javaType="java.lang.Long"/>
+            <arg column="status" javaType="com.gighub.work.domain.WorkCaseStatus"/>
+            <arg column="termsVersion" javaType="java.lang.Integer"/>
+        </constructor>
+    </resultMap>
+
+    <resultMap id="workCaseStatusCountResult"
+               type="com.gighub.work.mapper.result.WorkCaseStatusCountRow">
+        <constructor>
+            <arg column="status" javaType="com.gighub.work.domain.WorkCaseStatus"/>
+            <arg column="caseCount" javaType="java.lang.Long"/>
+        </constructor>
+    </resultMap>
+
+    <!--
+        소유권과 ACTIVE 조건을 조회에 함께 둡니다. 소유권을 별도 SQL로 확인하면 확인과 사용
+        사이에 사업장 상태가 바뀔 수 있습니다.
+    -->
+    <select id="findOwnedActiveWorkplace" resultMap="ownedWorkplaceSnapshotResult">
+        SELECT id             AS workplaceId,
+               name           AS workplaceName,
+               road_address   AS roadAddress,
+               detail_address AS detailAddress,
+               latitude       AS latitude,
+               longitude      AS longitude,
+               radius_meters  AS radiusMeters
+        FROM workplaces
+        WHERE id = #{workplaceId}
+          AND owner_user_id = #{ownerUserId}
+          AND status = 'ACTIVE'
+    </select>
+
+    <select id="lockById" resultMap="workCaseLockResult">
+        SELECT id            AS workCaseId,
+               employer_id   AS employerId,
+               workplace_id  AS workplaceId,
+               worker_id     AS workerId,
+               status        AS status,
+               terms_version AS termsVersion
+        FROM work_cases
+        WHERE id = #{workCaseId}
+            FOR UPDATE
+    </select>
+
+    <!--
+        worker_id, terms_version, status 는 Column DEFAULT에 기대지 않고 계약값을 직접 적습니다.
+        DEFAULT에 맡기면 "미매칭 DRAFT로 시작한다"는 계약이 코드에서 사라지고, 나중에 DEFAULT가
+        바뀌면 조용히 다른 값이 저장됩니다.
+    -->
+    <insert id="insert" useGeneratedKeys="true" keyProperty="workCaseId">
+        INSERT INTO work_cases
+        (employer_id, worker_id, workplace_id, title,
+         starts_at, ends_at, break_minutes, break_paid,
+         workplace_name, workplace_address,
+         workplace_latitude, workplace_longitude, allowed_radius_meters,
+         agreed_wage, terms_version, status)
+        VALUES
+            (#{employerId}, NULL, #{workplaceId}, #{title},
+             #{startsAt}, #{endsAt}, #{breakMinutes}, #{breakPaid},
+             #{workplaceName}, #{workplaceAddress},
+             #{workplaceLatitude}, #{workplaceLongitude}, #{allowedRadiusMeters},
+             #{dailyWage}, 1, 'DRAFT')
+    </insert>
+
+    <!--
+        terms_version 은 호출부가 계산한 값을 받지 않고 현재 값에 1을 더합니다. 읽은 값으로
+        덮어쓰면 동시 수정에서 같은 Version이 두 번 저장됩니다. status = 'DRAFT' 를 WHERE에
+        두어 상태 확인과 변경을 한 문장으로 처리합니다.
+    -->
+    <update id="updateDraftTerms">
+        UPDATE work_cases
+        SET title         = #{title},
+            starts_at     = #{startsAt},
+            ends_at       = #{endsAt},
+            break_minutes = #{breakMinutes},
+            break_paid    = #{breakPaid},
+            agreed_wage   = #{dailyWage},
+            terms_version = terms_version + 1
+        WHERE id = #{workCaseId}
+          AND status = 'DRAFT'
+    </update>
+
+    <update id="revokePendingInvitations">
+        UPDATE work_invitations
+        SET status     = 'REVOKED',
+            revoked_at = CURRENT_TIMESTAMP(6)
+        WHERE work_case_id = #{workCaseId}
+          AND status = 'PENDING'
+    </update>
+
+    <select id="countInvitations" resultType="int">
+        SELECT COUNT(*)
+        FROM work_invitations
+        WHERE work_case_id = #{workCaseId}
+    </select>
+
+    <delete id="deleteDraft">
+        DELETE FROM work_cases
+        WHERE id = #{workCaseId}
+          AND status = 'DRAFT'
+    </delete>
+
+    <update id="cancelDraft">
+        UPDATE work_cases
+        SET status      = 'CANCELED',
+            canceled_at = CURRENT_TIMESTAMP(6)
+        WHERE id = #{workCaseId}
+          AND status = 'DRAFT'
+    </update>
+
+    <!--
+        employer_id 조건은 workplace_id 만으로도 결과가 같지만 함께 둡니다. 소유권이 SQL에
+        남아 있어야 호출부가 검증을 빠뜨려도 다른 OWNER의 건수가 섞이지 않습니다.
+    -->
+    <select id="countByStatus" resultMap="workCaseStatusCountResult">
+        SELECT status     AS status,
+               COUNT(*)   AS caseCount
+        FROM work_cases
+        WHERE workplace_id = #{workplaceId}
+          AND employer_id = #{ownerUserId}
+        GROUP BY status
+    </select>
+
+</mapper>
