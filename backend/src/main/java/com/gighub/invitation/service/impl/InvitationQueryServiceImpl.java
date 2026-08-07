@@ -67,8 +67,16 @@ public class InvitationQueryServiceImpl implements InvitationQueryService {
         this.clock = clock;
     }
 
+    /**
+     * 만료 전이는 410 응답과 함께 확정되어야 하므로 이 예외에서는 Rollback하지 않습니다.
+     *
+     * <p>{@code InvitationExpiredException}도 RuntimeException이라 기본 규칙대로면 앞서 기록한
+     * {@code EXPIRED} 전이가 함께 지워집니다. 그러면 만료된 초대가 {@code PENDING}으로 남아
+     * 활성 초대 Unique 제약이 OWNER의 새 발급을 계속 막습니다. 이 경로에서 쓰는 값은 그
+     * 전이 하나뿐이라 보존해도 다른 변경이 함께 남지 않습니다.</p>
+     */
     @Override
-    @Transactional
+    @Transactional(noRollbackFor = InvitationExpiredException.class)
     public InvitationDetailResponse findByToken(AuthPrincipal principal, String token) {
         // 초대는 WORKER가 수락하는 흐름이므로 다른 역할에는 존재 여부조차 알리지 않습니다.
         if (principal.getRole() != UserRole.WORKER) {
