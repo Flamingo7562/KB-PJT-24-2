@@ -3,8 +3,16 @@ package com.gighub.work.mapper;
 import java.util.List;
 
 import com.gighub.work.mapper.param.WorkCaseInsertParam;
+import com.gighub.work.mapper.param.WorkCaseListQuery;
 import com.gighub.work.mapper.param.WorkCaseTermsUpdateParam;
+import com.gighub.work.mapper.result.AttendanceSummaryRow;
+import com.gighub.work.mapper.result.ContractDetailRow;
+import com.gighub.work.mapper.result.EscrowSummaryRow;
+import com.gighub.work.mapper.result.LatestInvitationRow;
 import com.gighub.work.mapper.result.OwnedWorkplaceSnapshotRow;
+import com.gighub.work.mapper.result.SettlementSummaryRow;
+import com.gighub.work.mapper.result.WorkCaseDetailRow;
+import com.gighub.work.mapper.result.WorkCaseListRow;
 import com.gighub.work.mapper.result.WorkCaseLockRow;
 import com.gighub.work.mapper.result.WorkCaseStatusCountRow;
 import org.apache.ibatis.annotations.Mapper;
@@ -92,11 +100,94 @@ public interface WorkCaseMapper {
     /**
      * 사업장의 상태별 근무 건수를 집계합니다.
      *
-     * <p>소유권 조건을 집계 SQL 자체에 두어 다른 OWNER의 근무가 건수에 섞이지 않게 합니다.</p>
+     * <p>소유권 조건을 집계 SQL 자체에 두어 다른 OWNER의 근무가 건수에 섞이지 않게 합니다. 이
+     * 조건만으로는 "소유하지 않음"과 "소유했지만 근무가 0건"을 구분할 수 없어, 호출부가 먼저
+     * {@link #existsOwnedManageableWorkplace}로 소유권을 확인합니다.</p>
      *
      * @return 건수가 1 이상인 상태만. 0건 상태는 호출부가 채웁니다
      */
     List<WorkCaseStatusCountRow> countByStatus(
             @Param("workplaceId") Long workplaceId,
             @Param("ownerUserId") Long ownerUserId);
+
+    /**
+     * 인증 OWNER가 소유하고 관리 대상인 사업장인지 확인합니다.
+     *
+     * <p>{@code ACTIVE}·{@code INACTIVE}만 허용하고 {@code DELETED}는 제외합니다. 제외 조건을
+     * {@code <> 'DELETED'}로 쓰지 않는 이유는 나중에 상태가 추가될 때 그 값이 검토 없이
+     * 조회 가능한 것으로 노출되기 때문입니다. 허용 목록으로 두면 새 상태는 기본적으로
+     * 숨겨집니다.</p>
+     */
+    boolean existsOwnedManageableWorkplace(
+            @Param("workplaceId") Long workplaceId,
+            @Param("ownerUserId") Long ownerUserId);
+
+    /**
+     * 조건에 맞는 근무 목록 한 Page를 정렬이 고정된 순서로 조회합니다.
+     *
+     * <p>정렬은 {@code starts_at DESC, id DESC}로 고정됩니다. API_SPEC 4.0.0이 별도 정렬
+     * Query를 받지 않기로 확정했습니다.</p>
+     */
+    List<WorkCaseListRow> findPageByFilters(WorkCaseListQuery query);
+
+    /**
+     * 같은 조건으로 전체 건수를 셉니다. Page Metadata의 {@code totalElements}에 씁니다.
+     *
+     * <p>{@link #findPageByFilters}와 조건이 어긋나면 마지막 Page가 비거나 총 건수가 실제와
+     * 달라지므로 두 쿼리는 같은 {@link WorkCaseListQuery}를 받고 XML의 {@code WHERE}를
+     * 공유합니다.</p>
+     */
+    long countByFilters(WorkCaseListQuery query);
+
+    /**
+     * 근무 상세 본문과 매칭 WORKER를 함께 읽습니다.
+     *
+     * <p>좌표·인증 반경·전화번호는 API_SPEC 4.0.0이 상세 응답에서 제외했으므로 SELECT 자체에
+     * 넣지 않습니다.</p>
+     *
+     * @return 해당 근무가 없으면 {@code null}
+     */
+    WorkCaseDetailRow findDetailRow(@Param("workCaseId") Long workCaseId);
+
+    /**
+     * 조건 Version과 무관하게 생성 시각·ID 내림차순 최신 초대 한 건을 읽습니다.
+     *
+     * @return 초대 이력이 없으면 {@code null}
+     */
+    LatestInvitationRow findLatestInvitation(@Param("workCaseId") Long workCaseId);
+
+    /**
+     * 근무 계약과 연결 계약서 문서를 함께 읽습니다.
+     *
+     * <p>{@code work_contracts}에는 문서 식별자가 없어 {@code documents.work_case_id}와
+     * {@code document_type='EMPLOYMENT_CONTRACT'}로 LEFT JOIN합니다. 계약은 있는데
+     * {@code documentId}가 {@code null}이면 계약서 생성이 중간에 끊긴 손상 상태이며, 호출부가
+     * 이 경우를 계약 없음과 구분해 처리합니다.</p>
+     *
+     * @return 계약이 없으면 {@code null}
+     */
+    ContractDetailRow findContractDetail(@Param("workCaseId") Long workCaseId);
+
+    /**
+     * 근무의 에스크로 상태와 금액을 읽습니다.
+     *
+     * @return 에스크로 행이 없으면 {@code null}
+     */
+    EscrowSummaryRow findEscrow(@Param("workCaseId") Long workCaseId);
+
+    /**
+     * 근무의 정산 상태·금액과 예정·완료 시각을 읽습니다.
+     *
+     * @return 정산 행이 없으면 {@code null}
+     */
+    SettlementSummaryRow findSettlement(@Param("workCaseId") Long workCaseId);
+
+    /**
+     * 성공 출근·퇴근 시각을 조건부 집계 하나로 함께 읽습니다.
+     *
+     * <p>근태 행이 전혀 없어도 두 필드가 모두 {@code null}인 행 하나를 돌려줍니다. API_SPEC
+     * 4.0.0이 {@code attendance}를 항상 객체로 응답하도록 고정했으므로 {@code null} 판정을
+     * 호출부에 넘기지 않습니다.</p>
+     */
+    AttendanceSummaryRow findAttendanceTimestamps(@Param("workCaseId") Long workCaseId);
 }

@@ -1,9 +1,13 @@
 package com.gighub.work.service.impl;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Objects;
 
 import com.gighub.auth.security.AuthPrincipal;
+import com.gighub.common.api.PageRequests;
+import com.gighub.common.api.PageResponse;
 import com.gighub.common.exception.ResourceNotFoundException;
 import com.gighub.common.exception.RoleMismatchException;
 import com.gighub.common.exception.ValidationException;
@@ -12,10 +16,16 @@ import com.gighub.member.domain.UserRole;
 import com.gighub.work.domain.WorkCaseAddress;
 import com.gighub.work.domain.WorkCaseStatus;
 import com.gighub.work.domain.WorkCaseTimes;
+import com.gighub.work.dto.WorkCaseDetailResponse;
+import com.gighub.work.dto.WorkCaseListItemResponse;
+import com.gighub.work.dto.WorkCaseSummaryResponse;
 import com.gighub.work.mapper.WorkCaseMapper;
 import com.gighub.work.mapper.param.WorkCaseInsertParam;
+import com.gighub.work.mapper.param.WorkCaseListQuery;
 import com.gighub.work.mapper.param.WorkCaseTermsUpdateParam;
+import com.gighub.work.mapper.result.ContractDetailRow;
 import com.gighub.work.mapper.result.OwnedWorkplaceSnapshotRow;
+import com.gighub.work.mapper.result.WorkCaseDetailRow;
 import com.gighub.work.mapper.result.WorkCaseLockRow;
 import com.gighub.work.service.WorkCaseService;
 import com.gighub.work.service.command.WorkCaseCreateCommand;
@@ -121,6 +131,127 @@ public class WorkCaseServiceImpl implements WorkCaseService {
         // CANCELED 전이는 status 등 일부 컬럼만 바꾸는 UPDATE라 자식 테이블의 FK RESTRICT를
         // 건드리지 않습니다. 행 자체를 지우는 DELETE만 참조 무결성 위반 가능성이 있습니다.
         workCaseMapper.cancelDraft(workCaseId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public WorkCaseSummaryResponse summary(AuthPrincipal principal, Long workplaceId) {
+        requireOwner(principal);
+        // 소유하지 않은 사업장과 근무 0건인 소유 사업장을 구분해야 하므로, 집계 전에 소유권을
+        // 먼저 확인합니다. countByStatus만으로는 두 경우가 똑같이 빈 결과로 보입니다.
+        if (!workCaseMapper.existsOwnedManageableWorkplace(workplaceId, principal.getUserId())) {
+            throw new ResourceNotFoundException("사업장을 찾을 수 없습니다.");
+        }
+
+        return WorkCaseSummaryResponse.from(
+                workCaseMapper.countByStatus(workplaceId, principal.getUserId()));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PageResponse<WorkCaseListItemResponse> list(
+            AuthPrincipal principal,
+            Long workplaceId,
+            String keyword,
+            WorkCaseStatus status,
+            LocalDate from,
+            LocalDate to,
+            int page,
+            int size) {
+        requireOwner(principal);
+        // 역할을 먼저 확인합니다. Page 값이 잘못된 요청이라도 권한 없는 호출자에게 400을
+        // 돌려주면 Endpoint의 존재와 Query 규칙을 알려주게 됩니다.
+        PageRequests.validate(page, size);
+        if (!workCaseMapper.existsOwnedManageableWorkplace(workplaceId, principal.getUserId())) {
+            throw new ResourceNotFoundException("사업장을 찾을 수 없습니다.");
+        }
+        requireValidDateRange(from, to);
+
+        WorkCaseListQuery query = WorkCaseListQuery.builder()
+                .workplaceId(workplaceId)
+                .ownerUserId(principal.getUserId())
+                .keyword(normalizeKeyword(keyword))
+                .status(status)
+                .from(from)
+                .to(to)
+                .size(size)
+                .offset(PageRequests.offset(page, size))
+                .build();
+
+        long totalElements = workCaseMapper.countByFilters(query);
+        List<WorkCaseListItemResponse> content = workCaseMapper.findPageByFilters(query).stream()
+                .map(WorkCaseListItemResponse::from)
+                .toList();
+
+        return PageResponse.of(content, page, size, totalElements);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public WorkCaseDetailResponse detail(AuthPrincipal principal, Long workCaseId) {
+        WorkCaseDetailRow row = workCaseMapper.findDetailRow(workCaseId);
+        if (row == null) {
+            throw new ResourceNotFoundException("근무 Case를 찾을 수 없습니다.");
+        }
+        requireParty(principal, row);
+
+        return WorkCaseDetailResponse.from(
+                row,
+                workCaseMapper.findLatestInvitation(workCaseId),
+                requireContractIntegrity(workCaseId),
+                workCaseMapper.findAttendanceTimestamps(workCaseId),
+                workCaseMapper.findEscrow(workCaseId),
+                workCaseMapper.findSettlement(workCaseId));
+    }
+
+    /**
+     * 해당 근무의 OWNER 또는 매칭 WORKER만 통과시킵니다.
+     *
+     * <p>미매칭 {@code DRAFT}는 {@code workerId}가 없어 OWNER만 당사자로 남습니다. 존재하지
+     * 않는 근무와 당사자가 아닌 접근을 같은 404로 응답해 "존재는 하지만 내 것이 아니다"라는
+     * 사실을 노출하지 않습니다.</p>
+     */
+    private void requireParty(AuthPrincipal principal, WorkCaseDetailRow row) {
+        boolean isEmployer = row.getEmployerId().equals(principal.getUserId());
+        boolean isMatchedWorker = row.getWorkerId() != null
+                && row.getWorkerId().equals(principal.getUserId());
+        if (!isEmployer && !isMatchedWorker) {
+            throw new ResourceNotFoundException("근무 Case를 찾을 수 없습니다.");
+        }
+    }
+
+    /**
+     * 계약은 있는데 연결 문서가 없는 손상 상태를 API_SPEC 4.0.0 계약대로 500으로 드러냅니다.
+     *
+     * <p>부분 객체나 {@code null}로 감추면 클라이언트가 {@code contract.documentId}로 계약
+     * 파일을 정상 조회할 수 있다고 착각합니다. 예외 메시지에 식별자를 담아 공통
+     * {@code Exception} Handler가 traceId와 함께 서버 로그에 남기게 합니다.</p>
+     */
+    private ContractDetailRow requireContractIntegrity(Long workCaseId) {
+        ContractDetailRow contract = workCaseMapper.findContractDetail(workCaseId);
+        if (contract != null && contract.getDocumentId() == null) {
+            throw new IllegalStateException(
+                    "근무 Case " + workCaseId + "의 계약 " + contract.getContractId()
+                            + "에 연결된 계약서 문서가 없습니다.");
+        }
+        return contract;
+    }
+
+    /**
+     * 앞뒤 공백만 제거합니다. 공백만 남는 검색어는 {@code null}로 바꿔 미지정과 같게 취급합니다.
+     */
+    private String normalizeKeyword(String keyword) {
+        if (keyword == null) {
+            return null;
+        }
+        String trimmed = keyword.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private void requireValidDateRange(LocalDate from, LocalDate to) {
+        if (from != null && to != null && from.isAfter(to)) {
+            throw new ValidationException("from은 to보다 늦을 수 없습니다.");
+        }
     }
 
     /**
