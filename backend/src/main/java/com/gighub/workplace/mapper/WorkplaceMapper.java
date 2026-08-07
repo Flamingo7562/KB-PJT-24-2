@@ -51,4 +51,18 @@ public interface WorkplaceMapper {
      * @return {@code DELETED}를 제외한 소유 사업장 수
      */
     int countByOwnerUserId(@Param("ownerUserId") Long ownerUserId);
+
+    /**
+     * 인증 OWNER가 소유한 {@code ACTIVE} 사업장인지 셉니다.
+     *
+     * <p>없는 사업장과 다른 OWNER의 사업장을 구분하지 않습니다. 구분하면 사업장 식별자의
+     * 존재 여부가 비소유자에게 드러납니다.</p>
+     *
+     * @param workplaceId 확인할 사업장 식별자
+     * @param ownerUserId 인증 Principal의 사용자 식별자
+     * @return 소유한 {@code ACTIVE} 사업장이면 {@code 1}, 아니면 {@code 0}
+     */
+    int countOwnedActiveById(
+            @Param("workplaceId") Long workplaceId,
+            @Param("ownerUserId") Long ownerUserId);
 }

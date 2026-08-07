@@ -45,8 +45,13 @@ public class QrHmacKeys {
         this(readActiveKeyId(environment), readKeys(environment));
     }
 
-    /** 테스트가 properties 없이 키를 직접 넣을 때 쓰는 생성자입니다. */
-    QrHmacKeys(String activeKeyId, Map<String, byte[]> keys) {
+    /**
+     * 키를 직접 넣어 만듭니다. 외부 properties 없이 서명 계약을 검증할 때 씁니다.
+     *
+     * <p>Container는 이 생성자를 쓰지 않습니다. 주입 대상은 {@code Environment} 생성자에
+     * {@code @Autowired}로 고정되어 있습니다.</p>
+     */
+    public QrHmacKeys(String activeKeyId, Map<String, byte[]> keys) {
         this.activeKeyId = requireValidKeyId(activeKeyId);
         this.keys = Map.copyOf(keys);
         if (!this.keys.containsKey(this.activeKeyId)) {
