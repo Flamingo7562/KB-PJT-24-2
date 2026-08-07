@@ -86,6 +86,32 @@ Copy-Item backend/config/database.example.properties backend/config/database-loc
 
 Secret을 교체할 때는 새 값을 `invite.hmac.secret`에, 직전 값을 `invite.hmac.previous-secret`에 둡니다. 이전 Secret으로 발급된 활성 초대는 만료되거나 철회될 때까지 Link를 다시 만들어 낼 수 있어야 하므로, 그 초대들이 모두 끝난 뒤에만 `invite.hmac.previous-secret`을 비웁니다. 두 값을 동시에 바꾸면 아직 유효한 초대의 현재 Link를 조회할 수 없게 되고, OWNER는 재발급으로만 복구할 수 있습니다.
 
+### 출퇴근 고정 QR 서명 키
+
+같은 `database-local.properties`가 사업장 고정 QR 서명 키도 함께 담습니다. 아래 두 키가 없으면 Spring Root Context가 생성되지 않아 애플리케이션과 `databaseTest`가 모두 시작하지 못합니다.
+
+| 키                      | 값                                                                             |
+| ----------------------- | ------------------------------------------------------------------------------ |
+| `qr.hmac.active-key-id` | 새 QR을 서명할 키 식별자. 1~16자의 영숫자, `-`, `_`만 사용합니다.              |
+| `qr.hmac.key.<식별자>`  | 그 식별자의 서명 키. Base64로 디코딩해 32바이트 이상이며 커밋하지 않습니다.    |
+
+로컬 값은 아무 임의 값이면 되고 팀원끼리 맞출 필요가 없습니다. 각자 자기 DB의 QR만 검증하기 때문입니다.
+
+```powershell
+[Convert]::ToBase64String((1..32 | ForEach-Object { Get-Random -Maximum 256 }))
+```
+
+키 교체 절차는 초대 Secret과 다릅니다. 초대 Token은 만료되므로 이전 Secret 하나를 함께 두면 충분하지만, 고정 QR은 만료되지 않고 인쇄되어 매장에 부착됩니다. 그래서 Token이 서명에 쓴 키 식별자를 함께 담고, 현장에 남아 있는 모든 식별자가 등록되어 있어야 합니다. 교체 중에는 `qr.hmac.key-ids`에 새 식별자와 구 식별자를 함께 적고 각 키 값을 모두 둡니다.
+
+```properties
+qr.hmac.active-key-id=k2
+qr.hmac.key-ids=k2,k1
+qr.hmac.key.k2=<새 값>
+qr.hmac.key.k1=<이전 값>
+```
+
+교체가 아닐 때는 `qr.hmac.key-ids`를 생략합니다. 활성 키 하나만 등록됩니다. 구 식별자를 목록에서 지우면 그 키로 서명된 인쇄물이 그 시점부터 동작하지 않으므로, 해당 사업장들이 새 QR을 재출력해 교체한 뒤에만 지웁니다.
+
 새 clone, Connector/J 버전 변경 또는 Gradle `clean` 실행 후에는 Flyway 컨테이너가 마운트할 JDBC Driver를 먼저 준비합니다.
 
 ```powershell

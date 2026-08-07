@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.gighub.attendance.mapper.QrTokenMapper">
+
+    <!--
+        status 는 Column DEFAULT 에 기대지 않고 계약값을 직접 적습니다. DEFAULT 에 맡기면
+        최초 ACTIVE 가 코드에서 사라지고, 나중에 DEFAULT 가 바뀌면 조용히 다른 값이 저장됩니다.
+        legacy_* 는 채우지 않습니다. ck_qr_tokens_shape 의 신형 분기가 그 값들이 모두 NULL 일
+        것을 요구합니다.
+    -->
+    <insert id="insertActive" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO qr_tokens
+            (workplace_id, issued_by_user_id, token_nonce, status)
+        VALUES
+            (#{workplaceId}, #{issuedByUserId}, #{tokenNonce}, 'ACTIVE')
+    </insert>
+
+    <!--
+        완성 Token 은 저장하지 않으므로 SELECT 하지 않습니다. 응답 Token 은 이 nonce 로부터
+        매번 다시 서명합니다.
+    -->
+    <select id="findActiveByWorkplaceId"
+            resultType="com.gighub.attendance.mapper.result.QrTokenRow">
+        SELECT id,
+               workplace_id,
+               token_nonce,
+               created_at
+        FROM qr_tokens
+        WHERE workplace_id = #{workplaceId}
+          AND status = 'ACTIVE'
+    </select>
+
+    <!--
+        ck_qr_tokens_revoked_at 은 REVOKED 와 revoked_at 을 함께 요구합니다. 둘을 나눠 쓰면
+        중간 상태가 제약에 걸립니다.
+    -->
+    <update id="revokeActiveByWorkplaceId">
+        UPDATE qr_tokens
+        SET status = 'REVOKED',
+            revoked_at = CURRENT_TIMESTAMP(6)
+        WHERE workplace_id = #{workplaceId}
+          AND status = 'ACTIVE'
+    </update>
+
+</mapper>

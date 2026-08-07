@@ -55,4 +55,31 @@
         <include refid="ownedManageableWorkplaces"/>
     </select>
 
+    <!--
+        고정 QR 은 ACTIVE 사업장에만 존재합니다. 상태 조건을 빼면 INACTIVE·DELETED 사업장의
+        QR 까지 조회됩니다. 소유권 조건도 SQL 안에 두어야 다른 OWNER 의 사업장이 통과하지
+        않습니다.
+    -->
+    <select id="countOwnedActiveById" resultType="int">
+        SELECT COUNT(*)
+        FROM workplaces
+        WHERE id = #{workplaceId}
+          AND owner_user_id = #{ownerUserId}
+          AND status = 'ACTIVE'
+    </select>
+
+    <!--
+        FOR UPDATE 로 사업장 행을 먼저 잠급니다. qr_tokens 만 잠그면 두 재발급이 서로 다른
+        순서로 행을 잡아 교착할 수 있습니다. 소유권 확인도 같은 조회에서 끝내 잠금과 판정
+        사이에 다른 요청이 끼어들지 않게 합니다.
+    -->
+    <select id="findOwnedActiveIdForUpdate" resultType="java.lang.Long">
+        SELECT id
+        FROM workplaces
+        WHERE id = #{workplaceId}
+          AND owner_user_id = #{ownerUserId}
+          AND status = 'ACTIVE'
+        FOR UPDATE
+    </select>
+
 </mapper>

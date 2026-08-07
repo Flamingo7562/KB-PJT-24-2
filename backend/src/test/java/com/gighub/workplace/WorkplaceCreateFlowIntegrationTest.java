@@ -107,6 +107,9 @@ class WorkplaceCreateFlowIntegrationTest {
     void tearDown() {
         try {
             for (Long userId : List.of(ownerUserId, otherOwnerUserId, workerUserId)) {
+                // 사업장 생성이 고정 QR을 함께 만들므로 qr_tokens를 먼저 지웁니다.
+                jdbcTemplate.update(
+                        "DELETE FROM qr_tokens WHERE issued_by_user_id = ?", userId);
                 jdbcTemplate.update("DELETE FROM workplaces WHERE owner_user_id = ?", userId);
                 jdbcTemplate.update("DELETE FROM users WHERE id = ?", userId);
             }

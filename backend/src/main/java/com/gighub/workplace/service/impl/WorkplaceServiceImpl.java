@@ -3,6 +3,7 @@ package com.gighub.workplace.service.impl;
 import java.util.List;
 import java.util.Objects;
 
+import com.gighub.attendance.service.WorkplaceQrIssuer;
 import com.gighub.auth.security.AuthPrincipal;
 import com.gighub.common.api.PageRequests;
 import com.gighub.common.api.PageResponse;
@@ -24,9 +25,11 @@ import org.springframework.transaction.annotation.Transactional;
 public class WorkplaceServiceImpl implements WorkplaceService {
 
     private final WorkplaceMapper workplaceMapper;
+    private final WorkplaceQrIssuer qrIssuer;
 
-    public WorkplaceServiceImpl(WorkplaceMapper workplaceMapper) {
+    public WorkplaceServiceImpl(WorkplaceMapper workplaceMapper, WorkplaceQrIssuer qrIssuer) {
         this.workplaceMapper = workplaceMapper;
+        this.qrIssuer = qrIssuer;
     }
 
     @Override
@@ -50,7 +53,13 @@ public class WorkplaceServiceImpl implements WorkplaceService {
         insertOrReportDuplicate(param);
         // 생성 Key 회수가 깨지면 201과 함께 workplaceId=null이 조용히 나갑니다.
         // ApiResponse는 래퍼만 검사하므로 여기서 끊습니다.
-        return Objects.requireNonNull(param.getId(), "생성된 사업장 식별자");
+        Long workplaceId = Objects.requireNonNull(param.getId(), "생성된 사업장 식별자");
+
+        // 같은 트랜잭션에서 발급해야 QR 없는 ACTIVE 사업장이 생기지 않습니다. 조회는 QR을
+        // 만들지 않으므로, 여기서 빠뜨리면 그 사업장은 재발급 전까지 QR을 얻을 수 없습니다.
+        qrIssuer.issueActive(workplaceId, principal.getUserId());
+
+        return workplaceId;
     }
 
     @Override

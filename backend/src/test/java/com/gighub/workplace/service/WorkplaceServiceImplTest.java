@@ -3,6 +3,7 @@ package com.gighub.workplace.service;
 import java.math.BigDecimal;
 import java.util.List;
 
+import com.gighub.attendance.service.WorkplaceQrIssuer;
 import com.gighub.auth.security.AuthPrincipal;
 import com.gighub.common.api.PageResponse;
 import com.gighub.common.exception.ConflictException;
@@ -36,7 +37,31 @@ import static org.mockito.Mockito.when;
 class WorkplaceServiceImplTest {
 
     private final WorkplaceMapper workplaceMapper = mock(WorkplaceMapper.class);
-    private final WorkplaceServiceImpl service = new WorkplaceServiceImpl(workplaceMapper);
+    private final WorkplaceQrIssuer qrIssuer = mock(WorkplaceQrIssuer.class);
+    private final WorkplaceServiceImpl service =
+            new WorkplaceServiceImpl(workplaceMapper, qrIssuer);
+
+    @Test
+    void issuesFixedQrForTheNewWorkplaceWithinTheSameCall() {
+        doAnswer(invocation -> {
+            invocation.getArgument(0, WorkplaceInsertParam.class).setId(42L);
+            return 1;
+        }).when(workplaceMapper).insert(any(WorkplaceInsertParam.class));
+
+        service.create(owner(7L), validCommand());
+
+        verify(qrIssuer).issueActive(42L, 7L);
+    }
+
+    @Test
+    void doesNotIssueQrWhenWorkplaceInsertFails() {
+        doThrow(new DuplicateKeyException("duplicate"))
+                .when(workplaceMapper).insert(any(WorkplaceInsertParam.class));
+
+        assertThrows(ConflictException.class, () -> service.create(owner(7L), validCommand()));
+
+        verifyNoInteractions(qrIssuer);
+    }
 
     @Test
     void storesOwnerFromPrincipalAndReturnsGeneratedIdentifier() {
