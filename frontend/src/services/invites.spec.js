@@ -36,7 +36,8 @@ describe('invites service', () => {
     ).resolves.toEqual({ workCaseId: 42, escrowStatus: 'HELD' })
 
     expect(idempotentPost).toHaveBeenCalledWith('/invitations/safe_token/accept', undefined, {
-      idempotencyKey: 'accept-intent-1'
+      idempotencyKey: 'accept-intent-1',
+      retries: 0
     })
   })
 })

@@ -25,7 +25,9 @@ export async function getInvite(token) {
  */
 export async function confirmInvite(token, { idempotencyKey }) {
   const { data } = await idempotentPost(`/invitations/${token}/accept`, undefined, {
-    idempotencyKey
+    idempotencyKey,
+    // 결과 불확실 상태는 화면이 기억하고 사용자의 명시적 Replay로만 같은 Key를 다시 보낸다.
+    retries: 0
   })
   return data
 }

@@ -140,14 +140,15 @@ async function confirm() {
     await synchronizeAcceptedState()
   } catch (error) {
     if (requestToken !== token.value) return
-    retryAvailable.value = shouldRetainAcceptanceKey(error)
+    const requestWasUncertain = retryAvailable.value
+    retryAvailable.value = shouldRetainAcceptanceKey(error, { requestWasUncertain })
     if (!retryAvailable.value) acceptanceKey = null
 
     if (isInvitationForbidden(error)) {
       await router.replace('/forbidden')
       return
     }
-    ui.toast(invitationErrorMessage(error), {
+    ui.toast(invitationErrorMessage(error, { sameIntentRetry: retryAvailable.value }), {
       type: retryAvailable.value ? 'warning' : 'danger',
       duration: 6000
     })

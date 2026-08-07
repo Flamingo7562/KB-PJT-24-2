@@ -112,6 +112,10 @@ describe('InviteConfirmView', () => {
   it('결과가 불확실한 사용자 재확인은 같은 멱등 Key를 유지한다', async () => {
     confirmInvite
       .mockRejectedValueOnce(new Error('network'))
+      .mockRejectedValueOnce({
+        code: 'CONFLICT',
+        response: { status: 409, data: { code: 'CONFLICT', message: '변경된 처리 중 문구' } }
+      })
       .mockResolvedValueOnce({ workCaseId: 42, escrowStatus: 'HELD' })
     const wrapper = mountView()
     await flushPromises()
@@ -123,10 +127,39 @@ describe('InviteConfirmView', () => {
 
     await acceptButton(wrapper).trigger('click')
     await flushPromises()
+    expect(wrapper.text()).toContain('같은 요청으로 다시 확인')
+
+    await acceptButton(wrapper).trigger('click')
+    await flushPromises()
 
     expect(newIdempotencyKey).toHaveBeenCalledTimes(1)
     expect(confirmInvite.mock.calls[0][1].idempotencyKey).toBe('accept-intent-key')
     expect(confirmInvite.mock.calls[1][1].idempotencyKey).toBe('accept-intent-key')
+    expect(confirmInvite.mock.calls[2][1].idempotencyKey).toBe('accept-intent-key')
+  })
+
+  it('첫 CONFLICT는 서버 문구와 무관하게 종료하고 다음 클릭에서 Key를 회전한다', async () => {
+    newIdempotencyKey
+      .mockReturnValueOnce('first-accept-intent')
+      .mockReturnValueOnce('second-accept-intent')
+    confirmInvite
+      .mockRejectedValueOnce({
+        code: 'CONFLICT',
+        response: { status: 409, data: { code: 'CONFLICT', message: '변경된 잔액 부족 문구' } }
+      })
+      .mockResolvedValueOnce({ workCaseId: 42, escrowStatus: 'HELD' })
+    const wrapper = mountView()
+    await flushPromises()
+
+    await wrapper.get('input[type="checkbox"]').setValue(true)
+    await acceptButton(wrapper).trigger('click')
+    await flushPromises()
+    await acceptButton(wrapper).trigger('click')
+    await flushPromises()
+
+    expect(newIdempotencyKey).toHaveBeenCalledTimes(2)
+    expect(confirmInvite.mock.calls[0][1].idempotencyKey).toBe('first-accept-intent')
+    expect(confirmInvite.mock.calls[1][1].idempotencyKey).toBe('second-accept-intent')
   })
 
   it('승인 오류 Code를 구분해 안내한다', async () => {

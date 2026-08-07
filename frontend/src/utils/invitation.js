@@ -1,12 +1,10 @@
-const INSUFFICIENT_BALANCE_MESSAGE = '사장님의 예치 가능 잔액이 부족하여 근무를 확정할 수 없습니다.'
-
 /** 공통 오류 Envelope에서 승인 오류 Code를 읽는다. */
 export function invitationErrorCode(error) {
   return error?.response?.data?.code ?? error?.code ?? ''
 }
 
-/** 초대 조회·수락 오류를 승인 Code별 사용자 문구로 바꾼다. */
-export function invitationErrorMessage(error) {
+/** 초대 조회·수락 오류를 승인 Code와 현재 재확인 상태에 맞는 사용자 문구로 바꾼다. */
+export function invitationErrorMessage(error, { sameIntentRetry = false } = {}) {
   const code = invitationErrorCode(error)
   switch (code) {
     case 'RESOURCE_NOT_FOUND':
@@ -27,9 +25,9 @@ export function invitationErrorMessage(error) {
     case 'FORBIDDEN':
       return '이 초대를 확인할 권한이 없어요.'
     case 'CONFLICT':
-      return error?.response?.data?.message === INSUFFICIENT_BALANCE_MESSAGE
-        ? '사장님이 임금을 예치할 수 없어 지금은 근무를 확정할 수 없어요.'
-        : '확정 요청을 처리 중이거나 상태가 바뀌었어요. 같은 요청으로 다시 확인해주세요.'
+      return sameIntentRetry
+        ? '확정 결과를 아직 확인하지 못했어요. 같은 요청으로 다시 확인해주세요.'
+        : '사장님이 임금을 예치할 수 없어 지금은 근무를 확정할 수 없어요.'
     case 'INTERNAL_ERROR':
       return '확정 결과를 확인하지 못했어요. 같은 요청으로 다시 확인해주세요.'
     default:
@@ -37,14 +35,14 @@ export function invitationErrorMessage(error) {
   }
 }
 
-/** 서버 Commit 여부를 확정할 수 없거나 같은 Claim이 처리 중이면 Key를 유지한다. */
-export function shouldRetainAcceptanceKey(error) {
+/** 서버 Commit 여부가 불확실한 요청과 그 동일 의도 재확인에서만 Key를 유지한다. */
+export function shouldRetainAcceptanceKey(error, { requestWasUncertain = false } = {}) {
   const status = error?.response?.status
   const code = invitationErrorCode(error)
-  const message = error?.response?.data?.message
 
-  // 처리 중 충돌은 원 요청 Replay가 필요하지만, 잔액 부족은 서버가 확정해 반환한 종료 결과다.
-  const retryableConflict = code === 'CONFLICT' && message !== INSUFFICIENT_BALANCE_MESSAGE
+  // 승인 계약은 잔액 부족과 처리 중 Claim을 같은 CONFLICT로 묶는다. 서버 문구를 파싱하지 않고,
+  // 이미 결과가 불확실했던 같은 의도를 재확인하는 경우에만 안전한 Replay Key를 보존한다.
+  const retryableConflict = code === 'CONFLICT' && requestWasUncertain
   return status === undefined || status >= 500 || retryableConflict
 }
 

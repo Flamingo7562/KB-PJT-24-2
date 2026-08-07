@@ -20,25 +20,32 @@ describe('invitation error UX', () => {
     expect(invitationErrorMessage(apiError(409, code))).toContain(expected)
   })
 
-  it('잔액 부족은 금액이나 내부 잔액 없이 안내한다', () => {
-    const message = invitationErrorMessage(
-      apiError(409, 'CONFLICT', '사장님의 예치 가능 잔액이 부족하여 근무를 확정할 수 없습니다.')
-    )
+  it('첫 CONFLICT는 서버 문구와 무관하게 금액이나 내부 잔액 없이 안내한다', () => {
+    const message = invitationErrorMessage(apiError(409, 'CONFLICT', '서버 문구가 변경됨'))
 
     expect(message).toContain('임금을 예치할 수 없어')
     expect(message).not.toMatch(/\d/)
   })
 
-  it('네트워크·5xx·처리 중 충돌에서는 같은 Key를 유지한다', () => {
+  it('네트워크·5xx와 그 뒤 동일 의도 CONFLICT에서만 같은 Key를 유지한다', () => {
     expect(shouldRetainAcceptanceKey(new Error('network'))).toBe(true)
     expect(shouldRetainAcceptanceKey(apiError(500, 'INTERNAL_ERROR'))).toBe(true)
-    expect(shouldRetainAcceptanceKey(apiError(409, 'CONFLICT'))).toBe(true)
-    expect(shouldRetainAcceptanceKey(apiError(409, 'INVITATION_REVOKED'))).toBe(false)
+    expect(shouldRetainAcceptanceKey(apiError(409, 'CONFLICT', '어떤 서버 문구'))).toBe(false)
     expect(
-      shouldRetainAcceptanceKey(
-        apiError(409, 'CONFLICT', '사장님의 예치 가능 잔액이 부족하여 근무를 확정할 수 없습니다.')
-      )
-    ).toBe(false)
+      shouldRetainAcceptanceKey(apiError(409, 'CONFLICT', '어떤 서버 문구'), {
+        requestWasUncertain: true
+      })
+    ).toBe(true)
+    expect(shouldRetainAcceptanceKey(apiError(409, 'INVITATION_REVOKED'))).toBe(false)
+  })
+
+  it('불확실 요청의 CONFLICT 안내도 서버 문구를 파싱하지 않는다', () => {
+    const message = invitationErrorMessage(apiError(409, 'CONFLICT', '완전히 다른 문구'), {
+      sameIntentRetry: true
+    })
+
+    expect(message).toContain('같은 요청으로 다시 확인')
+    expect(message).not.toContain('완전히 다른 문구')
   })
 
   it('역할·권한 오류는 403 화면 대상으로 판정한다', () => {
