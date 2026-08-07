@@ -73,4 +73,19 @@ describe('WorkerHomeView', () => {
     await wrapper.get('.wallet-card button').trigger('click')
     expect(push).toHaveBeenCalledWith('/worker/wallet/withdraw')
   })
+
+  it('GET /wallet 실패는 미처리 예외 없이 오류 화면으로 표시한다', async () => {
+    fetchWallet.mockReset().mockRejectedValue(new Error('network'))
+    const unhandled = vi.fn()
+    process.on('unhandledRejection', unhandled)
+
+    const wrapper = mount(WorkerHomeView)
+    await flushPromises()
+
+    expect(wrapper.find('.wallet-card').exists()).toBe(false)
+    expect(wrapper.text()).toContain('홈 정보를 불러오지 못했습니다.')
+    expect(unhandled).not.toHaveBeenCalled()
+
+    process.off('unhandledRejection', unhandled)
+  })
 })
