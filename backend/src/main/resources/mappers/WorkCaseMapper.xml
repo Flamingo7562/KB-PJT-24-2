@@ -37,6 +37,19 @@
         </constructor>
     </resultMap>
 
+    <resultMap id="workCaseListResult" type="com.gighub.work.mapper.result.WorkCaseListRow">
+        <constructor>
+            <idArg column="workCaseId" javaType="java.lang.Long"/>
+            <arg column="title" javaType="java.lang.String"/>
+            <arg column="startsAt" javaType="java.time.LocalDateTime"/>
+            <arg column="endsAt" javaType="java.time.LocalDateTime"/>
+            <arg column="dailyWage" javaType="java.lang.Long"/>
+            <arg column="status" javaType="com.gighub.work.domain.WorkCaseStatus"/>
+            <arg column="workerId" javaType="java.lang.Long"/>
+            <arg column="workerName" javaType="java.lang.String"/>
+        </constructor>
+    </resultMap>
+
     <!--
         소유권과 ACTIVE 조건을 조회에 함께 둡니다. 소유권을 별도 SQL로 확인하면 확인과 사용
         사이에 사업장 상태가 바뀔 수 있습니다.
@@ -152,6 +165,54 @@
         WHERE id = #{workplaceId}
           AND owner_user_id = #{ownerUserId}
           AND status IN ('ACTIVE', 'INACTIVE')
+    </select>
+
+    <!--
+        keyword는 제목 또는 매칭 WORKER 이름 부분 일치입니다. LOWER()로 감싸지 않는 이유는
+        테이블 Collation이 utf8mb4_0900_ai_ci(대소문자·발음 구분 없음)라 LIKE 자체가 이미
+        대소문자를 구분하지 않기 때문입니다.
+
+        from/to는 workDate(=starts_at의 Asia/Seoul 날짜) 경계입니다. starts_at은 이미 시간대
+        변환 없이 Asia/Seoul 벽시계 값을 그대로 저장하므로 DATE(starts_at)이 바로 workDate와
+        같습니다.
+    -->
+    <sql id="workCaseListScope">
+        FROM work_cases wc
+                 LEFT JOIN users w ON w.id = wc.worker_id
+        WHERE wc.workplace_id = #{workplaceId}
+          AND wc.employer_id = #{ownerUserId}
+        <if test="keyword != null">
+            AND (wc.title LIKE CONCAT('%', #{keyword}, '%')
+                OR w.name LIKE CONCAT('%', #{keyword}, '%'))
+        </if>
+        <if test="status != null">
+            AND wc.status = #{status}
+        </if>
+        <if test="from != null">
+            AND DATE(wc.starts_at) &gt;= #{from}
+        </if>
+        <if test="to != null">
+            AND DATE(wc.starts_at) &lt;= #{to}
+        </if>
+    </sql>
+
+    <select id="findPageByFilters" resultMap="workCaseListResult">
+        SELECT wc.id          AS workCaseId,
+               wc.title       AS title,
+               wc.starts_at   AS startsAt,
+               wc.ends_at     AS endsAt,
+               wc.agreed_wage AS dailyWage,
+               wc.status      AS status,
+               wc.worker_id   AS workerId,
+               w.name         AS workerName
+        <include refid="workCaseListScope"/>
+        ORDER BY wc.starts_at DESC, wc.id DESC
+        LIMIT #{size} OFFSET #{offset}
+    </select>
+
+    <select id="countByFilters" resultType="long">
+        SELECT COUNT(*)
+        <include refid="workCaseListScope"/>
     </select>
 
 </mapper>

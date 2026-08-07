@@ -1,9 +1,13 @@
 package com.gighub.work.service.impl;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Objects;
 
 import com.gighub.auth.security.AuthPrincipal;
+import com.gighub.common.api.PageRequests;
+import com.gighub.common.api.PageResponse;
 import com.gighub.common.exception.ResourceNotFoundException;
 import com.gighub.common.exception.RoleMismatchException;
 import com.gighub.common.exception.ValidationException;
@@ -12,10 +16,12 @@ import com.gighub.member.domain.UserRole;
 import com.gighub.work.domain.WorkCaseAddress;
 import com.gighub.work.domain.WorkCaseStatus;
 import com.gighub.work.domain.WorkCaseTimes;
+import com.gighub.work.dto.WorkCaseListItemResponse;
+import com.gighub.work.dto.WorkCaseSummaryResponse;
 import com.gighub.work.mapper.WorkCaseMapper;
 import com.gighub.work.mapper.param.WorkCaseInsertParam;
+import com.gighub.work.mapper.param.WorkCaseListQuery;
 import com.gighub.work.mapper.param.WorkCaseTermsUpdateParam;
-import com.gighub.work.dto.WorkCaseSummaryResponse;
 import com.gighub.work.mapper.result.OwnedWorkplaceSnapshotRow;
 import com.gighub.work.mapper.result.WorkCaseLockRow;
 import com.gighub.work.service.WorkCaseService;
@@ -136,6 +142,62 @@ public class WorkCaseServiceImpl implements WorkCaseService {
 
         return WorkCaseSummaryResponse.from(
                 workCaseMapper.countByStatus(workplaceId, principal.getUserId()));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PageResponse<WorkCaseListItemResponse> list(
+            AuthPrincipal principal,
+            Long workplaceId,
+            String keyword,
+            WorkCaseStatus status,
+            LocalDate from,
+            LocalDate to,
+            int page,
+            int size) {
+        requireOwner(principal);
+        // 역할을 먼저 확인합니다. Page 값이 잘못된 요청이라도 권한 없는 호출자에게 400을
+        // 돌려주면 Endpoint의 존재와 Query 규칙을 알려주게 됩니다.
+        PageRequests.validate(page, size);
+        if (!workCaseMapper.existsOwnedManageableWorkplace(workplaceId, principal.getUserId())) {
+            throw new ResourceNotFoundException("사업장을 찾을 수 없습니다.");
+        }
+        requireValidDateRange(from, to);
+
+        WorkCaseListQuery query = WorkCaseListQuery.builder()
+                .workplaceId(workplaceId)
+                .ownerUserId(principal.getUserId())
+                .keyword(normalizeKeyword(keyword))
+                .status(status)
+                .from(from)
+                .to(to)
+                .size(size)
+                .offset(PageRequests.offset(page, size))
+                .build();
+
+        long totalElements = workCaseMapper.countByFilters(query);
+        List<WorkCaseListItemResponse> content = workCaseMapper.findPageByFilters(query).stream()
+                .map(WorkCaseListItemResponse::from)
+                .toList();
+
+        return PageResponse.of(content, page, size, totalElements);
+    }
+
+    /**
+     * 앞뒤 공백만 제거합니다. 공백만 남는 검색어는 {@code null}로 바꿔 미지정과 같게 취급합니다.
+     */
+    private String normalizeKeyword(String keyword) {
+        if (keyword == null) {
+            return null;
+        }
+        String trimmed = keyword.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private void requireValidDateRange(LocalDate from, LocalDate to) {
+        if (from != null && to != null && from.isAfter(to)) {
+            throw new ValidationException("from은 to보다 늦을 수 없습니다.");
+        }
     }
 
     /**

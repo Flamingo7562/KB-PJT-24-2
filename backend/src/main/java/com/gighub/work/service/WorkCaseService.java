@@ -1,6 +1,11 @@
 package com.gighub.work.service;
 
+import java.time.LocalDate;
+
 import com.gighub.auth.security.AuthPrincipal;
+import com.gighub.common.api.PageResponse;
+import com.gighub.work.domain.WorkCaseStatus;
+import com.gighub.work.dto.WorkCaseListItemResponse;
 import com.gighub.work.dto.WorkCaseSummaryResponse;
 import com.gighub.work.service.command.WorkCaseCreateCommand;
 import com.gighub.work.service.command.WorkCaseUpdateCommand;
@@ -46,4 +51,27 @@ public interface WorkCaseService {
      * @return 8개 상태를 모두 포함하는 요약. 데이터가 없는 상태는 0
      */
     WorkCaseSummaryResponse summary(AuthPrincipal principal, Long workplaceId);
+
+    /**
+     * 인증 OWNER가 소유·관리하는 사업장의 근무 목록을 정렬이 고정된 순서로 조회합니다.
+     *
+     * @param principal   소유권을 결정하는 인증 Principal
+     * @param workplaceId 대상 사업장 식별자
+     * @param keyword     제목 또는 매칭 WORKER 이름 부분 일치. 없으면 전체
+     * @param status      단일 상태 필터. 없으면 전체 상태
+     * @param from        {@code workDate} 하한(포함). 없으면 하한 없음
+     * @param to          {@code workDate} 상한(포함). 없으면 상한 없음
+     * @param page        0-based Page 번호
+     * @param size        Page 크기
+     * @return 승인된 Page Envelope payload. 근무가 없으면 빈 {@code content}
+     */
+    PageResponse<WorkCaseListItemResponse> list(
+            AuthPrincipal principal,
+            Long workplaceId,
+            String keyword,
+            WorkCaseStatus status,
+            LocalDate from,
+            LocalDate to,
+            int page,
+            int size);
 }

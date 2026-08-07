@@ -3,8 +3,10 @@ package com.gighub.work.mapper;
 import java.util.List;
 
 import com.gighub.work.mapper.param.WorkCaseInsertParam;
+import com.gighub.work.mapper.param.WorkCaseListQuery;
 import com.gighub.work.mapper.param.WorkCaseTermsUpdateParam;
 import com.gighub.work.mapper.result.OwnedWorkplaceSnapshotRow;
+import com.gighub.work.mapper.result.WorkCaseListRow;
 import com.gighub.work.mapper.result.WorkCaseLockRow;
 import com.gighub.work.mapper.result.WorkCaseStatusCountRow;
 import org.apache.ibatis.annotations.Mapper;
@@ -113,4 +115,21 @@ public interface WorkCaseMapper {
     boolean existsOwnedManageableWorkplace(
             @Param("workplaceId") Long workplaceId,
             @Param("ownerUserId") Long ownerUserId);
+
+    /**
+     * 조건에 맞는 근무 목록 한 Page를 정렬이 고정된 순서로 조회합니다.
+     *
+     * <p>정렬은 {@code starts_at DESC, id DESC}로 고정됩니다. API_SPEC 4.0.0이 별도 정렬
+     * Query를 받지 않기로 확정했습니다.</p>
+     */
+    List<WorkCaseListRow> findPageByFilters(WorkCaseListQuery query);
+
+    /**
+     * 같은 조건으로 전체 건수를 셉니다. Page Metadata의 {@code totalElements}에 씁니다.
+     *
+     * <p>{@link #findPageByFilters}와 조건이 어긋나면 마지막 Page가 비거나 총 건수가 실제와
+     * 달라지므로 두 쿼리는 같은 {@link WorkCaseListQuery}를 받고 XML의 {@code WHERE}를
+     * 공유합니다.</p>
+     */
+    long countByFilters(WorkCaseListQuery query);
 }

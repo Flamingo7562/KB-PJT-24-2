@@ -1,16 +1,23 @@
 package com.gighub.work.controller;
 
+import java.time.LocalDate;
+
 import javax.validation.Valid;
 
 import com.gighub.auth.security.AuthPrincipal;
 import com.gighub.auth.security.AuthPrincipals;
 import com.gighub.common.api.ApiResponse;
+import com.gighub.common.api.PageRequests;
+import com.gighub.common.api.PageResponse;
+import com.gighub.work.domain.WorkCaseStatus;
 import com.gighub.work.dto.WorkCaseCreateRequest;
 import com.gighub.work.dto.WorkCaseCreateResponse;
+import com.gighub.work.dto.WorkCaseListItemResponse;
 import com.gighub.work.dto.WorkCaseSummaryResponse;
 import com.gighub.work.service.WorkCaseService;
 import com.gighub.work.service.command.WorkCaseCreateCommand;
 import com.gighub.work.service.command.WorkCaseUpdateCommand;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -20,6 +27,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -78,6 +86,22 @@ public class WorkCaseController {
         AuthPrincipal principal = AuthPrincipals.resolve(authentication);
 
         return ResponseEntity.ok(ApiResponse.of(workCaseService.summary(principal, workplaceId)));
+    }
+
+    @GetMapping("/api/workplaces/{workplaceId}/work-cases")
+    public ResponseEntity<ApiResponse<PageResponse<WorkCaseListItemResponse>>> list(
+            @PathVariable Long workplaceId,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) WorkCaseStatus status,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(defaultValue = PageRequests.DEFAULT_PAGE_TEXT) int page,
+            @RequestParam(defaultValue = PageRequests.DEFAULT_SIZE_TEXT) int size,
+            Authentication authentication) {
+        AuthPrincipal principal = AuthPrincipals.resolve(authentication);
+
+        return ResponseEntity.ok(ApiResponse.of(workCaseService.list(
+                principal, workplaceId, keyword, status, from, to, page, size)));
     }
 
     /**
