@@ -7,29 +7,41 @@
  * 적립액·진행률·예상 실수령액은 서버가 준 기준값으로부터 화면에서 계산하는 표시 전용
  * 추정치다(명세 DASH-001 "earning은 표시 계산값"). 지갑 잔액·정산 금액은 서버 값 그대로.
  * 연계 API: GET /worker/home  →  @/stores/workerHome (loadHome)
+ *   안심지갑 잔액은 GET /wallet  →  @/stores/wallet (loadWallet, OWNER와 공용 원천).
  * 출금 버튼 → /worker/wallet/withdraw (사장 출금 화면과 동일한 별도 화면 흐름).
  */
 import { storeToRefs } from 'pinia'
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 import EmptyState from '@/components/common/EmptyState.vue'
 import SecuredEarningCard from '@/components/worker/SecuredEarningCard.vue'
 import TodayWorkCaseCard from '@/components/worker/TodayWorkCaseCard.vue'
 import WorkerWalletCard from '@/components/worker/WorkerWalletCard.vue'
+import { useWalletStore } from '@/stores/wallet'
 import { useWorkerHomeStore } from '@/stores/workerHome'
 
 const router = useRouter()
 const homeStore = useWorkerHomeStore()
-const { availableBalance, todayWorkCase, earning, loading, error } = storeToRefs(homeStore)
+const walletStore = useWalletStore()
+const { todayWorkCase, earning, loading, error } = storeToRefs(homeStore)
+const { availableBalance } = storeToRefs(walletStore)
+// wallet Store는 loadWallet() 단독 호출의 실패를 자체 error로 추적하지 않으므로,
+// 이 화면에서 직접 잡아 homeStore.error와 함께 하나의 오류 화면으로 묶는다.
+const walletError = ref(false)
 
 // 확보 안심금액은 오늘 진행 중인 근무가 있을 때만 노출(없음/미배정이면 숨김).
 const showEarning = computed(
   () => !!earning.value && !!todayWorkCase.value && todayWorkCase.value.status !== 'NONE'
 )
+const hasError = computed(() => !!error.value || walletError.value)
 
 onMounted(() => {
   homeStore.loadHome()
+  walletError.value = false
+  walletStore.loadWallet().catch(() => {
+    walletError.value = true
+  })
 })
 
 const goWithdraw = () => router.push('/worker/wallet/withdraw')
@@ -37,7 +49,7 @@ const goWithdraw = () => router.push('/worker/wallet/withdraw')
 
 <template>
   <div class="worker-home">
-    <EmptyState v-if="error" message="홈 정보를 불러오지 못했습니다." />
+    <EmptyState v-if="hasError" message="홈 정보를 불러오지 못했습니다." />
 
     <template v-else>
       <WorkerWalletCard :available-balance="availableBalance" @withdraw="goWithdraw" />

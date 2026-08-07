@@ -15,6 +15,7 @@ import BaseButton from '@/components/common/BaseButton.vue'
 import BankSelect from '@/components/wallet/BankSelect.vue'
 import WalletAmountField from '@/components/wallet/WalletAmountField.vue'
 import WithdrawConfirmModal from '@/components/wallet/WithdrawConfirmModal.vue'
+import { newIdempotencyKey } from '@/services/http'
 import { withdrawWallet } from '@/services/wallet'
 import { useUiStore } from '@/stores/ui'
 import { useWalletStore } from '@/stores/wallet'
@@ -34,6 +35,8 @@ const accountError = ref('')
 const amountError = ref('')
 const submitting = ref(false)
 const confirmOpen = ref(false)
+// 확인 모달을 여는 시점에만 새로 발급하고, 같은 모달 안의 수동 재시도는 이 키를 재사용한다.
+const idempotencyKey = ref(newIdempotencyKey())
 
 const bankName = computed(() => findBank(bankCode.value)?.name ?? '')
 
@@ -73,17 +76,21 @@ function onRequestConfirm() {
   accountError.value = accountCheck.value.valid ? '' : accountCheck.value.message
   amountError.value = amountCheck.value.valid ? '' : amountCheck.value.message
   if (accountError.value || amountError.value) return
+  idempotencyKey.value = newIdempotencyKey()
   confirmOpen.value = true
 }
 
 async function onSubmit() {
   submitting.value = true
   try {
-    await withdrawWallet({
-      bankCode: bankCode.value,
-      accountNo: normalizeBankAccountNo(accountNo.value),
-      amount: Number(amount.value)
-    })
+    await withdrawWallet(
+      {
+        bankCode: bankCode.value,
+        accountNo: normalizeBankAccountNo(accountNo.value),
+        amount: Number(amount.value)
+      },
+      { idempotencyKey: idempotencyKey.value }
+    )
     await walletStore.loadWallet()
     confirmOpen.value = false
     ui.toast(`${formatKRW(Number(amount.value))} 출금 신청이 완료되었습니다.`, { type: 'success' })

@@ -6,6 +6,7 @@ import WorkerWithdrawView from '@/views/worker/wallet/WorkerWithdrawView.vue'
 
 const back = vi.fn()
 vi.mock('vue-router', () => ({ useRouter: () => ({ back }) }))
+vi.mock('@/services/http', () => ({ newIdempotencyKey: () => 'withdrawal-intent-worker' }))
 
 vi.mock('@/services/wallet', () => ({
   fetchTransactions: vi.fn(),
@@ -72,9 +73,38 @@ describe('WorkerWithdrawView', () => {
     await flushPromises()
 
     expect(withdrawWallet).toHaveBeenCalledWith(
-      expect.objectContaining({ bankCode: '004', accountNo: '170000000001', amount: 100000 })
+      expect.objectContaining({ bankCode: '004', accountNo: '170000000001', amount: 100000 }),
+      { idempotencyKey: 'withdrawal-intent-worker' }
     )
     expect(fetchWallet).toHaveBeenCalledTimes(2)
     expect(back).toHaveBeenCalled()
+  })
+
+  it('불확실한 결과를 수동 재시도할 때 같은 멱등키를 유지한다', async () => {
+    withdrawWallet.mockRejectedValueOnce(new Error('network')).mockResolvedValueOnce({
+      withdrawalRequestId: 11,
+      status: 'COMPLETED',
+      bankTransactionId: 21
+    })
+    const wrapper = mount(WorkerWithdrawView, { global: { stubs: { teleport: true } } })
+    await flushPromises()
+
+    await wrapper.find('button.bank').trigger('click')
+    const [accountInput, amountInput] = wrapper.findAll('input')
+    await accountInput.setValue('170-0000-00001')
+    await amountInput.setValue('100000')
+    await wrapper.find('button.submit').trigger('click')
+    const confirm = () => {
+      const buttons = wrapper.findAll('button.modal-btn')
+      return buttons[buttons.length - 1]
+    }
+    await confirm().trigger('click')
+    await flushPromises()
+    await confirm().trigger('click')
+    await flushPromises()
+
+    expect(withdrawWallet).toHaveBeenCalledTimes(2)
+    expect(withdrawWallet.mock.calls[0][1]).toEqual({ idempotencyKey: 'withdrawal-intent-worker' })
+    expect(withdrawWallet.mock.calls[1][1]).toEqual({ idempotencyKey: 'withdrawal-intent-worker' })
   })
 })

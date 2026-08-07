@@ -1,12 +1,13 @@
 /**
  * 지갑 API 서비스.
  *
- * #150에서는 승인 계약과 동일한 화면용 Mock 모델을 유지한다. 실제 Session·CSRF·멱등
- * HTTP 전환과 USE_MOCK 제거는 #151, 충전 PIN 입력 흐름은 #203의 책임이다.
+ * 실제 Session·CSRF·멱등 HTTP로 GET /wallet, /wallet/transactions,
+ * POST /wallet/funding-orders, /wallet/withdrawal-requests에 연결되어 있다.
+ * Mock은 개발 환경에서 VITE_USE_MOCK=true로만 켠다.
  */
 import http, { idempotentPost } from '@/services/http'
+import { USE_MOCK } from '@/services/mockFlag'
 
-const USE_MOCK = true
 const DEFAULT_PAGE = 0
 const DEFAULT_SIZE = 20
 const MAX_SIZE = 100
@@ -240,7 +241,10 @@ export async function chargeWallet(
 }
 
 /** 출금 성공 응답에는 최신 잔액을 합치지 않고 GET /wallet 재조회 결과를 사용한다. */
-export async function withdrawWallet({ bankCode, accountNo, amount }) {
+export async function withdrawWallet(
+  { bankCode, accountNo, amount },
+  { idempotencyKey = null } = {}
+) {
   if (USE_MOCK) {
     const normalizedAmount = Number(amount)
     mockWallet.availableBalance -= normalizedAmount
@@ -265,10 +269,14 @@ export async function withdrawWallet({ bankCode, accountNo, amount }) {
     })
     return result
   }
-  const { data } = await idempotentPost('/wallet/withdrawal-requests', {
-    bankCode,
-    accountNo,
-    amount
-  })
+  const { data } = await idempotentPost(
+    '/wallet/withdrawal-requests',
+    {
+      bankCode,
+      accountNo,
+      amount
+    },
+    { idempotencyKey }
+  )
   return data
 }

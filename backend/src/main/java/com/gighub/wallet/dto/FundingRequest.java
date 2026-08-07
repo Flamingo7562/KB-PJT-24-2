@@ -17,7 +17,7 @@ public class FundingRequest {
 
     // @Pattern은 null을 통과시키므로 필수 여부는 @NotBlank가 책임진다.
     @NotBlank(message = "bankCode는 필수입니다.")
-    @Pattern(regexp = "^(004|088|020|081|011)$", message = "지원하지 않는 bankCode입니다.")
+    @Pattern(regexp = BankInputNormalizer.BANK_CODE_PATTERN, message = "지원하지 않는 bankCode입니다.")
     private final String bankCode;
 
     @NotBlank(message = "accountNo는 필수입니다.")
