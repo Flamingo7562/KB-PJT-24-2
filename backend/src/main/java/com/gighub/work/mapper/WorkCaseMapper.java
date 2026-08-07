@@ -5,7 +5,13 @@ import java.util.List;
 import com.gighub.work.mapper.param.WorkCaseInsertParam;
 import com.gighub.work.mapper.param.WorkCaseListQuery;
 import com.gighub.work.mapper.param.WorkCaseTermsUpdateParam;
+import com.gighub.work.mapper.result.AttendanceSummaryRow;
+import com.gighub.work.mapper.result.ContractDetailRow;
+import com.gighub.work.mapper.result.EscrowSummaryRow;
+import com.gighub.work.mapper.result.LatestInvitationRow;
 import com.gighub.work.mapper.result.OwnedWorkplaceSnapshotRow;
+import com.gighub.work.mapper.result.SettlementSummaryRow;
+import com.gighub.work.mapper.result.WorkCaseDetailRow;
 import com.gighub.work.mapper.result.WorkCaseListRow;
 import com.gighub.work.mapper.result.WorkCaseLockRow;
 import com.gighub.work.mapper.result.WorkCaseStatusCountRow;
@@ -132,4 +138,56 @@ public interface WorkCaseMapper {
      * 공유합니다.</p>
      */
     long countByFilters(WorkCaseListQuery query);
+
+    /**
+     * 근무 상세 본문과 매칭 WORKER를 함께 읽습니다.
+     *
+     * <p>좌표·인증 반경·전화번호는 API_SPEC 4.0.0이 상세 응답에서 제외했으므로 SELECT 자체에
+     * 넣지 않습니다.</p>
+     *
+     * @return 해당 근무가 없으면 {@code null}
+     */
+    WorkCaseDetailRow findDetailRow(@Param("workCaseId") Long workCaseId);
+
+    /**
+     * 조건 Version과 무관하게 생성 시각·ID 내림차순 최신 초대 한 건을 읽습니다.
+     *
+     * @return 초대 이력이 없으면 {@code null}
+     */
+    LatestInvitationRow findLatestInvitation(@Param("workCaseId") Long workCaseId);
+
+    /**
+     * 근무 계약과 연결 계약서 문서를 함께 읽습니다.
+     *
+     * <p>{@code work_contracts}에는 문서 식별자가 없어 {@code documents.work_case_id}와
+     * {@code document_type='EMPLOYMENT_CONTRACT'}로 LEFT JOIN합니다. 계약은 있는데
+     * {@code documentId}가 {@code null}이면 계약서 생성이 중간에 끊긴 손상 상태이며, 호출부가
+     * 이 경우를 계약 없음과 구분해 처리합니다.</p>
+     *
+     * @return 계약이 없으면 {@code null}
+     */
+    ContractDetailRow findContractDetail(@Param("workCaseId") Long workCaseId);
+
+    /**
+     * 근무의 에스크로 상태와 금액을 읽습니다.
+     *
+     * @return 에스크로 행이 없으면 {@code null}
+     */
+    EscrowSummaryRow findEscrow(@Param("workCaseId") Long workCaseId);
+
+    /**
+     * 근무의 정산 상태·금액과 예정·완료 시각을 읽습니다.
+     *
+     * @return 정산 행이 없으면 {@code null}
+     */
+    SettlementSummaryRow findSettlement(@Param("workCaseId") Long workCaseId);
+
+    /**
+     * 성공 출근·퇴근 시각을 조건부 집계 하나로 함께 읽습니다.
+     *
+     * <p>근태 행이 전혀 없어도 두 필드가 모두 {@code null}인 행 하나를 돌려줍니다. API_SPEC
+     * 4.0.0이 {@code attendance}를 항상 객체로 응답하도록 고정했으므로 {@code null} 판정을
+     * 호출부에 넘기지 않습니다.</p>
+     */
+    AttendanceSummaryRow findAttendanceTimestamps(@Param("workCaseId") Long workCaseId);
 }

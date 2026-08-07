@@ -215,4 +215,142 @@
         <include refid="workCaseListScope"/>
     </select>
 
+    <resultMap id="workCaseDetailResult" type="com.gighub.work.mapper.result.WorkCaseDetailRow">
+        <constructor>
+            <idArg column="workCaseId" javaType="java.lang.Long"/>
+            <arg column="title" javaType="java.lang.String"/>
+            <arg column="startsAt" javaType="java.time.LocalDateTime"/>
+            <arg column="endsAt" javaType="java.time.LocalDateTime"/>
+            <arg column="breakMinutes" javaType="java.lang.Integer"/>
+            <arg column="breakPaid" javaType="java.lang.Boolean"/>
+            <arg column="dailyWage" javaType="java.lang.Long"/>
+            <arg column="status" javaType="com.gighub.work.domain.WorkCaseStatus"/>
+            <arg column="termsVersion" javaType="java.lang.Integer"/>
+            <arg column="workplaceName" javaType="java.lang.String"/>
+            <arg column="workplaceAddress" javaType="java.lang.String"/>
+            <arg column="employerId" javaType="java.lang.Long"/>
+            <arg column="workerId" javaType="java.lang.Long"/>
+            <arg column="workerName" javaType="java.lang.String"/>
+        </constructor>
+    </resultMap>
+
+    <resultMap id="latestInvitationResult" type="com.gighub.work.mapper.result.LatestInvitationRow">
+        <constructor>
+            <arg column="status" javaType="java.lang.String"/>
+            <arg column="termsVersion" javaType="java.lang.Integer"/>
+            <arg column="expiresAt" javaType="java.time.LocalDateTime"/>
+        </constructor>
+    </resultMap>
+
+    <resultMap id="contractDetailResult" type="com.gighub.work.mapper.result.ContractDetailRow">
+        <constructor>
+            <idArg column="contractId" javaType="java.lang.Long"/>
+            <arg column="documentId" javaType="java.lang.Long"/>
+            <arg column="sourceTermsVersion" javaType="java.lang.Integer"/>
+            <arg column="acceptedAt" javaType="java.time.LocalDateTime"/>
+        </constructor>
+    </resultMap>
+
+    <resultMap id="escrowSummaryResult" type="com.gighub.work.mapper.result.EscrowSummaryRow">
+        <constructor>
+            <arg column="status" javaType="java.lang.String"/>
+            <arg column="amount" javaType="java.lang.Long"/>
+        </constructor>
+    </resultMap>
+
+    <resultMap id="settlementSummaryResult" type="com.gighub.work.mapper.result.SettlementSummaryRow">
+        <constructor>
+            <arg column="status" javaType="java.lang.String"/>
+            <arg column="amount" javaType="java.lang.Long"/>
+            <arg column="dueAt" javaType="java.time.LocalDateTime"/>
+            <arg column="completedAt" javaType="java.time.LocalDateTime"/>
+        </constructor>
+    </resultMap>
+
+    <resultMap id="attendanceSummaryResult" type="com.gighub.work.mapper.result.AttendanceSummaryRow">
+        <constructor>
+            <arg column="checkedInAt" javaType="java.time.LocalDateTime"/>
+            <arg column="checkedOutAt" javaType="java.time.LocalDateTime"/>
+        </constructor>
+    </resultMap>
+
+    <!--
+        좌표·인증 반경·전화번호는 API_SPEC 4.0.0이 상세 응답에서 제외했으므로 SELECT 자체에
+        넣지 않습니다. 당사자 판정에만 쓰는 employerId는 조회하되 응답 DTO로는 옮기지 않습니다.
+    -->
+    <select id="findDetailRow" resultMap="workCaseDetailResult">
+        SELECT wc.id             AS workCaseId,
+               wc.title          AS title,
+               wc.starts_at      AS startsAt,
+               wc.ends_at        AS endsAt,
+               wc.break_minutes  AS breakMinutes,
+               wc.break_paid     AS breakPaid,
+               wc.agreed_wage    AS dailyWage,
+               wc.status         AS status,
+               wc.terms_version  AS termsVersion,
+               wc.workplace_name AS workplaceName,
+               wc.workplace_address AS workplaceAddress,
+               wc.employer_id    AS employerId,
+               wc.worker_id      AS workerId,
+               w.name            AS workerName
+        FROM work_cases wc
+                 LEFT JOIN users w ON w.id = wc.worker_id
+        WHERE wc.id = #{workCaseId}
+    </select>
+
+    <select id="findLatestInvitation" resultMap="latestInvitationResult">
+        SELECT status,
+               expected_terms_version AS termsVersion,
+               expires_at             AS expiresAt
+        FROM work_invitations
+        WHERE work_case_id = #{workCaseId}
+        ORDER BY created_at DESC, id DESC
+        LIMIT 1
+    </select>
+
+    <!--
+        work_contracts에는 문서 식별자가 없어 documents.work_case_id와
+        document_type='EMPLOYMENT_CONTRACT'의 Unique 제약으로 LEFT JOIN합니다. INNER JOIN을
+        쓰면 "계약 없음"과 "계약은 있는데 문서가 없음"이 똑같이 빈 결과가 되어 구분할 수
+        없습니다.
+    -->
+    <select id="findContractDetail" resultMap="contractDetailResult">
+        SELECT c.id                    AS contractId,
+               d.id                    AS documentId,
+               c.source_terms_version  AS sourceTermsVersion,
+               c.accepted_at           AS acceptedAt
+        FROM work_contracts c
+                 LEFT JOIN documents d
+                           ON d.work_case_id = c.work_case_id
+                               AND d.document_type = 'EMPLOYMENT_CONTRACT'
+        WHERE c.work_case_id = #{workCaseId}
+    </select>
+
+    <select id="findEscrow" resultMap="escrowSummaryResult">
+        SELECT status, amount
+        FROM escrows
+        WHERE work_case_id = #{workCaseId}
+    </select>
+
+    <select id="findSettlement" resultMap="settlementSummaryResult">
+        SELECT status, amount, due_at AS dueAt, completed_at AS completedAt
+        FROM settlements
+        WHERE work_case_id = #{workCaseId}
+    </select>
+
+    <!--
+        uk_attendance_records_success가 근무당 유형별 SUCCESS 행을 하나로 제한하므로 MAX로도
+        값이 섞이지 않습니다. 근태 행이 전혀 없어도 GROUP BY 없는 집계는 두 필드가 모두 NULL인
+        행 하나를 돌려주므로, attendance가 항상 객체여야 한다는 API_SPEC 4.0.0 계약을 SQL
+        층에서부터 만족시킵니다.
+    -->
+    <select id="findAttendanceTimestamps" resultMap="attendanceSummaryResult">
+        SELECT MAX(CASE WHEN attendance_type = 'CHECK_IN' AND result = 'SUCCESS'
+                             THEN captured_at END)  AS checkedInAt,
+               MAX(CASE WHEN attendance_type = 'CHECK_OUT' AND result = 'SUCCESS'
+                             THEN captured_at END)  AS checkedOutAt
+        FROM attendance_records
+        WHERE work_case_id = #{workCaseId}
+    </select>
+
 </mapper>

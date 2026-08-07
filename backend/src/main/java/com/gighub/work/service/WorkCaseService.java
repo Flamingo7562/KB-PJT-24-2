@@ -5,12 +5,13 @@ import java.time.LocalDate;
 import com.gighub.auth.security.AuthPrincipal;
 import com.gighub.common.api.PageResponse;
 import com.gighub.work.domain.WorkCaseStatus;
+import com.gighub.work.dto.WorkCaseDetailResponse;
 import com.gighub.work.dto.WorkCaseListItemResponse;
 import com.gighub.work.dto.WorkCaseSummaryResponse;
 import com.gighub.work.service.command.WorkCaseCreateCommand;
 import com.gighub.work.service.command.WorkCaseUpdateCommand;
 
-/** OWNER 근무 {@code DRAFT} 생성·조건 수정·삭제·조회의 승인 규칙을 적용합니다. */
+/** OWNER 근무 {@code DRAFT} 생성·조건 수정·삭제·조회와 당사자 상세 조회의 승인 규칙을 적용합니다. */
 public interface WorkCaseService {
 
     /**
@@ -74,4 +75,16 @@ public interface WorkCaseService {
             LocalDate to,
             int page,
             int size);
+
+    /**
+     * 근무 조건과 계약·근태·에스크로·정산 Aggregate를 함께 조회합니다.
+     *
+     * <p>해당 근무의 OWNER 또는 매칭 WORKER만 호출할 수 있습니다. 미매칭 {@code DRAFT}는
+     * OWNER만 당사자입니다.</p>
+     *
+     * @param principal  당사자를 판정하는 인증 Principal
+     * @param workCaseId 대상 근무 Case 식별자
+     * @return 승인된 상세 DTO
+     */
+    WorkCaseDetailResponse detail(AuthPrincipal principal, Long workCaseId);
 }

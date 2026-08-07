@@ -12,6 +12,7 @@ import com.gighub.common.api.PageResponse;
 import com.gighub.work.domain.WorkCaseStatus;
 import com.gighub.work.dto.WorkCaseCreateRequest;
 import com.gighub.work.dto.WorkCaseCreateResponse;
+import com.gighub.work.dto.WorkCaseDetailResponse;
 import com.gighub.work.dto.WorkCaseListItemResponse;
 import com.gighub.work.dto.WorkCaseSummaryResponse;
 import com.gighub.work.service.WorkCaseService;
@@ -102,6 +103,15 @@ public class WorkCaseController {
 
         return ResponseEntity.ok(ApiResponse.of(workCaseService.list(
                 principal, workplaceId, keyword, status, from, to, page, size)));
+    }
+
+    @GetMapping("/api/work-cases/{workCaseId}")
+    public ResponseEntity<ApiResponse<WorkCaseDetailResponse>> detail(
+            @PathVariable Long workCaseId,
+            Authentication authentication) {
+        AuthPrincipal principal = AuthPrincipals.resolve(authentication);
+
+        return ResponseEntity.ok(ApiResponse.of(workCaseService.detail(principal, workCaseId)));
     }
 
     /**

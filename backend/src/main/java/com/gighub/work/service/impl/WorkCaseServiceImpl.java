@@ -16,13 +16,16 @@ import com.gighub.member.domain.UserRole;
 import com.gighub.work.domain.WorkCaseAddress;
 import com.gighub.work.domain.WorkCaseStatus;
 import com.gighub.work.domain.WorkCaseTimes;
+import com.gighub.work.dto.WorkCaseDetailResponse;
 import com.gighub.work.dto.WorkCaseListItemResponse;
 import com.gighub.work.dto.WorkCaseSummaryResponse;
 import com.gighub.work.mapper.WorkCaseMapper;
 import com.gighub.work.mapper.param.WorkCaseInsertParam;
 import com.gighub.work.mapper.param.WorkCaseListQuery;
 import com.gighub.work.mapper.param.WorkCaseTermsUpdateParam;
+import com.gighub.work.mapper.result.ContractDetailRow;
 import com.gighub.work.mapper.result.OwnedWorkplaceSnapshotRow;
+import com.gighub.work.mapper.result.WorkCaseDetailRow;
 import com.gighub.work.mapper.result.WorkCaseLockRow;
 import com.gighub.work.service.WorkCaseService;
 import com.gighub.work.service.command.WorkCaseCreateCommand;
@@ -181,6 +184,57 @@ public class WorkCaseServiceImpl implements WorkCaseService {
                 .toList();
 
         return PageResponse.of(content, page, size, totalElements);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public WorkCaseDetailResponse detail(AuthPrincipal principal, Long workCaseId) {
+        WorkCaseDetailRow row = workCaseMapper.findDetailRow(workCaseId);
+        if (row == null) {
+            throw new ResourceNotFoundException("근무 Case를 찾을 수 없습니다.");
+        }
+        requireParty(principal, row);
+
+        return WorkCaseDetailResponse.from(
+                row,
+                workCaseMapper.findLatestInvitation(workCaseId),
+                requireContractIntegrity(workCaseId),
+                workCaseMapper.findAttendanceTimestamps(workCaseId),
+                workCaseMapper.findEscrow(workCaseId),
+                workCaseMapper.findSettlement(workCaseId));
+    }
+
+    /**
+     * 해당 근무의 OWNER 또는 매칭 WORKER만 통과시킵니다.
+     *
+     * <p>미매칭 {@code DRAFT}는 {@code workerId}가 없어 OWNER만 당사자로 남습니다. 존재하지
+     * 않는 근무와 당사자가 아닌 접근을 같은 404로 응답해 "존재는 하지만 내 것이 아니다"라는
+     * 사실을 노출하지 않습니다.</p>
+     */
+    private void requireParty(AuthPrincipal principal, WorkCaseDetailRow row) {
+        boolean isEmployer = row.getEmployerId().equals(principal.getUserId());
+        boolean isMatchedWorker = row.getWorkerId() != null
+                && row.getWorkerId().equals(principal.getUserId());
+        if (!isEmployer && !isMatchedWorker) {
+            throw new ResourceNotFoundException("근무 Case를 찾을 수 없습니다.");
+        }
+    }
+
+    /**
+     * 계약은 있는데 연결 문서가 없는 손상 상태를 API_SPEC 4.0.0 계약대로 500으로 드러냅니다.
+     *
+     * <p>부분 객체나 {@code null}로 감추면 클라이언트가 {@code contract.documentId}로 계약
+     * 파일을 정상 조회할 수 있다고 착각합니다. 예외 메시지에 식별자를 담아 공통
+     * {@code Exception} Handler가 traceId와 함께 서버 로그에 남기게 합니다.</p>
+     */
+    private ContractDetailRow requireContractIntegrity(Long workCaseId) {
+        ContractDetailRow contract = workCaseMapper.findContractDetail(workCaseId);
+        if (contract != null && contract.getDocumentId() == null) {
+            throw new IllegalStateException(
+                    "근무 Case " + workCaseId + "의 계약 " + contract.getContractId()
+                            + "에 연결된 계약서 문서가 없습니다.");
+        }
+        return contract;
     }
 
     /**
