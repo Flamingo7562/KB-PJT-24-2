@@ -1,6 +1,7 @@
 package com.gighub.work.mapper;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
@@ -13,8 +14,10 @@ import javax.sql.DataSource;
 import com.gighub.config.RootConfig;
 import com.gighub.work.domain.WorkCaseStatus;
 import com.gighub.work.mapper.param.WorkCaseInsertParam;
+import com.gighub.work.mapper.param.WorkCaseListQuery;
 import com.gighub.work.mapper.param.WorkCaseTermsUpdateParam;
 import com.gighub.work.mapper.result.OwnedWorkplaceSnapshotRow;
+import com.gighub.work.mapper.result.WorkCaseListRow;
 import com.gighub.work.mapper.result.WorkCaseLockRow;
 import com.gighub.work.mapper.result.WorkCaseStatusCountRow;
 import org.junit.jupiter.api.Tag;
@@ -86,6 +89,8 @@ class WorkCaseMapperDatabaseIntegrationTest {
                         jdbc, mapper, ownerUserId, activeWorkplaceId, snapshot);
                 verifyCountByStatusIsOwnerScoped(
                         mapper, activeWorkplaceId, ownerUserId, otherOwnerUserId);
+                verifyListFiltersSearchesAndOrders(
+                        jdbc, mapper, ownerUserId, otherOwnerUserId, activeWorkplaceId, suffix);
             } finally {
                 cleanUp(jdbc, ownerUserId, otherOwnerUserId);
             }
@@ -266,6 +271,135 @@ class WorkCaseMapperDatabaseIntegrationTest {
         List<WorkCaseStatusCountRow> otherOwnerCounts =
                 mapper.countByStatus(workplaceId, otherOwnerUserId);
         assertTrue(otherOwnerCounts.isEmpty(), "다른 OWNER에게는 건수가 보이면 안 됩니다.");
+    }
+
+    /**
+     * 목록 조회는 이 시점까지의 시나리오가 남긴 기존 근무(제목 "주말 홀 서빙" 다수 포함)와 같은
+     * 사업장을 공유하므로, 검색어로는 이번 실행에서만 유일한 표식을 씁니다. 고정 문자열을 쓰면
+     * 기존 행이 우연히 검색어에 걸려 건수 assertion이 실행마다 달라집니다.
+     */
+    private void verifyListFiltersSearchesAndOrders(
+            JdbcTemplate jdbc,
+            WorkCaseMapper mapper,
+            Long ownerUserId,
+            Long otherOwnerUserId,
+            Long workplaceId,
+            String suffix) {
+        String marker = "IT" + suffix;
+        Long workerUserId = insertWorker(jdbc, "qa154c" + suffix);
+
+        Long olderId = insertListFixture(
+                jdbc, ownerUserId, workplaceId, marker + " 저녁 근무",
+                LocalDateTime.of(2026, 8, 9, 9, 0), "DRAFT", null);
+        Long matchedId = insertListFixture(
+                jdbc, ownerUserId, workplaceId, "평일 주방 보조",
+                LocalDateTime.of(2026, 8, 10, 9, 0), "READY", workerUserId);
+        Long newerId = insertListFixture(
+                jdbc, ownerUserId, workplaceId, marker + " 주말 근무",
+                LocalDateTime.of(2026, 8, 11, 9, 0), "DRAFT", null);
+
+        try {
+            // keyword: 제목 부분 일치. marker가 붙은 두 행(older·newer)만 걸립니다.
+            // worker 이름에는 아직 marker가 없으므로 matchedId는 걸리지 않습니다.
+            List<WorkCaseListRow> byTitle = findAll(mapper, listQuery(workplaceId, ownerUserId)
+                    .keyword(marker)
+                    .build());
+            assertEquals(2, byTitle.size());
+
+            // 정렬: starts_at DESC, id DESC 고정. marker 필터로 older·newer 두 행만 좁혀서
+            // 순서를 확인합니다. worker 이름 갱신 전에 확인해야 matchedId가 섞이지 않습니다.
+            List<WorkCaseListRow> ordered = byTitle;
+            assertEquals(newerId, ordered.get(0).getWorkCaseId(), "최신 근무가 먼저 와야 합니다.");
+            assertEquals(olderId, ordered.get(1).getWorkCaseId());
+
+            // Page 크기: marker 두 건 중 한 건만 요청하면 정확히 한 건만 돌아와야 합니다.
+            WorkCaseListQuery firstPage = listQuery(workplaceId, ownerUserId)
+                    .keyword(marker)
+                    .size(1)
+                    .offset(0)
+                    .build();
+            assertEquals(1, mapper.findPageByFilters(firstPage).size());
+            assertEquals(2, mapper.countByFilters(firstPage), "건수는 Page 크기와 무관하게 전체를 세야 합니다.");
+
+            // keyword: worker 이름 부분 일치. 근무 자체 제목에는 없는 단어라 JOIN이 아니면 안 잡힙니다.
+            // 이 갱신 이후로는 matchedId도 marker 검색에 걸리므로 marker 관련 검증은 이 앞에서 끝냅니다.
+            jdbc.update("UPDATE users SET name = ? WHERE id = ?", "이알바" + marker, workerUserId);
+            List<WorkCaseListRow> byWorkerName = findAll(mapper, listQuery(workplaceId, ownerUserId)
+                    .keyword("이알바" + marker)
+                    .build());
+            assertEquals(1, byWorkerName.size());
+            assertEquals(matchedId, byWorkerName.get(0).getWorkCaseId());
+            assertEquals(workerUserId, byWorkerName.get(0).getWorkerId());
+
+            // status 필터
+            List<WorkCaseListRow> readyOnly = findAll(mapper, listQuery(workplaceId, ownerUserId)
+                    .keyword(null)
+                    .status(WorkCaseStatus.READY)
+                    .build());
+            assertTrue(readyOnly.stream().allMatch(row -> row.getStatus() == WorkCaseStatus.READY));
+
+            // from/to: workDate 경계(포함). 08-09는 제외되고 08-10·08-11만 남습니다.
+            WorkCaseListQuery dateRange = listQuery(workplaceId, ownerUserId)
+                    .from(LocalDate.of(2026, 8, 10))
+                    .to(LocalDate.of(2026, 8, 11))
+                    .build();
+            List<WorkCaseListRow> inRange = findAll(mapper, dateRange);
+            assertTrue(inRange.stream().noneMatch(row -> row.getWorkCaseId().equals(olderId)));
+            assertTrue(inRange.stream().anyMatch(row -> row.getWorkCaseId().equals(newerId)));
+
+            // 다른 OWNER에게는 같은 사업장의 근무가 전혀 보이면 안 됩니다.
+            WorkCaseListQuery otherOwnerQuery = listQuery(workplaceId, otherOwnerUserId).build();
+            assertEquals(0, findAll(mapper, otherOwnerQuery).size());
+            assertEquals(0, mapper.countByFilters(otherOwnerQuery));
+        } finally {
+            jdbc.update(
+                    "DELETE FROM work_cases WHERE id IN (?, ?, ?)", olderId, matchedId, newerId);
+            jdbc.update("DELETE FROM users WHERE id = ?", workerUserId);
+        }
+    }
+
+    private List<WorkCaseListRow> findAll(WorkCaseMapper mapper, WorkCaseListQuery query) {
+        return mapper.findPageByFilters(query);
+    }
+
+    private WorkCaseListQuery.WorkCaseListQueryBuilder listQuery(Long workplaceId, Long ownerUserId) {
+        return WorkCaseListQuery.builder()
+                .workplaceId(workplaceId)
+                .ownerUserId(ownerUserId)
+                .size(20)
+                .offset(0);
+    }
+
+    /** READY는 매칭 WORKER가 있어야 하는 ck_work_cases_matched_worker 제약을 만족시킵니다. */
+    private Long insertListFixture(
+            JdbcTemplate jdbc,
+            Long ownerUserId,
+            Long workplaceId,
+            String title,
+            LocalDateTime startsAt,
+            String status,
+            Long workerUserId) {
+        jdbc.update(
+                "INSERT INTO work_cases"
+                        + " (employer_id, worker_id, workplace_id, title, starts_at, ends_at,"
+                        + " break_minutes, break_paid, workplace_name, workplace_address,"
+                        + " allowed_radius_meters, agreed_wage, terms_version, status)"
+                        + " VALUES (?, ?, ?, ?, ?, ?, 60, 0, '강남점', '서울 강남구 테헤란로 1 2층',"
+                        + " 100.00, 100000, 1, ?)",
+                ownerUserId, workerUserId, workplaceId, title, startsAt, startsAt.plusHours(8), status);
+        return jdbc.queryForObject(
+                "SELECT id FROM work_cases WHERE workplace_id = ? AND title = ? AND starts_at = ?",
+                Long.class, workplaceId, title, startsAt);
+    }
+
+    private Long insertWorker(JdbcTemplate jdbc, String loginId) {
+        jdbc.update(
+                "INSERT INTO users (login_id, email, password_hash, name, role)"
+                        + " VALUES (?, ?, ?, '이알바', 'WORKER')",
+                loginId,
+                loginId + "@example.com",
+                "$2a$10$0000000000000000000000000000000000000000000000000000");
+        return jdbc.queryForObject("SELECT id FROM users WHERE login_id = ?", Long.class, loginId);
     }
 
     private Long insertDraft(

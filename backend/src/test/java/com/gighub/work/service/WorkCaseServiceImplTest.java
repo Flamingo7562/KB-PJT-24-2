@@ -11,13 +11,17 @@ import com.gighub.common.exception.ResourceNotFoundException;
 import com.gighub.common.exception.RoleMismatchException;
 import com.gighub.common.exception.ValidationException;
 import com.gighub.common.exception.WorkCaseLockedException;
+import com.gighub.common.api.PageResponse;
 import com.gighub.member.domain.UserRole;
 import com.gighub.work.domain.WorkCaseStatus;
+import com.gighub.work.dto.WorkCaseListItemResponse;
+import com.gighub.work.dto.WorkCaseSummaryResponse;
 import com.gighub.work.mapper.WorkCaseMapper;
 import com.gighub.work.mapper.param.WorkCaseInsertParam;
+import com.gighub.work.mapper.param.WorkCaseListQuery;
 import com.gighub.work.mapper.param.WorkCaseTermsUpdateParam;
-import com.gighub.work.dto.WorkCaseSummaryResponse;
 import com.gighub.work.mapper.result.OwnedWorkplaceSnapshotRow;
+import com.gighub.work.mapper.result.WorkCaseListRow;
 import com.gighub.work.mapper.result.WorkCaseLockRow;
 import com.gighub.work.mapper.result.WorkCaseStatusCountRow;
 import com.gighub.work.service.command.WorkCaseCreateCommand;
@@ -239,6 +243,98 @@ class WorkCaseServiceImplTest {
 
         assertEquals(2, response.getDraft());
         assertEquals(0, response.getCompleted());
+    }
+
+    // ---------- list ----------
+
+    @Test
+    void listRejectsNonOwner() {
+        assertThrows(
+                RoleMismatchException.class,
+                () -> service.list(worker(), WORKPLACE_ID, null, null, null, null, 0, 20));
+
+        verifyNoInteractions(workCaseMapper);
+    }
+
+    @Test
+    void listRejectsInvalidPageBeforeCheckingOwnership() {
+        assertThrows(
+                ValidationException.class,
+                () -> service.list(owner(), WORKPLACE_ID, null, null, null, null, -1, 20));
+
+        verify(workCaseMapper, never()).existsOwnedManageableWorkplace(any(), any());
+    }
+
+    @Test
+    void listRejectsUnownedWorkplace() {
+        when(workCaseMapper.existsOwnedManageableWorkplace(WORKPLACE_ID, OWNER_ID))
+                .thenReturn(false);
+
+        assertThrows(
+                ResourceNotFoundException.class,
+                () -> service.list(owner(), WORKPLACE_ID, null, null, null, null, 0, 20));
+
+        verify(workCaseMapper, never()).countByFilters(any());
+        verify(workCaseMapper, never()).findPageByFilters(any());
+    }
+
+    @Test
+    void listRejectsFromAfterTo() {
+        when(workCaseMapper.existsOwnedManageableWorkplace(WORKPLACE_ID, OWNER_ID))
+                .thenReturn(true);
+
+        assertThrows(
+                ValidationException.class,
+                () -> service.list(
+                        owner(), WORKPLACE_ID, null, null,
+                        LocalDate.of(2026, 8, 20), LocalDate.of(2026, 8, 10), 0, 20));
+
+        verify(workCaseMapper, never()).countByFilters(any());
+    }
+
+    @Test
+    void listTrimsBlankKeywordToNull() {
+        when(workCaseMapper.existsOwnedManageableWorkplace(WORKPLACE_ID, OWNER_ID))
+                .thenReturn(true);
+        when(workCaseMapper.countByFilters(any())).thenReturn(0L);
+        when(workCaseMapper.findPageByFilters(any())).thenReturn(List.of());
+
+        service.list(owner(), WORKPLACE_ID, "   ", null, null, null, 0, 20);
+
+        ArgumentCaptor<WorkCaseListQuery> captor = ArgumentCaptor.forClass(WorkCaseListQuery.class);
+        verify(workCaseMapper).countByFilters(captor.capture());
+        assertEquals(null, captor.getValue().getKeyword());
+    }
+
+    @Test
+    void listReturnsMappedContentAndPageMetadata() {
+        when(workCaseMapper.existsOwnedManageableWorkplace(WORKPLACE_ID, OWNER_ID))
+                .thenReturn(true);
+        when(workCaseMapper.countByFilters(any())).thenReturn(1L);
+        when(workCaseMapper.findPageByFilters(any())).thenReturn(List.of(
+                WorkCaseListRow.builder()
+                        .workCaseId(WORK_CASE_ID)
+                        .title("주말 홀 서빙")
+                        .startsAt(LocalDateTime.of(2026, 8, 10, 9, 0))
+                        .endsAt(LocalDateTime.of(2026, 8, 10, 18, 0))
+                        .dailyWage(120_000L)
+                        .status(WorkCaseStatus.DRAFT)
+                        .workerId(null)
+                        .workerName(null)
+                        .build()));
+
+        PageResponse<WorkCaseListItemResponse> page =
+                service.list(owner(), WORKPLACE_ID, "서빙", WorkCaseStatus.DRAFT, null, null, 0, 20);
+
+        assertEquals(1, page.getContent().size());
+        assertEquals(WORK_CASE_ID, page.getContent().get(0).getWorkCaseId());
+        assertEquals(1, page.getPage().getTotalElements());
+
+        ArgumentCaptor<WorkCaseListQuery> captor = ArgumentCaptor.forClass(WorkCaseListQuery.class);
+        verify(workCaseMapper).findPageByFilters(captor.capture());
+        assertEquals("서빙", captor.getValue().getKeyword());
+        assertEquals(WorkCaseStatus.DRAFT, captor.getValue().getStatus());
+        assertEquals(0L, captor.getValue().getOffset());
     }
 
     // ---------- fixtures ----------

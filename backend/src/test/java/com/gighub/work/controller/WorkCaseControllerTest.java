@@ -1,13 +1,16 @@
 package com.gighub.work.controller;
 
+import java.time.LocalDate;
 import java.util.List;
 
 import com.gighub.auth.security.AuthPrincipal;
+import com.gighub.common.api.PageResponse;
 import com.gighub.common.exception.CommonExceptionHandler;
 import com.gighub.common.exception.ResourceNotFoundException;
 import com.gighub.common.exception.RoleMismatchException;
 import com.gighub.common.exception.WorkCaseLockedException;
 import com.gighub.member.domain.UserRole;
+import com.gighub.work.domain.WorkCaseStatus;
 import com.gighub.work.dto.WorkCaseSummaryResponse;
 import com.gighub.work.service.WorkCaseService;
 import org.junit.jupiter.api.BeforeEach;
@@ -18,9 +21,12 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -218,6 +224,57 @@ class WorkCaseControllerTest {
     @Test
     void summaryRejectsRequestWithoutAuthentication() throws Exception {
         mockMvc.perform(get("/api/workplaces/5/work-cases/summary"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    // ---------- GET list ----------
+
+    @Test
+    void listReturnsApprovedPageEnvelope() throws Exception {
+        when(workCaseService.list(any(), anyLong(), any(), any(), any(), any(), anyInt(), anyInt()))
+                .thenReturn(PageResponse.of(List.of(), 0, 20, 0));
+
+        mockMvc.perform(get("/api/workplaces/5/work-cases")
+                        .principal(ownerAuthentication()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.content").isArray())
+                .andExpect(jsonPath("$.data.page.number").value(0))
+                .andExpect(jsonPath("$.data.page.size").value(20));
+    }
+
+    @Test
+    void listPassesQueryParamsToService() throws Exception {
+        when(workCaseService.list(any(), anyLong(), any(), any(), any(), any(), anyInt(), anyInt()))
+                .thenReturn(PageResponse.of(List.of(), 0, 20, 0));
+
+        mockMvc.perform(get("/api/workplaces/5/work-cases")
+                        .param("keyword", "서빙")
+                        .param("status", "DRAFT")
+                        .param("from", "2026-08-01")
+                        .param("to", "2026-08-31")
+                        .param("page", "0")
+                        .param("size", "20")
+                        .principal(ownerAuthentication()))
+                .andExpect(status().isOk());
+
+        verify(workCaseService).list(
+                any(), eq(5L), eq("서빙"), eq(WorkCaseStatus.DRAFT),
+                eq(LocalDate.of(2026, 8, 1)), eq(LocalDate.of(2026, 8, 31)), eq(0), eq(20));
+    }
+
+    @Test
+    void listSurfacesUnownedWorkplaceAsNotFound() throws Exception {
+        when(workCaseService.list(any(), anyLong(), any(), any(), any(), any(), anyInt(), anyInt()))
+                .thenThrow(new ResourceNotFoundException("사업장을 찾을 수 없습니다."));
+
+        mockMvc.perform(get("/api/workplaces/5/work-cases").principal(ownerAuthentication()))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("RESOURCE_NOT_FOUND"));
+    }
+
+    @Test
+    void listRejectsRequestWithoutAuthentication() throws Exception {
+        mockMvc.perform(get("/api/workplaces/5/work-cases"))
                 .andExpect(status().isUnauthorized());
     }
 
