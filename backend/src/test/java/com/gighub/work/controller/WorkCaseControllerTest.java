@@ -1,0 +1,202 @@
+package com.gighub.work.controller;
+
+import java.util.List;
+
+import com.gighub.auth.security.AuthPrincipal;
+import com.gighub.common.exception.CommonExceptionHandler;
+import com.gighub.common.exception.ResourceNotFoundException;
+import com.gighub.common.exception.RoleMismatchException;
+import com.gighub.common.exception.WorkCaseLockedException;
+import com.gighub.member.domain.UserRole;
+import com.gighub.work.service.WorkCaseService;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+import static org.springframework.http.MediaType.APPLICATION_JSON;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+class WorkCaseControllerTest {
+
+    private WorkCaseService workCaseService;
+    private MockMvc mockMvc;
+
+    @BeforeEach
+    void setUp() {
+        workCaseService = mock(WorkCaseService.class);
+        mockMvc = MockMvcBuilders.standaloneSetup(new WorkCaseController(workCaseService))
+                .setControllerAdvice(new CommonExceptionHandler())
+                .build();
+    }
+
+    // ---------- POST ----------
+
+    @Test
+    void createReturnsCreatedWorkCaseIdentifier() throws Exception {
+        when(workCaseService.create(any(), any())).thenReturn(101L);
+
+        mockMvc.perform(post("/api/workplaces/5/work-cases")
+                        .principal(ownerAuthentication())
+                        .contentType(APPLICATION_JSON)
+                        .content(validBody()))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.workCaseId").value(101));
+    }
+
+    @Test
+    void createRejectsRequestWithoutAuthentication() throws Exception {
+        mockMvc.perform(post("/api/workplaces/5/work-cases")
+                        .contentType(APPLICATION_JSON)
+                        .content(validBody()))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void createRejectsMissingRequiredField() throws Exception {
+        mockMvc.perform(post("/api/workplaces/5/work-cases")
+                        .principal(ownerAuthentication())
+                        .contentType(APPLICATION_JSON)
+                        .content("{"
+                                + "\"workDate\":\"2026-08-10\","
+                                + "\"startTime\":\"09:00\","
+                                + "\"endTime\":\"18:00\","
+                                + "\"breakMinutes\":60,"
+                                + "\"breakPaid\":false,"
+                                + "\"dailyWage\":120000"
+                                + "}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+    }
+
+    @Test
+    void createRejectsUnknownField() throws Exception {
+        mockMvc.perform(post("/api/workplaces/5/work-cases")
+                        .principal(ownerAuthentication())
+                        .contentType(APPLICATION_JSON)
+                        .content("{"
+                                + "\"title\":\"주말 홀 서빙\","
+                                + "\"workDate\":\"2026-08-10\","
+                                + "\"startTime\":\"09:00\","
+                                + "\"endTime\":\"18:00\","
+                                + "\"breakMinutes\":60,"
+                                + "\"breakPaid\":false,"
+                                + "\"dailyWage\":120000,"
+                                + "\"status\":\"ACCEPTED\""
+                                + "}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void createSurfacesRoleRejectionAsRoleMismatch() throws Exception {
+        when(workCaseService.create(any(), any()))
+                .thenThrow(new RoleMismatchException("근무 Case는 OWNER만 관리할 수 있습니다."));
+
+        mockMvc.perform(post("/api/workplaces/5/work-cases")
+                        .principal(ownerAuthentication())
+                        .contentType(APPLICATION_JSON)
+                        .content(validBody()))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("ROLE_MISMATCH"));
+    }
+
+    @Test
+    void createSurfacesUnownedWorkplaceAsNotFound() throws Exception {
+        when(workCaseService.create(any(), any()))
+                .thenThrow(new ResourceNotFoundException("등록할 수 있는 사업장을 찾을 수 없습니다."));
+
+        mockMvc.perform(post("/api/workplaces/5/work-cases")
+                        .principal(ownerAuthentication())
+                        .contentType(APPLICATION_JSON)
+                        .content(validBody()))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("RESOURCE_NOT_FOUND"));
+    }
+
+    // ---------- PATCH ----------
+
+    @Test
+    void updateReturnsNoContentOnSuccess() throws Exception {
+        mockMvc.perform(patch("/api/work-cases/101")
+                        .principal(ownerAuthentication())
+                        .contentType(APPLICATION_JSON)
+                        .content(validBody()))
+                .andExpect(status().isNoContent());
+    }
+
+    @Test
+    void updateSurfacesNonDraftAsWorkCaseLocked() throws Exception {
+        doThrow(new WorkCaseLockedException("DRAFT 상태의 근무만 처리할 수 있습니다."))
+                .when(workCaseService).update(any(), any());
+
+        mockMvc.perform(patch("/api/work-cases/101")
+                        .principal(ownerAuthentication())
+                        .contentType(APPLICATION_JSON)
+                        .content(validBody()))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("WORK_CASE_LOCKED"));
+    }
+
+    @Test
+    void updateSurfacesUnownedWorkCaseAsNotFound() throws Exception {
+        doThrow(new ResourceNotFoundException("근무 Case를 찾을 수 없습니다."))
+                .when(workCaseService).update(any(), any());
+
+        mockMvc.perform(patch("/api/work-cases/101")
+                        .principal(ownerAuthentication())
+                        .contentType(APPLICATION_JSON)
+                        .content(validBody()))
+                .andExpect(status().isNotFound());
+    }
+
+    // ---------- DELETE ----------
+
+    @Test
+    void deleteReturnsNoContentOnSuccess() throws Exception {
+        mockMvc.perform(delete("/api/work-cases/101").principal(ownerAuthentication()))
+                .andExpect(status().isNoContent());
+    }
+
+    @Test
+    void deleteSurfacesNonDraftAsWorkCaseLocked() throws Exception {
+        doThrow(new WorkCaseLockedException("DRAFT 상태의 근무만 처리할 수 있습니다."))
+                .when(workCaseService).delete(any(), any());
+
+        mockMvc.perform(delete("/api/work-cases/101").principal(ownerAuthentication()))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("WORK_CASE_LOCKED"));
+    }
+
+    @Test
+    void deleteRejectsRequestWithoutAuthentication() throws Exception {
+        mockMvc.perform(delete("/api/work-cases/101"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    private Authentication ownerAuthentication() {
+        return new UsernamePasswordAuthenticationToken(
+                new AuthPrincipal(7L, UserRole.OWNER, "김사장"), null, List.of());
+    }
+
+    private String validBody() {
+        return "{"
+                + "\"title\":\"주말 홀 서빙\","
+                + "\"workDate\":\"2026-08-10\","
+                + "\"startTime\":\"09:00\","
+                + "\"endTime\":\"18:00\","
+                + "\"breakMinutes\":60,"
+                + "\"breakPaid\":false,"
+                + "\"dailyWage\":120000"
+                + "}";
+    }
+}
