@@ -9,6 +9,22 @@ import java.util.List;
 @Mapper
 public interface SettlementMapper {
 
+    /**
+     * 수락 시점에 정산을 예약한다.
+     *
+     * <p>금액은 근무의 일급과 같아야 한다. 복합 FK {@code fk_settlements_case_wage}가
+     * {@code (work_case_id, amount)}를 {@code work_cases(id, agreed_wage)}와 대조하므로 다른
+     * 금액으로는 예약할 수 없다.</p>
+     *
+     * <p>상태와 시각은 승인 계약이 정한 초기값으로 서버가 고정한다. {@code due_at}과 승인·처리·
+     * 완료·실패 필드는 이후 정산 흐름이 채운다.</p>
+     *
+     * @return 저장된 행 수
+     */
+    int insertWaiting(
+            @Param("workCaseId") Long workCaseId,
+            @Param("amount") Long amount);
+
     // 정산 원장: 지급 판단부터 완료까지 동일 행을 잠근다.
     SettlementSnapshot findByWorkCaseIdForUpdate(
             @Param("workCaseId") Long workCaseId);

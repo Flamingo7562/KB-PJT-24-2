@@ -55,6 +55,14 @@
         <include refid="ownedManageableWorkplaces"/>
     </select>
 
+    <!-- 온보딩 기준은 목록 기준과 달리 INACTIVE를 제외하고 현재 ACTIVE 사업장만 셉니다. -->
+    <select id="countActiveByOwnerUserId" resultType="int">
+        SELECT COUNT(*)
+        FROM workplaces
+        WHERE owner_user_id = #{ownerUserId}
+          AND status = 'ACTIVE'
+    </select>
+
     <!--
         고정 QR 은 ACTIVE 사업장에만 존재합니다. 상태 조건을 빼면 INACTIVE·DELETED 사업장의
         QR 까지 조회됩니다. 소유권 조건도 SQL 안에 두어야 다른 OWNER 의 사업장이 통과하지

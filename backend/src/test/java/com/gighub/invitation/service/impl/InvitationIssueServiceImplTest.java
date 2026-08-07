@@ -8,11 +8,10 @@ import com.gighub.common.exception.WorkCaseLockedException;
 import com.gighub.invitation.config.InvitationLinkFactory;
 import com.gighub.invitation.config.InvitationProperties;
 import com.gighub.invitation.dto.InvitationIssueResponse;
-import com.gighub.invitation.mapper.InvitationMapper;
+import com.gighub.invitation.mapper.InvitationMapperTestDouble;
 import com.gighub.invitation.mapper.param.InvitationInsertParam;
 import com.gighub.invitation.mapper.result.InvitationRow;
 import com.gighub.invitation.mapper.result.InvitationWorkCaseLockRow;
-import com.gighub.invitation.mapper.result.InvitationWorkCaseRow;
 import com.gighub.invitation.service.InvitationIssueResult;
 import com.gighub.invitation.token.InvitationTokenCodec;
 import com.gighub.member.domain.UserRole;
@@ -333,7 +332,7 @@ class InvitationIssueServiceImplTest {
     }
 
     /** 호출 순서까지 확인해야 해서 Mock 대신 직접 만든 Stub을 씁니다. */
-    private static final class StubInvitationMapper implements InvitationMapper {
+    private static final class StubInvitationMapper extends InvitationMapperTestDouble {
 
         private final List<String> calls = new ArrayList<>();
         private final List<InvitationInsertParam> inserted = new ArrayList<>();
@@ -366,24 +365,9 @@ class InvitationIssueServiceImplTest {
         }
 
         @Override
-        public InvitationRow findByTokenHashForUpdate(byte[] tokenHash) {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
         public InvitationRow findActivePendingByWorkCaseIdForUpdate(long workCaseId) {
             calls.add("findActivePending");
             return activePending;
-        }
-
-        @Override
-        public InvitationWorkCaseRow findWorkCaseForInvitation(long workCaseId) {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public int markExpired(long invitationId) {
-            throw new UnsupportedOperationException();
         }
 
         @Override

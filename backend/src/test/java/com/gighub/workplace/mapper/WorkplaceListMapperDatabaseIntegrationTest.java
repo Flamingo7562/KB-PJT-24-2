@@ -93,6 +93,10 @@ class WorkplaceListMapperDatabaseIntegrationTest {
                 rows.stream().map(WorkplaceListRow::getWorkplaceId).toList(),
                 "소유한 ACTIVE·INACTIVE만 최신 등록 순으로 반환해야 합니다.");
         assertEquals(4, workplaceMapper.countByOwnerUserId(ownerUserId), "건수는 목록과 같은 조건이어야 합니다.");
+        assertEquals(
+                3,
+                workplaceMapper.countActiveByOwnerUserId(ownerUserId),
+                "온보딩 건수는 INACTIVE를 제외한 ACTIVE 사업장만 세어야 합니다.");
 
         assertTrue(
                 rows.stream().noneMatch(row -> "DELETED".equals(row.getStatus())),
@@ -171,6 +175,7 @@ class WorkplaceListMapperDatabaseIntegrationTest {
     private void verifyEmptyOwnerReturnsEmptyPage(WorkplaceMapper workplaceMapper, Long emptyOwnerUserId) {
         assertEquals(List.of(), workplaceMapper.findPageByOwnerUserId(emptyOwnerUserId, 20, 0L));
         assertEquals(0, workplaceMapper.countByOwnerUserId(emptyOwnerUserId));
+        assertEquals(0, workplaceMapper.countActiveByOwnerUserId(emptyOwnerUserId));
     }
 
     private List<Long> pageIds(WorkplaceMapper workplaceMapper, Long ownerUserId, int size, long offset) {

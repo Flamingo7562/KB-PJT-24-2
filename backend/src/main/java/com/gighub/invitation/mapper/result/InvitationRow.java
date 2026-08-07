@@ -18,7 +18,7 @@ import java.time.LocalDateTime;
  * 행에도 담을 값이 없고, 필드를 만들어 두면 이후 계층이 응답이나 로그에 실을 수 있습니다.</p>
  */
 @Getter
-@Builder
+@Builder(toBuilder = true)
 @NoArgsConstructor
 @AllArgsConstructor
 public class InvitationRow {

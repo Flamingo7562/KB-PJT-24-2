@@ -14,6 +14,7 @@ import com.gighub.invitation.exception.InvitationExpiredException;
 import com.gighub.invitation.exception.InvitationNotFoundException;
 import com.gighub.invitation.exception.InvitationRevokedException;
 import com.gighub.invitation.exception.InvitationTermsChangedException;
+import com.gighub.invitation.service.InvitationAcceptService;
 import com.gighub.invitation.service.InvitationQueryService;
 import com.gighub.member.domain.UserRole;
 import org.junit.jupiter.api.BeforeEach;
@@ -55,7 +56,8 @@ class InvitationControllerTest {
     void setUp() {
         invitationQueryService = mock(InvitationQueryService.class);
         mockMvc = MockMvcBuilders
-                .standaloneSetup(new InvitationController(invitationQueryService))
+                .standaloneSetup(new InvitationController(
+                        invitationQueryService, mock(InvitationAcceptService.class)))
                 .setControllerAdvice(new CommonExceptionHandler())
                 // 운영 Converter와 같은 JSON 규칙이어야 Instant·금액 표현을 검증할 수 있습니다.
                 .setMessageConverters(

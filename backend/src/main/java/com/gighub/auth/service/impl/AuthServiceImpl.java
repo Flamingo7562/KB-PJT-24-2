@@ -2,7 +2,6 @@ package com.gighub.auth.service.impl;
 
 import com.gighub.auth.dto.SignupRequest;
 import com.gighub.auth.dto.LoginRequest;
-import com.gighub.auth.mapper.WorkplaceCountMapper;
 import com.gighub.auth.security.AuthPrincipal;
 import com.gighub.auth.service.AuthService;
 import com.gighub.auth.service.LoginResult;
@@ -14,6 +13,7 @@ import com.gighub.member.domain.UserRole;
 import com.gighub.member.domain.UserStatus;
 import com.gighub.member.mapper.UserMapper;
 import com.gighub.wallet.mapper.WalletMapper;
+import com.gighub.workplace.mapper.WorkplaceMapper;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -26,17 +26,17 @@ public class AuthServiceImpl implements AuthService {
     private static final String DUMMY_PASSWORD_HASH =
             "$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy";
 
-    private final WorkplaceCountMapper workplaceCountMapper;
+    private final WorkplaceMapper workplaceMapper;
     private final UserMapper userMapper;
     private final WalletMapper walletMapper;
     private final PasswordEncoder passwordEncoder;
 
     public AuthServiceImpl(
-            WorkplaceCountMapper workplaceCountMapper,
+            WorkplaceMapper workplaceMapper,
             UserMapper userMapper,
             WalletMapper walletMapper,
             PasswordEncoder passwordEncoder) {
-        this.workplaceCountMapper = workplaceCountMapper;
+        this.workplaceMapper = workplaceMapper;
         this.userMapper = userMapper;
         this.walletMapper = walletMapper;
         this.passwordEncoder = passwordEncoder;
@@ -109,7 +109,7 @@ public class AuthServiceImpl implements AuthService {
             return false;
         }
         // 사업장 생성·비활성화가 즉시 반영되도록 Session에 계산 결과를 저장하지 않습니다.
-        return workplaceCountMapper.countActiveByOwnerUserId(principal.getUserId()) == 0;
+        return workplaceMapper.countActiveByOwnerUserId(principal.getUserId()) == 0;
     }
 
     private ConflictException signupConflict() {

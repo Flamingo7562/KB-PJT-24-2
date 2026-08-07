@@ -53,6 +53,19 @@ public interface WorkplaceMapper {
     int countByOwnerUserId(@Param("ownerUserId") Long ownerUserId);
 
     /**
+     * OWNER 온보딩 상태를 계산하기 위해 소유한 {@code ACTIVE} 사업장 수만 셉니다.
+     *
+     * <p>DEC-OWNER-ONBOARDING은 활성 사업장이 없을 때만 설정이 필요하다고 판단하므로
+     * {@code INACTIVE}를 제외합니다. 목록 Metadata용 {@link #countByOwnerUserId(Long)}는
+     * DEC-WORKPLACE-LIST에 따라 {@code ACTIVE}와 {@code INACTIVE}를 모두 세며, 두 기준은
+     * 의도적으로 다릅니다.</p>
+     *
+     * @param ownerUserId 인증 Principal의 사용자 식별자
+     * @return 소유한 {@code ACTIVE} 사업장 수
+     */
+    int countActiveByOwnerUserId(@Param("ownerUserId") Long ownerUserId);
+
+    /**
      * 인증 OWNER가 소유한 {@code ACTIVE} 사업장인지 셉니다.
      *
      * <p>없는 사업장과 다른 OWNER의 사업장을 구분하지 않습니다. 구분하면 사업장 식별자의
