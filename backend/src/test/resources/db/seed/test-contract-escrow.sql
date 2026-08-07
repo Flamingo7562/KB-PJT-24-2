@@ -267,9 +267,22 @@ WHERE wallet_id IN (@owner_wallet_id, @worker_wallet_id);
 DELETE FROM escrows WHERE work_case_id = @work_case_id;
 DELETE FROM work_contracts WHERE work_case_id = @work_case_id;
 DELETE FROM work_invitations WHERE work_case_id = @work_case_id;
-DELETE FROM funding_orders WHERE employer_id = @owner_id;
-DELETE FROM withdrawal_requests
-WHERE user_id IN (@owner_id, @worker_id);
+-- 사용자 비귀속 합성 계좌는 다른 로컬 사용자의 충전·출금에도 쓰일 수 있다.
+-- 계좌 거래를 지우기 전에 해당 거래 또는 계좌를 참조하는 자식 행을 함께 정리한다.
+DELETE funding_order
+FROM funding_orders AS funding_order
+LEFT JOIN mock_bank_transactions AS bank_transaction
+    ON bank_transaction.id = funding_order.mock_bank_transaction_id
+WHERE funding_order.employer_id = @owner_id
+   OR funding_order.linked_account_id IN (@owner_account_id, @worker_account_id)
+   OR bank_transaction.account_id IN (@owner_account_id, @worker_account_id);
+DELETE withdrawal_request
+FROM withdrawal_requests AS withdrawal_request
+LEFT JOIN mock_bank_transactions AS bank_transaction
+    ON bank_transaction.id = withdrawal_request.mock_bank_transaction_id
+WHERE withdrawal_request.user_id IN (@owner_id, @worker_id)
+   OR withdrawal_request.linked_account_id IN (@owner_account_id, @worker_account_id)
+   OR bank_transaction.account_id IN (@owner_account_id, @worker_account_id);
 DELETE FROM mock_bank_transactions
 WHERE account_id IN (@owner_account_id, @worker_account_id);
 
