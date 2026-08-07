@@ -36,20 +36,16 @@ public interface WalletMapper {
     // 에스크로
     String getEscrowStatusForUpdate(@Param("workCaseId") Long workCaseId);
 
-    int insertEscrowRecord(@Param("workCaseId") Long workCaseId, @Param("amount") Long amount);
-
     /**
      * 수락 Aggregate가 공유하는 시각으로 에스크로를 HELD 상태로 만든다.
      *
-     * <p>{@link #insertEscrowRecord}는 held_at을 NOW(6)로 채운다. 수락은 계약·원장·정산이
-     * 모두 하나의 acceptedAt을 가리켜야 해서 시각을 인자로 받는다.</p>
+     * <p>계약·원장·정산이 모두 하나의 acceptedAt을 가리켜야 해서 held_at을 NOW(6)가 아니라
+     * 인자로 받는다.</p>
      */
     int insertHeldEscrowAt(
             @Param("workCaseId") Long workCaseId,
             @Param("amount") Long amount,
             @Param("heldAt") java.time.LocalDateTime heldAt);
-
-    int holdEscrow(@Param("workCaseId") Long workCaseId);
 
     int releaseEscrow(@Param("workCaseId") Long workCaseId);
 
