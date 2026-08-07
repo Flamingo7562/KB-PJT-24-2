@@ -103,8 +103,13 @@ export function newIdempotencyKey() {
  * (docs/specs/API_SPEC.md '멱등 요청').
  * 더블클릭·네트워크 재시도로 인한 중복 반영(중복 충전·출금·지급)을 방지한다.
  */
-export async function idempotentPost(url, body = null, { retries = 2, config = {} } = {}) {
-  const key = newIdempotencyKey()
+export async function idempotentPost(
+  url,
+  body = null,
+  { retries = 2, config = {}, idempotencyKey = null } = {}
+) {
+  // 결과가 불확실한 뒤 사용자가 같은 의도를 다시 확인해도 호출자가 보존한 키를 재사용한다.
+  const key = idempotencyKey || newIdempotencyKey()
   let lastError
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
