@@ -58,7 +58,17 @@ public class CommonExceptionHandler {
         );
     }
 
-    /** Bean Validation 필드 오류만 선택 필드로 포함하고 Spring 내부 객체는 노출하지 않습니다. */
+    private static final String TYPE_MISMATCH_CODE = "typeMismatch";
+    private static final String TYPE_MISMATCH_MESSAGE = "요청 파라미터 형식이 올바르지 않습니다.";
+
+    /**
+     * Bean Validation 필드 오류만 선택 필드로 포함하고 Spring 내부 객체는 노출하지 않습니다.
+     *
+     * <p>{@code @ModelAttribute} 바인딩이 원시 타입 변환에 실패하면 Spring이 자동으로
+     * 채우는 {@code defaultMessage}에는 Java 예외 클래스명과 원인 메시지가 그대로 담깁니다.
+     * 그 값을 응답에 그대로 내보내지 않고 {@link MethodArgumentTypeMismatchException}과 같은
+     * 안전한 문구로 치환합니다.</p>
+     */
     @ExceptionHandler(BindException.class)
     public ResponseEntity<ApiErrorResponse> handleValidation(
             BindException exception,
@@ -68,7 +78,9 @@ public class CommonExceptionHandler {
                 .stream()
                 .map(error -> new ApiFieldError(
                         error.getField(),
-                        String.valueOf(error.getDefaultMessage())
+                        TYPE_MISMATCH_CODE.equals(error.getCode())
+                                ? TYPE_MISMATCH_MESSAGE
+                                : String.valueOf(error.getDefaultMessage())
                 ))
                 .toList();
 
