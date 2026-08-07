@@ -2,8 +2,8 @@
 
 | 항목        | 값              |
 | ----------- | --------------- |
-| 명세 릴리스 | `4.2.0`         |
-| 승인일      | 2026-08-07      |
+| 명세 릴리스 | `5.0.0`         |
+| 승인일      | 2026-08-08      |
 | 소유자      | PM/Admin Master |
 | Base Path   | `/api`          |
 
@@ -78,8 +78,9 @@
   않습니다.
 - Mock 계좌·지갑 금융 오류는 `DEC-BANK-ERROR-CATALOG`, 초대 오류는
   `DEC-INVITE-ERROR-CATALOG`, 고정 QR 조회·재발급 오류는 `DEC-QR-ERROR-CATALOG`를
-  따릅니다. 근태·문서·정산의 추가 도메인 오류 Code는 `DEC-OPEN-ERROR-CATALOG`가
-  승인하기 전까지 새 규범 값으로 확정하지 않습니다.
+  따릅니다. 근태 스캔 오류는 `DEC-ATTENDANCE-ERROR-CATALOG`를 따르며 문서·정산의 추가
+  도메인 오류 Code는 `DEC-OPEN-ERROR-CATALOG`가 승인하기 전까지 새 규범 값으로 확정하지
+  않습니다.
 
 ### Session, CSRF와 로컬 CORS
 
@@ -144,6 +145,7 @@ API: 2026-07-31T09:00:00Z
 - `POST /api/wallet/withdrawal-requests`
 - `POST /api/invitations/{token}/accept`
 - `POST /api/work-cases/{workCaseId}/settlement/approve`
+- `POST /api/attendance/scans`
 
 Key는 공백 없는 출력 가능한 ASCII 1~100자입니다. 저장 범위는
 `(인증 사용자, Operation, Idempotency-Key)` 조합이며 같은 사용자가 다른 Operation에서
@@ -152,6 +154,10 @@ Fingerprint로 판정합니다.
 
 - 충전 Fingerprint는 정규화한 `bankCode`, `accountNo`, `amount`만 포함하고 PIN과 PIN의
   Hash·HMAC 등 파생값은 포함하지 않습니다. 출금도 같은 세 필드를 사용합니다.
+- 근태 스캔의 Operation은 `ATTENDANCE_SCAN`입니다. QR Token SHA-256 소문자 Hex, 후행 0을
+  제거하고 `-0`을 `0`으로 만든 지수 없는 위도·경도·정확도, UTC `capturedAt`, 소문자
+  `confirmEarlyCheckout`을 순서대로 LF 결합한 UTF-8 Bytes의 SHA-256을 Fingerprint로
+  저장합니다. Token 원문과 WORKER 정밀 좌표는 Claim·일반 로그·오류에 저장하지 않습니다.
 - 형식 검증 실패와 계좌 인증 실패 등 자금 이동 전 실패는 저장·재생하지 않습니다. 실패
   과정에서 만든 `PROCESSING` Claim은 별도 짧은 트랜잭션에서 삭제하므로 같은 Key로 입력을
   고쳐 다시 시도할 수 있습니다.
@@ -167,8 +173,8 @@ Fingerprint로 판정합니다.
 
 1. 구조 검증과 정규화 뒤 별도의 짧은 트랜잭션에서 `PROCESSING` Claim을 삽입하고
    Commit합니다.
-2. Claim 선점 요청만 자금 이동 본 트랜잭션을 실행합니다. 충전의 계좌·PIN 인증 실패를
-   포함해 본 처리가 실패하면 그 요청이 선점한 Claim을 삭제합니다.
+2. Claim 선점 요청만 도메인 본 트랜잭션을 실행합니다. 충전의 계좌·PIN 인증 실패와 근태
+   스캔의 의미상 거부를 포함해 본 처리가 실패하면 그 요청이 선점한 Claim을 삭제합니다.
 3. 본 처리가 성공하면 HTTP 상태와 Body Snapshot, 완료·만료 시각을 기록하고
    `COMPLETED`로 전이합니다.
 
@@ -185,7 +191,8 @@ Fingerprint로 판정합니다.
 완료된 자금 이동의 중복을 막습니다. Claim 선점·비교·실패 정리·만료 정리는 애플리케이션
 책임이며 DB는 범위 유일성과 상태 필드 정합성을 강제합니다.
 
-QR 재발급의 재시도 방식은 `DEC-OPEN-QR-REISSUE-IDEMPOTENCY`를 따릅니다.
+QR 재발급은 `Idempotency-Key`를 요구하지 않습니다. 응답을 확인하지 못한 클라이언트는
+재발급 POST를 자동 반복하지 않고 현재 QR을 GET으로 복구합니다.
 
 ## 인증·회원
 
@@ -320,6 +327,7 @@ PATCH Body는 `phone`만 허용합니다. `loginId`, `email`, `name`, `role`, `s
 | POST   | `/api/workplaces`               | OWNER      | 사업장 등록 Body | `201 {data:{workplaceId}}` |
 | GET    | `/api/workplaces`               | OWNER      | 공통 Page Query  | 사업장 목록                |
 | PATCH  | `/api/workplaces/{workplaceId}` | 해당 OWNER | 허용 필드        | 변경된 사업장              |
+| PUT    | `/api/workplaces/{workplaceId}/coordinates` | 해당 OWNER | 현장 위치 확정 Body | `204`                 |
 | DELETE | `/api/workplaces/{workplaceId}` | 해당 OWNER | 없음             | `204`                      |
 
 ### 사업장 등록
@@ -339,6 +347,8 @@ PATCH Body는 `phone`만 허용합니다. `loginId`, `email`, `name`, `role`, `s
 
 - `detailAddress`, `latitude`, `longitude`는 선택값입니다.
 - 위도와 경도는 함께 보내거나 모두 생략합니다.
+- 현장 브라우저가 좌표를 공급하고 OWNER가 등록 동작으로 명시적으로 확인합니다. 서버는 주소를
+  지오코딩하거나 좌표를 추정하지 않습니다.
 - `radiusMeters`, `radiusM`은 받지 않으며 서버가 100m를 적용합니다.
 - `phone`은 공통 전화번호 정규화 후 숫자 문자열로 저장·반환합니다.
 - 등록 성공 시 같은 트랜잭션에서 그 사업장의 활성 고정 QR 한 건을 발급합니다. 발급자는
@@ -359,6 +369,7 @@ PATCH Body는 `phone`만 허용합니다. `loginId`, `email`, `name`, `role`, `s
   "detailAddress": "2층",
   "phone": "0212345678",
   "radiusMeters": 100,
+  "attendanceLocationConfirmed": false,
   "status": "INACTIVE"
 }
 ```
@@ -366,14 +377,39 @@ PATCH Body는 `phone`만 허용합니다. `loginId`, `email`, `name`, `role`, `s
 - OWNER가 소유한 `ACTIVE`, `INACTIVE` 사업장을 반환합니다.
 - `DELETED` 사업장은 반환하지 않습니다.
 - 목록 Item에 `latitude`, `longitude`를 포함하지 않습니다.
+- 두 좌표가 모두 존재하면 `attendanceLocationConfirmed=true`, 모두 없으면 `false`입니다.
 - 전역 작업 Context로 선택할 수 있는 사업장은 기존 계약대로 `ACTIVE`만 허용합니다.
 
 ### 사업장 수정
 
 허용 필드는 `name`, `roadAddress`, `detailAddress`, `phone`입니다.
 `businessRegistrationNumber`, `representativeName`, `latitude`, `longitude`,
-`radiusMeters`를 보내면 `400 VALIDATION_ERROR`입니다. 좌표가 있는 사업장의 주소 변경
-처리는 `DEC-OPEN-WORKPLACE-COORDINATES`를 따릅니다.
+`radiusMeters`를 보내면 `400 VALIDATION_ERROR`입니다. 좌표가 확정된 사업장의 도로명·상세
+주소 변경은 `409 WORKPLACE_LOCATION_LOCKED`이고 상호·전화번호 변경은 유지합니다.
+
+### 사업장 출퇴근 위치 확정
+
+좌표가 없는 `ACTIVE` 소유 사업장은
+`PUT /api/workplaces/{workplaceId}/coordinates`로 현장 위치를 한 번 확정합니다.
+
+```json
+{
+  "latitude": 37.1234567,
+  "longitude": 127.1234567,
+  "accuracyMeters": 18.25,
+  "capturedAt": "2026-08-07T01:00:00Z"
+}
+```
+
+- 위도·경도는 각각 소수점 7자리 이하와 지리 범위, 정확도는 0 이상 100 이하의 소수점
+  2자리 이하입니다.
+- `capturedAt`은 서버 수신 시각보다 정확히 5분 전부터 1분 후까지 포함합니다.
+- 서버는 소유권·ACTIVE 상태와 좌표 미확정을 검증한 뒤 두 좌표만 사업장 기준정보로
+  저장합니다. 정확도와 측정 시각은 저장하지 않습니다.
+- 최초 성공과 같은 정규화 좌표 재전송은 204, 다른 값은
+  `409 WORKPLACE_COORDINATES_ALREADY_SET`입니다.
+- 형식·범위·신선도·정확도 오류는 `400 VALIDATION_ERROR`, 없는 사업장 또는 다른 OWNER는
+  `404 RESOURCE_NOT_FOUND`입니다.
 
 ## WORKER 홈과 근무 이력
 
@@ -383,9 +419,18 @@ PATCH Body는 `phone`만 허용합니다. `loginId`, `email`, `name`, `role`, `s
 | GET    | `/api/worker/work-cases` | WORKER | 본인 근무 목록               |
 | GET    | `/api/worker/workplaces` | WORKER | 보건증 공유 가능 사업장 목록 |
 
-`GET /api/worker/home`은 최소한 `workCaseId`, `title`, `workplaceName`, `startsAt`,
-`endsAt`, `breakMinutes`, `breakPaid`, `dailyWage`, `expectedNetAmount`, `status`를
+`GET /api/worker/home`의 `todayWorkCase`는 없으면 `null`이고, 있으면 다음 필드를
 반환합니다.
+
+- `workCaseId`, `title`, `workplaceName`, `startsAt`, `endsAt`
+- `breakMinutes`, `breakPaid`, `dailyWage`, `expectedNetAmount`, `status`
+- `attendance:{checkedInAt,checkedOutAt,isLate,lateMinutes}`
+- `escrowStatus`, `settlementStatus`, `settlementDueAt`
+
+출퇴근 시점은 nullable이고 지각 여부와 분수는 성공 CHECK_IN에서 파생합니다. 오늘 후보는
+`Asia/Seoul` 시작일이 오늘인 배정 근무와 전날부터 남은 `IN_PROGRESS`,
+`CHECK_OUT_MISSING`입니다. 복수이면 `IN_PROGRESS`, `CHECK_OUT_MISSING`, `READY`, `ACCEPTED`,
+`COMPLETED`, `NO_SHOW` 순서, 같은 상태에서는 `startsAt ASC, workCaseId ASC`로 한 건을 고릅니다.
 
 `expectedNetAmount`는 다음 계약으로 계산합니다.
 
@@ -403,7 +448,10 @@ expectedNetAmount = dailyWage - incomeTax - localIncomeTax
 갱신합니다. API를 매분 재호출하는 계약은 아닙니다. 무급 휴게 반영은
 `DEC-OPEN-DASHBOARD-BREAK`를 따릅니다.
 
-근무 목록과 상세 응답은 `CHECK_OUT_MISSING`을 `NO_SHOW`와 구분하여 전달합니다.
+`GET /api/worker/work-cases`의 각 Page Item은 같은 기본 근무 필드와 근태·Escrow·Settlement
+상태를 반환합니다. 저장 상태를 `BEFORE_WORK`, `LATE`, `SETTLED` 같은 화면 별칭으로 바꾸지
+않고 `CHECK_OUT_MISSING`을 `NO_SHOW`와 구분합니다. 두 API는 정밀 좌표, QR Token, OWNER
+잔액과 계약 Storage 정보를 반환하지 않습니다.
 
 `GET /api/worker/workplaces`는 WORKER에게 노출 가능한 별도 목록이며 `ACTIVE` 사업장만
 반환합니다. 전체 Item 필드는 별도 승인 전까지 이 계약에서 추정하지 않습니다.
@@ -1101,10 +1149,14 @@ v1.k1.42.AQIDBAUGBwgJCgsMDQ4PEA.qZ7XcO1nB2sV4hK9pR0tYuI3wE5aM6dF7gH8jL2xN0c
 }
 ```
 
-현재 재발급은 `Idempotency-Key` Header를 요구하지 않습니다. 응답은 완료 시점의 현재 활성
-QR을 나타냅니다. 요청이 여러 번 도달해도 활성 QR은 하나이며 마지막 완료 응답이 현재 상태의
-권위 있는 표현입니다. 후속 재시도 식별 방식은 `DEC-OPEN-QR-REISSUE-IDEMPOTENCY`의 열린
-결정으로 유지합니다.
+재발급은 `Idempotency-Key` Header를 요구하지 않습니다. 응답을 확인하지 못한 클라이언트는
+POST를 자동 반복하지 않고 `GET /api/workplaces/{workplaceId}/qr`로 현재 활성 QR을
+복구합니다. 사용자가 다시 확인한 재발급만 새로운 회전 의도입니다.
+
+재발급과 스캔은 모두 `workplaces`를 먼저 잠그고 활성 `qr_tokens`를 확인하며 스캔은 그 뒤
+`work_cases`를 잠급니다. 사업장 잠금을 먼저 얻은 Transaction이 이깁니다. 재발급이 먼저
+Commit되면 구 nonce 스캔은 `410 QR_REVOKED`, 스캔이 현재 nonce 검증과 근태 Commit을 먼저
+끝내면 그 근태는 유효하고 뒤이은 재발급은 이후 스캔에만 적용합니다.
 
 고정 QR 조회·재발급 오류는 다음과 같습니다.
 
@@ -1119,28 +1171,79 @@ QR을 나타냅니다. 요청이 여러 번 도달해도 활성 QR은 하나이�
 없는 사업장과 다른 OWNER의 사업장을 구분하지 않습니다. 조회의 무결성 오류는 공통 안전 메시지와
 `traceId`를 반환하며 내부 상태나 Token 원문을 노출하지 않습니다.
 
+### 근태 자동 상태 판정
+
+서버 Scheduler는 Job 시작 시 한 번 얻은 시각으로 다음 경계를 판정하며 정상 운영 중 기준
+시각부터 1분 안에 전이합니다.
+
+| 경계 | 값 | 포함 규칙 |
+| --- | --- | --- |
+| READY 시작 | `starts_at - 30분` | 해당 시각 포함 |
+| CHECK_IN 종료·NO_SHOW 판정 | `starts_at + 1시간` | CHECK_IN은 미포함, NO_SHOW는 포함 |
+| CHECK_OUT 종료·누락 판정 | `ends_at + 2시간` | CHECK_OUT은 미포함, 누락 판정은 포함 |
+
+`ACCEPTED`는 배정 WORKER·수락 초대·계약 조건 Version, 읽을 수 있고 Checksum이 일치하는
+최종 SIGNED 계약, 같은 일급의 `HELD` Escrow, `WAITING/due_at=null` Settlement, ACTIVE
+사업장과 현재 좌표가 모두 있을 때만 READY가 됩니다. 누락 조건이 CHECK_IN 종료 전 충족되면
+다음 주기에 READY가 될 수 있고, 끝까지 불완전하면 시스템 준비 실패이므로 `ACCEPTED`에 남아
+WORKER의 NO_SHOW로 만들지 않습니다.
+
+성공 CHECK_IN이 없는 READY만 CHECK_IN 종료 경계에 `NO_SHOW`, 성공 CHECK_IN이 있고 성공
+CHECK_OUT이 없는 IN_PROGRESS만 CHECK_OUT 종료 경계에 `CHECK_OUT_MISSING`이 됩니다. 스캔과
+Scheduler는 Work Case 잠금과 조건부 상태 변경으로 한 결과만 Commit합니다. M5는 두 종료
+상태의 늦은 QR·수동 보정 API를 제공하지 않고 Settlement를 `WAITING/due_at=null`로 유지하며
+Wallet·Escrow 금액과 원장을 바꾸지 않습니다.
+
 ### `POST /api/attendance/scans`
 
-인증된 WORKER가 호출합니다.
+인증된 WORKER가 공통 형식의 `Idempotency-Key` Header와 다음 Body로 호출합니다.
 
 ```json
 {
   "qrToken": "signed-token",
-  "latitude": 37.123,
-  "longitude": 127.123,
+  "latitude": 37.1234567,
+  "longitude": 127.1234567,
+  "accuracyMeters": 18.25,
+  "capturedAt": "2026-08-07T01:00:00Z",
   "confirmEarlyCheckout": false
 }
 ```
 
-처리 순서는 다음과 같습니다.
+- 위도·경도는 소수점 7자리 이하, 정확도는 0 이상 100 이하의 소수점 2자리 이하입니다.
+- `capturedAt`은 서버 수신 시각보다 정확히 5분 전부터 1분 후까지 포함합니다.
+- `attempted_at`은 요청마다 정한 서버 판정 시각, `captured_at`은 브라우저 측정 시각,
+  `recordedAt`은 성공 `attempted_at`입니다.
+- 거리는 현재 `workplaces` 좌표와 지구 반지름 6,371,000m의 Haversine Double 계산을 사용하고
+  반올림 전 100m를 포함합니다. 판정 뒤 거리만 소수점 2자리로 저장합니다.
+- WORKER 원문 위도·경도는 판정 중 메모리에서만 사용하고 DB·Claim·일반 로그에 보존하지
+  않습니다. 근태 행에는 거리, 정확도와 측정·시도 시각만 남깁니다.
 
-1. HMAC과 nonce 상태로 QR과 사업장을 확인합니다.
-2. 인증 WORKER에게 해당 사업장에서 처리할 근무가 최대 하나인지 확인합니다.
-3. 사업장 좌표와 고정 100m 반경으로 위치를 확인합니다.
-4. 성공 출근이 없으면 `CHECK_IN`, 출근만 있으면 `CHECK_OUT`으로 판별합니다.
-5. 출퇴근이 모두 완료됐으면 중복 스캔을 거부합니다.
+현재 QR 사업장과 인증 WORKER를 기준으로 다음 활성 후보를 함께 조회합니다.
 
-일반 성공:
+- `READY`이고 `starts_at - 30분 <= attemptedAt < starts_at + 1시간`이면 CHECK_IN
+- 성공 CHECK_IN이 있는 `IN_PROGRESS`이고 `attemptedAt < ends_at + 2시간`이면 CHECK_OUT
+
+활성 후보가 0건이면 완료 후보를 같은 시간 범위에서 확인합니다. 완료 후보 한 건은
+`409 ATTENDANCE_ALREADY_COMPLETED`, 두 건 이상 또는 활성 후보 복수는
+`409 ATTENDANCE_WORK_CASE_AMBIGUOUS`, 아무 후보도 없으면
+`404 ATTENDANCE_WORK_CASE_NOT_FOUND`입니다. 서버는 시각이나 ID로 임의 선택하지 않으며
+`NO_SHOW`, `CHECK_OUT_MISSING`은 늦은 스캔 후보가 아닙니다.
+
+같은 스캔 응답 유실은 같은 Key와 Body로 재시도하고 실제 CHECK_OUT과 조기 퇴근 확인은 각각
+새 Key를 사용합니다. 성공 기록과 `CONFIRMATION_REQUIRED`는 24시간 저장해 현재 상태 판정 전에
+200 Replay하며 `Idempotency-Replayed: true`를 붙입니다. 본 처리 실패 Claim은 삭제합니다.
+
+본 처리는 `workplaces → qr_tokens → work_cases` 순서로 잠급니다. 서로 다른 Key가 같은
+출퇴근 슬롯을 경쟁하면 먼저 Commit한 요청만 성공하고 패자와 성공 슬롯 Unique 충돌은
+`409 ATTENDANCE_STATE_CONFLICT`입니다. Deadlock·Lock Timeout은 같은 의도를 최대 2회 내부
+재시도해 총 3회 시도하고 계속 실패하면 Claim을 제거한 뒤
+`503 ATTENDANCE_TEMPORARILY_UNAVAILABLE`를 반환합니다.
+
+CHECK_IN의 `attemptedAt > starts_at`이면 지각이며 `lateMinutes`는 양의 차이를 분 단위로
+올림합니다. 지각은 저장 Work Case 상태가 아닙니다.
+
+일반 성공은 다음 필드를 항상 반환합니다. CHECK_IN의 `settlementDueAt`과 확인되지 않은
+`earlyCheckoutConfirmedAt`은 `null`입니다.
 
 ```json
 {
@@ -1148,30 +1251,65 @@ QR을 나타냅니다. 요청이 여러 번 도달해도 활성 QR은 하나이�
     "result": "RECORDED",
     "workCaseId": 123,
     "scanType": "CHECK_IN",
-    "recordedAt": "2026-07-31T00:00:00Z",
-    "earlyCheckoutConfirmedAt": null
+    "recordedAt": "2026-08-07T01:00:05Z",
+    "isLate": true,
+    "lateMinutes": 1,
+    "earlyCheckoutConfirmedAt": null,
+    "settlementDueAt": null
   }
 }
 ```
 
-예정 종료 전 두 번째 스캔은 기록하지 않고 200으로 확인 필요 결과를 반환합니다.
+예정 종료 전 CHECK_OUT의 `confirmEarlyCheckout:false` 요청은 성공·거절 근태 행과 상태 변경
+없이 200으로 다음 결과를 반환합니다.
 
 ```json
 {
   "data": {
     "result": "CONFIRMATION_REQUIRED",
+    "workCaseId": 123,
     "scanType": "CHECK_OUT",
-    "scheduledEndAt": "2026-07-31T09:00:00Z"
+    "scheduledEndAt": "2026-08-07T09:00:00Z"
   }
 }
 ```
 
-사용자가 확인하면 같은 QR과 위치에 `confirmEarlyCheckout:true`로 다시 요청합니다. 성공 시
-`CHECK_OUT`과 `earlyCheckoutConfirmedAt`을 기록합니다.
+확인은 같은 QR·위치 계약을 다시 검증하는 `confirmEarlyCheckout:true`의 새 의도입니다. 정상
+또는 확인된 CHECK_OUT은 성공 행, `IN_PROGRESS→COMPLETED`, Settlement
+`WAITING→SCHEDULED`, `due_at=recordedAt+24시간`을 한 트랜잭션에서 반영합니다. M6는 이
+예약을 소비해 실제 자금만 이동합니다.
 
-성공 `CHECK_IN` 뒤 성공 `CHECK_OUT`이 없는 근무는 `CHECK_OUT_MISSING` 후보이며
-`NO_SHOW`로 바꾸지 않습니다. 판정과 해소 API 또는 자동 처리 계약은
-`DEC-OPEN-CHECK-OUT-MISSING-FLOW`를 따릅니다.
+정확히 하나의 Work Case와 출퇴근 유형을 정한 뒤 발생한 의미상 위치·시간·상태 거부는
+`attendance_records.result=REJECTED`와 `LOCATION_INACCURATE`, `LOCATION_STALE`,
+`OUTSIDE_RADIUS`, `TIME_WINDOW_CLOSED`, `STATE_CONFLICT` 중 하나를 남깁니다. QR 변조와 후보
+없음·복수처럼 신뢰할 Work Case를 정할 수 없는 요청은 근태 행 없이 민감값을 제외한 구조화
+보안 로그와 `traceId`만 남깁니다.
+
+| 상황 | HTTP | Code |
+| --- | ---: | --- |
+| QR 형식·Key ID·HMAC·사업장 식별 실패 | 422 | `QR_INVALID` |
+| 서명은 유효하지만 현재 QR이 아님 | 410 | `QR_REVOKED` |
+| 사업장 좌표 없음 | 409 | `WORKPLACE_LOCATION_REQUIRED` |
+| Key·좌표·정확도·측정 시각 형식 또는 범위 오류 | 400 | `VALIDATION_ERROR` |
+| 같은 Key가 같은 Fingerprint를 처리 중 | 409 | `CONFLICT` |
+| 같은 Key를 다른 Fingerprint에 재사용 | 409 | `IDEMPOTENCY_KEY_REUSED` |
+| 위치 정확도 초과 또는 측정 시각 신선도 오류 | 422 | `LOCATION_INVALID` |
+| 반올림 전 거리 100m 초과 | 422 | `OUTSIDE_WORKPLACE_RADIUS` |
+| 처리 대상 근무 없음 | 404 | `ATTENDANCE_WORK_CASE_NOT_FOUND` |
+| 처리 대상 근무 또는 완료 후보 복수 | 409 | `ATTENDANCE_WORK_CASE_AMBIGUOUS` |
+| 이미 출퇴근 완료 | 409 | `ATTENDANCE_ALREADY_COMPLETED` |
+| 상태·시간창·다른 Key 동시 요청 경합 | 409 | `ATTENDANCE_STATE_CONFLICT` |
+| Deadlock·Lock Timeout이 총 3회 뒤에도 지속 | 503 | `ATTENDANCE_TEMPORARILY_UNAVAILABLE` |
+
+MVP 스캔 지원 환경은 브랜드·최소 Version 대신 실행 Capability로 판정합니다. HTTPS 또는 로컬
+Secure Context에서 `navigator.mediaDevices.getUserMedia`, Geolocation API,
+`BarcodeDetector`가 존재하고 `BarcodeDetector.getSupportedFormats()`에 `qr_code`가 있을
+때만 지원합니다. 하나라도 없거나 카메라·위치 권한이 거부되면 Token 직접 입력 없이 지원
+환경 안내를 표시합니다. Decoder 의존성 추가는 별도 승인 대상입니다.
+
+현재 좌표·근태·Settlement·범용 Claim Column과 Index로 기능 계약을 충족하므로 이번
+릴리스에는 Scheduler Index, 수동 보정 Column 또는 다른 Migration이 없습니다. 운영 규모의
+MySQL `EXPLAIN`에서 성능 문제가 확인될 때만 별도 관리자 승인 Migration을 검토합니다.
 
 ## 문서
 

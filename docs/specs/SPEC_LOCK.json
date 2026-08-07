@@ -5,23 +5,23 @@
   "files": [
     {
       "path": "docs/specs/API_SPEC.md",
-      "sha256": "dfd99111761e2ccc0835e1839ff1a19ce0c3801763669c4b023d583076ee31dd"
+      "sha256": "9d8f26e2c04f3ce5ee6fa3801031dd0c6783b28f71ff2ceff0e95c4d442bb0cf"
     },
     {
       "path": "docs/specs/DECISIONS.md",
-      "sha256": "35a404d94260e660e01ee47f5f198510c32cd074437569e8ce353f304d390747"
+      "sha256": "2f963b5095dc988c71446d9de8c516a14784fea662d9bf22bbb1f01a5b130a60"
     },
     {
       "path": "docs/specs/README.md",
-      "sha256": "7dca64c2e13f75ccdffa02a1f1c8023ab97aa8185c4641d799a7406a2b9feaff"
+      "sha256": "186af4237e2dee02989d972075f8f7ab34ee6f552c3c471de88ca2ab9f3e8523"
     },
     {
       "path": "docs/specs/REQUIREMENTS.md",
-      "sha256": "4cc5e0c245c810e0539fd636b328ec18061a6572fce770db2ff7a491c1e77aca"
+      "sha256": "892d74e59fdd76b79fe8cb8800abf968b349c002efbff00bfc28dd1c34f9e205"
     },
     {
       "path": "docs/specs/SPEC_TRACEABILITY.md",
-      "sha256": "d50879701736176c6298dbcfaba3f379810ea0ac8402ccb156e64ac267e748d4"
+      "sha256": "edbdde218a2ce6fe37d3daf7328656795021eccf1e1a08f2d9e3032c453db0c4"
     }
   ]
 }
