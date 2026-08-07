@@ -2,6 +2,10 @@ package com.gighub.workplace.service.impl;
 
 import java.util.List;
 import java.util.Objects;
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
+import java.time.ZoneId;
 
 import com.gighub.attendance.service.WorkplaceQrIssuer;
 import com.gighub.auth.security.AuthPrincipal;
@@ -9,13 +13,18 @@ import com.gighub.common.api.PageRequests;
 import com.gighub.common.api.PageResponse;
 import com.gighub.common.exception.RoleMismatchException;
 import com.gighub.common.exception.ConflictException;
+import com.gighub.common.exception.ResourceNotFoundException;
 import com.gighub.member.domain.UserRole;
 import com.gighub.workplace.dto.WorkplaceListItemResponse;
 import com.gighub.workplace.mapper.WorkplaceMapper;
 import com.gighub.workplace.mapper.param.WorkplaceInsertParam;
 import com.gighub.workplace.mapper.result.WorkplaceListRow;
+import com.gighub.workplace.mapper.result.WorkplaceCoordinateLockRow;
 import com.gighub.workplace.service.WorkplaceService;
 import com.gighub.workplace.service.command.WorkplaceCreateCommand;
+import com.gighub.workplace.service.command.WorkplaceCoordinateConfirmCommand;
+import com.gighub.workplace.service.WorkplaceCoordinatesAlreadySetException;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,12 +33,27 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class WorkplaceServiceImpl implements WorkplaceService {
 
+    private static final ZoneId DATABASE_ZONE = ZoneId.of("Asia/Seoul");
+    private static final Duration MAX_LOCATION_AGE = Duration.ofMinutes(5);
+    private static final Duration MAX_FUTURE_SKEW = Duration.ofMinutes(1);
+
     private final WorkplaceMapper workplaceMapper;
     private final WorkplaceQrIssuer qrIssuer;
+    private final Clock clock;
 
+    @Autowired
     public WorkplaceServiceImpl(WorkplaceMapper workplaceMapper, WorkplaceQrIssuer qrIssuer) {
+        this(workplaceMapper, qrIssuer, Clock.system(DATABASE_ZONE));
+    }
+
+    /** 위치 측정 신선도 경계 테스트에서만 고정 Clock을 주입합니다. */
+    WorkplaceServiceImpl(
+            WorkplaceMapper workplaceMapper,
+            WorkplaceQrIssuer qrIssuer,
+            Clock clock) {
         this.workplaceMapper = workplaceMapper;
         this.qrIssuer = qrIssuer;
+        this.clock = clock;
     }
 
     @Override
@@ -83,6 +107,54 @@ public class WorkplaceServiceImpl implements WorkplaceService {
                 .toList();
 
         return PageResponse.of(content, page, size, totalElements);
+    }
+
+    @Override
+    @Transactional
+    public void confirmCoordinates(
+            AuthPrincipal principal,
+            WorkplaceCoordinateConfirmCommand command) {
+        requireOwner(principal, "사업장 위치는 OWNER만 확정할 수 있습니다.");
+        requireFreshLocation(command.getCapturedAt());
+
+        WorkplaceCoordinateLockRow row = workplaceMapper.findOwnedActiveCoordinatesForUpdate(
+                command.getWorkplaceId(), principal.getUserId());
+        if (row == null) {
+            // 미존재와 비소유를 같은 결과로 처리해 다른 OWNER의 사업장 식별자를 숨깁니다.
+            throw new ResourceNotFoundException("사업장을 찾을 수 없습니다.");
+        }
+        if (row.getLatitude() != null && row.getLongitude() != null) {
+            if (sameCoordinate(row, command)) {
+                return;
+            }
+            throw new WorkplaceCoordinatesAlreadySetException();
+        }
+
+        if (workplaceMapper.setCoordinatesWhenAbsent(
+                command.getWorkplaceId(),
+                principal.getUserId(),
+                command.getLatitude(),
+                command.getLongitude()) != 1) {
+            throw new WorkplaceCoordinatesAlreadySetException();
+        }
+    }
+
+    private void requireFreshLocation(Instant capturedAt) {
+        Instant now = clock.instant();
+        if (capturedAt.isBefore(now.minus(MAX_LOCATION_AGE))
+                || capturedAt.isAfter(now.plus(MAX_FUTURE_SKEW))) {
+            throw new com.gighub.common.exception.ValidationException(
+                    "측정 시각이 허용 범위를 벗어났습니다.",
+                    "capturedAt",
+                    "현재 위치를 다시 측정해 주세요.");
+        }
+    }
+
+    private boolean sameCoordinate(
+            WorkplaceCoordinateLockRow row,
+            WorkplaceCoordinateConfirmCommand command) {
+        return row.getLatitude().compareTo(command.getLatitude()) == 0
+                && row.getLongitude().compareTo(command.getLongitude()) == 0;
     }
 
     /**

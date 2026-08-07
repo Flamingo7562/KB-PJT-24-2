@@ -4,16 +4,16 @@
  * 카메라 스캔 → GPS 검증 → 출근/퇴근 자동 판별·기록(단일 스캔 API).
  * 카메라·위치 권한 필요. 서버가 QR 유효성·GPS 반경·출퇴근 판별을 최종 검증한다.
  * QR 이 정적이라 시간 만료로 걸러지지 않는다 — 대리 출근 차단은 서버의 GPS 반경 검증이 전담한다.
- * 연계 API: POST /worker/scan  →  @/services/worker (scan)
- *   요청: { qrToken, latitude, longitude } / 응답: scanType(CHECK_IN/CHECK_OUT), isLate, ...
- * QR 디코딩은 브라우저 내장 BarcodeDetector 사용(미지원·카메라 불가 시 토큰 직접 입력).
+ * 연계 API: POST /api/attendance/scans  →  @/services/worker (scan)
+ * QR 디코딩은 브라우저 내장 BarcodeDetector만 사용한다. 직접 Token 입력은 대리출석 경로가
+ * 되므로 제공하지 않고 미지원·권한 거부 시 지원 환경을 안내한다.
  */
 import { QrCode, ScanLine } from 'lucide-vue-next'
 import { nextTick, onBeforeUnmount, ref } from 'vue'
 
-import AppField from '@/components/common/AppField.vue'
 import BaseButton from '@/components/common/BaseButton.vue'
 import BaseModal from '@/components/common/BaseModal.vue'
+import { newIdempotencyKey } from '@/services/http'
 import { scan } from '@/services/worker'
 import { useUiStore } from '@/stores/ui'
 import { SCAN_TYPE } from '@/utils/constants'
@@ -21,12 +21,12 @@ import { formatDateTime } from '@/utils/format'
 
 const ui = useUiStore()
 
-// phase: idle | scanning | processing | result
+// phase: idle | scanning | processing | confirmation | result
 const phase = ref('idle')
-const manualMode = ref(false)
-const manualToken = ref('')
 const errorMsg = ref('')
 const result = ref(null)
+const pendingQrToken = ref('')
+const pendingIntent = ref(null)
 
 const videoEl = ref(null)
 const coords = ref(null)
@@ -43,9 +43,15 @@ function getLocation() {
       return
     }
     navigator.geolocation.getCurrentPosition(
-      (pos) => resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude }),
+      (pos) =>
+        resolve({
+          latitude: Number(pos.coords.latitude.toFixed(7)),
+          longitude: Number(pos.coords.longitude.toFixed(7)),
+          accuracyMeters: Number(pos.coords.accuracy.toFixed(2)),
+          capturedAt: new Date(pos.timestamp).toISOString()
+        }),
       (err) => reject(err),
-      { enableHighAccuracy: true, timeout: 10000 }
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
     )
   })
 }
@@ -62,18 +68,20 @@ async function startScan() {
     return
   }
 
-  // 2) QR 디코더 지원 여부 → 미지원 시 토큰 직접 입력
+  // 2) QR 디코더 지원 여부 — 직접 입력으로 우회하지 않는다.
   if (!('BarcodeDetector' in window)) {
-    manualMode.value = true
+    errorMsg.value =
+      '이 브라우저는 QR 스캔을 지원하지 않아요. 지원되는 모바일 브라우저를 이용해주세요.'
+    ui.toast(errorMsg.value, { type: 'warning' })
     return
   }
 
-  // 3) 후면 카메라 열기 → 실패 시 직접 입력으로 폴백
+  // 3) 후면 카메라 열기
   try {
     stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
   } catch {
-    manualMode.value = true
-    ui.toast('카메라를 열 수 없어 직접 입력으로 전환합니다.', { type: 'info' })
+    errorMsg.value = '카메라 권한이 필요합니다. 브라우저 설정에서 카메라 접근을 허용해주세요.'
+    ui.toast(errorMsg.value, { type: 'warning' })
     return
   }
 
@@ -138,24 +146,55 @@ function scanErrorInfo(error) {
   }
 }
 
-async function submitScan(qrToken) {
+async function submitScan(qrToken, { confirmEarlyCheckout = false } = {}) {
   if (!qrToken) return
+  const intent = {
+    payload: {
+      qrToken,
+      latitude: coords.value?.latitude,
+      longitude: coords.value?.longitude,
+      accuracyMeters: coords.value?.accuracyMeters,
+      capturedAt: coords.value?.capturedAt,
+      confirmEarlyCheckout
+    },
+    idempotencyKey: newIdempotencyKey()
+  }
+  pendingIntent.value = intent
+  await sendIntent(intent)
+}
+
+/** 응답 유실 재확인은 최초 Body와 Key를 그대로 사용해 CHECK_OUT으로 오판되지 않게 합니다. */
+async function sendIntent(intent) {
   errorMsg.value = ''
   phase.value = 'processing'
   try {
-    const res = await scan({
-      qrToken,
-      latitude: coords.value?.latitude,
-      longitude: coords.value?.longitude
-    })
+    const res = await scan(intent.payload, { idempotencyKey: intent.idempotencyKey })
+    pendingIntent.value = null
     result.value = res
-    phase.value = 'result'
+    if (res.result === 'CONFIRMATION_REQUIRED') {
+      pendingQrToken.value = intent.payload.qrToken
+      phase.value = 'confirmation'
+    } else {
+      phase.value = 'result'
+    }
   } catch (error) {
-    const info = scanErrorInfo(error)
+    const status = error?.response?.status
+    const uncertain = status === undefined || status >= 500
+    if (!uncertain) pendingIntent.value = null
+    const info = uncertain
+      ? {
+          message: '처리 결과를 확인하지 못했어요. 같은 요청으로 결과를 다시 확인해주세요.',
+          type: 'warning'
+        }
+      : scanErrorInfo(error)
     errorMsg.value = info.message
     ui.toast(info.message, { type: info.type })
     phase.value = 'idle'
   }
+}
+
+async function retryPendingIntent() {
+  if (pendingIntent.value) await sendIntent(pendingIntent.value)
 }
 
 /** 카메라·감지 루프 정리 */
@@ -176,30 +215,20 @@ function cancelScan() {
   phase.value = 'idle'
 }
 
-async function enableManual() {
-  if (!coords.value) {
-    try {
-      coords.value = await getLocation()
-    } catch {
-      // 위치 없이도 서버가 최종 검증 — UX 안내만
-      ui.toast('위치 권한이 없으면 인증이 거절될 수 있어요.', { type: 'warning' })
-    }
-  }
-  manualMode.value = true
-}
-
-async function onManualSubmit() {
-  if (!manualToken.value.trim()) {
-    ui.toast('QR 토큰을 입력해주세요.', { type: 'warning' })
+async function confirmEarlyCheckout() {
+  try {
+    coords.value = await getLocation()
+  } catch {
+    ui.toast('조기 퇴근 확인에는 현재 위치가 필요합니다.', { type: 'warning' })
     return
   }
-  await submitScan(manualToken.value.trim())
+  await submitScan(pendingQrToken.value, { confirmEarlyCheckout: true })
 }
 
 function reset() {
   result.value = null
-  manualMode.value = false
-  manualToken.value = ''
+  pendingQrToken.value = ''
+  pendingIntent.value = null
   phase.value = 'idle'
 }
 
@@ -211,7 +240,7 @@ onBeforeUnmount(stopCamera)
 <template>
   <div class="worker-scan">
     <!-- 스캔 전 안내 -->
-    <section v-if="phase === 'idle' && !manualMode" class="intro">
+    <section v-if="phase === 'idle'" class="intro">
       <span class="intro-icon">
         <QrCode :size="56" />
       </span>
@@ -222,21 +251,13 @@ onBeforeUnmount(stopCamera)
       </p>
       <p v-if="errorMsg" class="error">{{ errorMsg }}</p>
 
-      <BaseButton variant="worker" size="lg" block @click="startScan">
+      <BaseButton v-if="pendingIntent" variant="worker" size="lg" block @click="retryPendingIntent">
+        같은 요청 결과 다시 확인
+      </BaseButton>
+      <BaseButton v-else variant="worker" size="lg" block @click="startScan">
         <ScanLine :size="20" />
         스캔 시작
       </BaseButton>
-      <button type="button" class="manual-link" @click="enableManual">QR 토큰 직접 입력</button>
-    </section>
-
-    <!-- 토큰 직접 입력(폴백) -->
-    <section v-else-if="phase === 'idle' && manualMode" class="manual">
-      <h1 class="intro-title">QR 토큰 입력</h1>
-      <p class="intro-desc">카메라를 사용할 수 없어 QR 토큰을 직접 입력합니다.</p>
-      <AppField v-model="manualToken" label="QR 토큰" placeholder="QR에 포함된 토큰" />
-      <p v-if="errorMsg" class="error">{{ errorMsg }}</p>
-      <BaseButton variant="worker" size="lg" block @click="onManualSubmit">인증하기</BaseButton>
-      <button type="button" class="manual-link" @click="reset">뒤로</button>
     </section>
 
     <!-- 카메라 스캔 중 -->
@@ -259,11 +280,22 @@ onBeforeUnmount(stopCamera)
     <BaseModal :open="phase === 'result'" :closable="false" title="인증 완료">
       <div v-if="result" class="result">
         <p class="result-type">{{ resultLabel() }} 처리되었습니다.</p>
-        <p class="result-time">{{ formatDateTime(result.scanTime) }}</p>
+        <p class="result-time">{{ formatDateTime(result.recordedAt) }}</p>
         <p v-if="result.isLate" class="result-late">지각 {{ result.lateMinutes }}분으로 기록됨</p>
       </div>
       <template #footer>
         <BaseButton variant="worker" size="lg" block @click="reset">확인</BaseButton>
+      </template>
+    </BaseModal>
+
+    <BaseModal :open="phase === 'confirmation'" :closable="false" title="조기 퇴근 확인">
+      <p class="intro-desc">
+        예정 종료 시각 {{ formatDateTime(result?.scheduledEndAt) }} 전입니다. 지금 퇴근으로
+        기록할까요?
+      </p>
+      <template #footer>
+        <BaseButton variant="secondary" block @click="reset">취소</BaseButton>
+        <BaseButton variant="worker" block @click="confirmEarlyCheckout">퇴근 기록</BaseButton>
       </template>
     </BaseModal>
   </div>
@@ -271,7 +303,6 @@ onBeforeUnmount(stopCamera)
 
 <style scoped>
 .intro,
-.manual,
 .processing {
   display: flex;
   flex-direction: column;
@@ -279,10 +310,6 @@ onBeforeUnmount(stopCamera)
   gap: var(--space-md);
   padding: var(--space-xl) 0;
   text-align: center;
-}
-.manual {
-  align-items: stretch;
-  text-align: left;
 }
 .intro-icon {
   display: inline-flex;
@@ -308,19 +335,12 @@ onBeforeUnmount(stopCamera)
   color: var(--color-text);
   font-weight: var(--weight-medium);
 }
-.intro .btn,
-.manual .btn {
+.intro .btn {
   margin-top: var(--space-md);
 }
 .error {
   font-size: var(--text-sm);
   color: var(--color-danger);
-}
-.manual-link {
-  margin-top: var(--space-sm);
-  font-size: var(--text-sm);
-  color: var(--color-text-sub);
-  text-decoration: underline;
 }
 .scanning {
   display: flex;

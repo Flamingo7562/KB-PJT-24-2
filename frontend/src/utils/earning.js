@@ -60,8 +60,26 @@ function floorTo10(value) {
  * 근무 시작 시각부터 지금까지 경과한 비율만큼 일급을 적립해 보여준다.
  * 무급 휴게는 전체 구간에 균등 비례로 녹아 있다(휴게 시각 필드가 스키마에 없음).
  */
-export function calcElapsedPay({ agreedWage, workDate, startTime, endTime, now = new Date() }) {
+export function calcElapsedPay({
+  agreedWage,
+  workDate,
+  startTime,
+  endTime,
+  startsAt,
+  endsAt,
+  now = new Date()
+}) {
   const wage = Number(agreedWage) || 0
+  const exactStart = new Date(startsAt)
+  const exactEnd = new Date(endsAt)
+  if (!Number.isNaN(exactStart.getTime()) && !Number.isNaN(exactEnd.getTime())) {
+    const totalMilliseconds = exactEnd.getTime() - exactStart.getTime()
+    if (totalMilliseconds <= 0) return { elapsedPay: 0, progressRatio: 0 }
+    const elapsedMilliseconds = clamp(now.getTime() - exactStart.getTime(), 0, totalMilliseconds)
+    const progressRatio = elapsedMilliseconds / totalMilliseconds
+    return { elapsedPay: Math.floor(wage * progressRatio), progressRatio }
+  }
+
   const start = toMinutes(startTime)
   const end = toMinutes(endTime)
   if (start === null || end === null) return { elapsedPay: 0, progressRatio: 0 }

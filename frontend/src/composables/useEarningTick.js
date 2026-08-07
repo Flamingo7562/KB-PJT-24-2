@@ -9,7 +9,7 @@ const TICK_MS = 60_000
  * 기준값(일급·근무 시각)은 서버가 준 값을 그대로 쓰고, 시간 축 파생값만 여기서 만든다.
  *
  * @param {import('vue').Ref<object|null>|object|null} earning  { agreedWage }
- * @param {import('vue').Ref<object|null>|object|null} workCase { workDate, startTime, endTime }
+ * @param {import('vue').Ref<object|null>|object|null} workCase 서버 UTC startsAt/endsAt 또는 기존 시각 필드
  */
 export function useEarningTick(earning, workCase) {
   const elapsedPay = ref(0)
@@ -38,7 +38,9 @@ export function useEarningTick(earning, workCase) {
       agreedWage: e.agreedWage,
       workDate: w.workDate,
       startTime: w.startTime,
-      endTime: w.endTime
+      endTime: w.endTime,
+      startsAt: w.startsAt,
+      endsAt: w.endsAt
     })
     elapsedPay.value = result.elapsedPay
     progressRatio.value = result.progressRatio

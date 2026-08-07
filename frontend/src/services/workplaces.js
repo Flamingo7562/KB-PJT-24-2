@@ -36,6 +36,7 @@ const mockWorkplaces = [
     detailAddress: '2층',
     phone: '0212345678',
     radiusMeters: 100,
+    attendanceLocationConfirmed: true,
     status: 'ACTIVE'
   },
   {
@@ -47,6 +48,7 @@ const mockWorkplaces = [
     detailAddress: '',
     phone: '023334444',
     radiusMeters: 100,
+    attendanceLocationConfirmed: false,
     status: 'ACTIVE'
   }
 ]
@@ -79,7 +81,7 @@ export async function listWorkplaces({ page = 0, size = MAX_PAGE_SIZE } = {}) {
  * 사업장 등록 → { workplaceId } (명세 11).
  * 승인 Body 는 businessRegistrationNumber, name, representativeName, roadAddress,
  * detailAddress?, phone, latitude?, longitude? 뿐이다. radius 는 받지 않으며 서버가
- * 100m 를 적용한다. 좌표는 지오코딩 미연동이라 보내지 않는다(둘 다 생략은 유효하다).
+ * 100m 를 적용한다. 현장 위치 측정에 성공한 경우에만 좌표를 보내며 둘 다 생략할 수도 있다.
  */
 export async function createWorkplace({
   businessRegistrationNumber,
@@ -87,7 +89,9 @@ export async function createWorkplace({
   representativeName,
   roadAddress,
   detailAddress,
-  phone
+  phone,
+  latitude,
+  longitude
 }) {
   const body = {
     // 화면은 하이픈이 들어간 표시 형식("123-45-67890")을 유지한다. DB 컬럼은
@@ -101,12 +105,17 @@ export async function createWorkplace({
   // 선택 필드다. 비어 있으면 키 자체를 만들지 않는다.
   const trimmedDetail = detailAddress?.trim()
   if (trimmedDetail) body.detailAddress = trimmedDetail
+  if (latitude !== undefined && longitude !== undefined) {
+    body.latitude = latitude
+    body.longitude = longitude
+  }
 
   if (USE_MOCK) {
     const workplaceId = Date.now()
     mockWorkplaces.push({
       workplaceId,
       radiusMeters: 100,
+      attendanceLocationConfirmed: latitude !== undefined && longitude !== undefined,
       status: 'ACTIVE',
       detailAddress: '',
       ...body
@@ -115,6 +124,16 @@ export async function createWorkplace({
   }
   const { data } = await http.post('/workplaces', body)
   return data
+}
+
+/** 좌표가 없는 ACTIVE 사업장의 현장 위치를 한 번만 확정한다. */
+export async function confirmWorkplaceCoordinates(workplaceId, location) {
+  if (USE_MOCK) {
+    const target = mockWorkplaces.find((w) => w.workplaceId === workplaceId)
+    if (target) target.attendanceLocationConfirmed = true
+    return
+  }
+  await http.put(`/workplaces/${workplaceId}/coordinates`, location)
 }
 
 /**

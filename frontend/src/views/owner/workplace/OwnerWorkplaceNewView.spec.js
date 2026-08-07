@@ -38,6 +38,7 @@ async function fillValidForm(wrapper) {
 describe('OwnerWorkplaceNewView', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
+    Object.defineProperty(navigator, 'geolocation', { configurable: true, value: undefined })
     push.mockClear()
     createWorkplace.mockReset().mockResolvedValue({ workplaceId: 7 })
     listWorkplaces.mockReset().mockResolvedValue({
@@ -151,6 +152,35 @@ describe('OwnerWorkplaceNewView', () => {
     )
     expect(payload).not.toHaveProperty('radiusM')
     expect(payload).not.toHaveProperty('address')
+  })
+
+  it('현장 위치 정확도가 100m 이내이면 등록 좌표를 함께 보낸다', async () => {
+    Object.defineProperty(navigator, 'geolocation', {
+      configurable: true,
+      value: {
+        getCurrentPosition: vi.fn((success) =>
+          success({
+            coords: { latitude: 37.123456789, longitude: 127.123456789, accuracy: 18.25 }
+          })
+        )
+      }
+    })
+    const auth = useAuthStore()
+    auth.setUser({ name: '김사장', role: 'OWNER', needsWorkplaceSetup: true })
+    vi.spyOn(auth, 'refreshSession').mockResolvedValue({
+      authenticated: true,
+      role: 'OWNER',
+      needsWorkplaceSetup: false
+    })
+    const wrapper = mount(OwnerWorkplaceNewView)
+    await fillValidForm(wrapper)
+
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+
+    expect(createWorkplace).toHaveBeenCalledWith(
+      expect.objectContaining({ latitude: 37.1234568, longitude: 127.1234568 })
+    )
   })
 
   it('상호명·대표자명·도로명주소·세부주소는 서버 @Size 제한과 같은 maxlength 를 갖는다', () => {

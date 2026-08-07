@@ -13,7 +13,7 @@
  */
 import { Building2 } from 'lucide-vue-next'
 import { storeToRefs } from 'pinia'
-import { nextTick, onMounted, reactive, ref } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 import AppBackHeader from '@/components/common/AppBackHeader.vue'
@@ -23,7 +23,11 @@ import BaseModal from '@/components/common/BaseModal.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import { useFieldValidation } from '@/composables/useFieldValidation'
 import { getWorkCaseSummary } from '@/services/workCases'
-import { deleteWorkplace, updateWorkplace } from '@/services/workplaces'
+import {
+  confirmWorkplaceCoordinates,
+  deleteWorkplace,
+  updateWorkplace
+} from '@/services/workplaces'
 import { useUiStore } from '@/stores/ui'
 import { useWorkplaceStore } from '@/stores/workplace'
 import { embedAddressSearch } from '@/utils/daumPostcode'
@@ -46,6 +50,8 @@ const editDetailAddress = ref('')
 const editDetailOpen = ref(false)
 const editPhone = ref('')
 const saving = ref(false)
+const confirmingId = ref(null)
+const addressLocked = computed(() => Boolean(editTarget.value?.attendanceLocationConfirmed))
 
 // 형식 오류 전용. 규칙은 기존 confirmEdit() 이 쓰던 것을 그대로 옮겼다 — 규칙 자체는 불변.
 const { errors, handleBlur, validateAll, reset } = useFieldValidation(
@@ -98,6 +104,7 @@ const addressSearchOpen = ref(false)
 const addressSearchContainer = ref(null)
 
 async function searchEditAddress() {
+  if (addressLocked.value) return
   addressSearchOpen.value = true
   await nextTick()
   embedAddressSearch(
@@ -143,6 +150,43 @@ async function confirmEdit() {
     ui.toast(err?.response?.data?.message || '수정에 실패했어요.', { type: 'danger' })
   } finally {
     saving.value = false
+  }
+}
+
+function captureCurrentLocation() {
+  return new Promise((resolve, reject) => {
+    if (!navigator.geolocation) {
+      reject(new Error('geolocation unavailable'))
+      return
+    }
+    navigator.geolocation.getCurrentPosition(
+      (position) =>
+        resolve({
+          latitude: Number(position.coords.latitude.toFixed(7)),
+          longitude: Number(position.coords.longitude.toFixed(7)),
+          accuracyMeters: Number(position.coords.accuracy.toFixed(2)),
+          capturedAt: new Date(position.timestamp).toISOString()
+        }),
+      reject,
+      { enableHighAccuracy: true, timeout: 10_000, maximumAge: 0 }
+    )
+  })
+}
+
+async function confirmLocation(workplace) {
+  confirmingId.value = workplace.workplaceId
+  try {
+    const location = await captureCurrentLocation()
+    await confirmWorkplaceCoordinates(workplace.workplaceId, location)
+    await workplaceStore.load({ force: true })
+    ui.toast('출퇴근 현장 위치를 확정했어요.', { type: 'success' })
+  } catch (error) {
+    ui.toast(
+      error?.response?.data?.message || '현장에서 위치 권한을 허용한 뒤 다시 시도해주세요.',
+      { type: 'danger' }
+    )
+  } finally {
+    confirmingId.value = null
   }
 }
 
@@ -203,6 +247,21 @@ async function confirmDelete() {
               진행 중 근무 {{ workingCounts[w.workplaceId] ?? 0 }}건 · 인증 반경
               {{ w.radiusMeters ?? '-' }}m
             </p>
+            <p
+              class="location-status"
+              :class="{ 'location-status--required': !w.attendanceLocationConfirmed }"
+            >
+              {{ w.attendanceLocationConfirmed ? '출퇴근 위치 확정' : '출퇴근 위치 미확정' }}
+            </p>
+            <button
+              v-if="!w.attendanceLocationConfirmed && w.status === 'ACTIVE'"
+              type="button"
+              class="location-btn"
+              :disabled="confirmingId === w.workplaceId"
+              @click="confirmLocation(w)"
+            >
+              {{ confirmingId === w.workplaceId ? '위치 확인 중…' : '현장 위치 확정' }}
+            </button>
           </div>
           <div class="wp-actions">
             <button type="button" class="action-btn" @click="openEdit(w)">수정</button>
@@ -237,11 +296,17 @@ async function confirmDelete() {
           :label="editDetailOpen ? '사업장 주소 (도로명)' : '사업장 주소'"
           required
           maxlength="255"
+          :disabled="addressLocked"
+          :hint="addressLocked ? '출퇴근 위치가 확정되어 주소를 변경할 수 없습니다.' : ''"
           :error="errors.roadAddress"
           @blur="handleBlur('roadAddress')"
         >
           <template #suffix>
-            <BaseButton type="button" variant="secondary" @click="searchEditAddress"
+            <BaseButton
+              type="button"
+              variant="secondary"
+              :disabled="addressLocked"
+              @click="searchEditAddress"
               >검색</BaseButton
             >
           </template>
@@ -252,6 +317,7 @@ async function confirmDelete() {
           label="세부 주소"
           placeholder="건물명·동·호수 등을 입력하세요"
           maxlength="100"
+          :disabled="addressLocked"
         />
         <AppField
           :model-value="editPhone"
@@ -356,6 +422,20 @@ async function confirmDelete() {
   font-size: var(--text-sm);
   color: var(--color-text-sub);
   word-break: keep-all;
+}
+.location-status {
+  margin-top: var(--space-xs);
+  font-size: var(--text-sm);
+  color: var(--color-success);
+}
+.location-status--required {
+  color: var(--color-warning);
+}
+.location-btn {
+  margin-top: var(--space-xs);
+  font-size: var(--text-sm);
+  color: var(--color-owner);
+  text-decoration: underline;
 }
 
 .wp-actions {

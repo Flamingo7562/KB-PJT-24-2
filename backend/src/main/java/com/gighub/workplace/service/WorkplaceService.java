@@ -4,6 +4,7 @@ import com.gighub.auth.security.AuthPrincipal;
 import com.gighub.common.api.PageResponse;
 import com.gighub.workplace.dto.WorkplaceListItemResponse;
 import com.gighub.workplace.service.command.WorkplaceCreateCommand;
+import com.gighub.workplace.service.command.WorkplaceCoordinateConfirmCommand;
 
 /** 사업장 등록과 소유 사업장 조회의 승인 규칙을 적용합니다. */
 public interface WorkplaceService {
@@ -30,4 +31,7 @@ public interface WorkplaceService {
      * @return 승인된 Page Envelope payload. 사업장이 없으면 빈 {@code content}
      */
     PageResponse<WorkplaceListItemResponse> findOwnedWorkplaces(AuthPrincipal principal, int page, int size);
+
+    /** 좌표가 없는 소유 사업장의 현장 위치를 한 번만 확정합니다. */
+    void confirmCoordinates(AuthPrincipal principal, WorkplaceCoordinateConfirmCommand command);
 }

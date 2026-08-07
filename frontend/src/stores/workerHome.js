@@ -22,7 +22,18 @@ export const useWorkerHomeStore = defineStore('workerHome', () => {
     try {
       const data = await getWorkerHome()
       todayWorkCase.value = data.todayWorkCase
-      earning.value = data.earning
+      const workCase = data.todayWorkCase
+      // 서버는 권위 있는 근무·세금 기준값만 주고, 시간 경과 금액은 화면이 계산한다.
+      earning.value =
+        data.earning ??
+        (workCase
+          ? {
+              agreedWage: workCase.dailyWage,
+              expectedNetAmount: workCase.expectedNetAmount,
+              isLate: workCase.attendance?.isLate ?? false,
+              lateMinutes: workCase.attendance?.lateMinutes ?? 0
+            }
+          : null)
     } catch (e) {
       error.value = e
     } finally {

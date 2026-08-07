@@ -9,18 +9,22 @@ import com.gighub.common.api.PageRequests;
 import com.gighub.common.api.PageResponse;
 import com.gighub.workplace.dto.WorkplaceCreateRequest;
 import com.gighub.workplace.dto.WorkplaceCreateResponse;
+import com.gighub.workplace.dto.WorkplaceCoordinateConfirmRequest;
 import com.gighub.workplace.dto.WorkplaceListItemResponse;
 import com.gighub.workplace.service.WorkplaceService;
 import com.gighub.workplace.service.command.WorkplaceCreateCommand;
+import com.gighub.workplace.service.command.WorkplaceCoordinateConfirmCommand;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.PathVariable;
 
 /** 사업장 등록과 소유 사업장 조회를 제공하는 Controller입니다. */
 @RestController
@@ -60,6 +64,24 @@ public class WorkplaceController {
 
         return ResponseEntity.ok(
                 ApiResponse.of(workplaceService.findOwnedWorkplaces(principal, page, size)));
+    }
+
+    @PutMapping("/{workplaceId}/coordinates")
+    public ResponseEntity<Void> confirmCoordinates(
+            @PathVariable Long workplaceId,
+            @Valid @RequestBody WorkplaceCoordinateConfirmRequest request,
+            Authentication authentication) {
+        AuthPrincipal principal = AuthPrincipals.resolve(authentication);
+        workplaceService.confirmCoordinates(
+                principal,
+                WorkplaceCoordinateConfirmCommand.builder()
+                        .workplaceId(workplaceId)
+                        .latitude(request.getLatitude())
+                        .longitude(request.getLongitude())
+                        .accuracyMeters(request.getAccuracyMeters())
+                        .capturedAt(request.getCapturedAt())
+                        .build());
+        return ResponseEntity.noContent().build();
     }
 
     /**

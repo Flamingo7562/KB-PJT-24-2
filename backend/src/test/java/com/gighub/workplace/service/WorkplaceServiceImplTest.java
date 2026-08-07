@@ -1,6 +1,7 @@
 package com.gighub.workplace.service;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.List;
 
 import com.gighub.attendance.service.WorkplaceQrIssuer;
@@ -14,7 +15,9 @@ import com.gighub.workplace.dto.WorkplaceListItemResponse;
 import com.gighub.workplace.mapper.WorkplaceMapper;
 import com.gighub.workplace.mapper.param.WorkplaceInsertParam;
 import com.gighub.workplace.mapper.result.WorkplaceListRow;
+import com.gighub.workplace.mapper.result.WorkplaceCoordinateLockRow;
 import com.gighub.workplace.service.command.WorkplaceCreateCommand;
+import com.gighub.workplace.service.command.WorkplaceCoordinateConfirmCommand;
 import com.gighub.workplace.service.impl.WorkplaceServiceImpl;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -165,7 +168,76 @@ class WorkplaceServiceImplTest {
         assertEquals("2층", item.getDetailAddress());
         assertEquals("0212345678", item.getPhone());
         assertEquals(100, item.getRadiusMeters(), "DECIMAL(8,2)가 아니라 명세의 정수 100이어야 합니다.");
+        assertTrue(item.isAttendanceLocationConfirmed());
         assertEquals("INACTIVE", item.getStatus(), "INACTIVE 사업장도 상태를 그대로 노출합니다.");
+    }
+
+    @Test
+    void confirmsCoordinatesOnlyWhenOwnedActiveWorkplaceIsStillUnset() {
+        when(workplaceMapper.findOwnedActiveCoordinatesForUpdate(11L, 7L))
+                .thenReturn(new WorkplaceCoordinateLockRow(11L, null, null));
+        when(workplaceMapper.setCoordinatesWhenAbsent(
+                11L,
+                7L,
+                new BigDecimal("37.1234567"),
+                new BigDecimal("127.1234567")))
+                .thenReturn(1);
+
+        service.confirmCoordinates(owner(7L), coordinateCommand(
+                new BigDecimal("37.1234567"),
+                new BigDecimal("127.1234567"),
+                Instant.now()));
+
+        verify(workplaceMapper).setCoordinatesWhenAbsent(
+                11L,
+                7L,
+                new BigDecimal("37.1234567"),
+                new BigDecimal("127.1234567"));
+    }
+
+    @Test
+    void treatsSameConfirmedCoordinatesAsSuccessfulReplay() {
+        when(workplaceMapper.findOwnedActiveCoordinatesForUpdate(11L, 7L))
+                .thenReturn(new WorkplaceCoordinateLockRow(
+                        11L,
+                        new BigDecimal("37.1234567"),
+                        new BigDecimal("127.1234567")));
+
+        service.confirmCoordinates(owner(7L), coordinateCommand(
+                new BigDecimal("37.12345670"),
+                new BigDecimal("127.12345670"),
+                Instant.now()));
+
+        verify(workplaceMapper, never()).setCoordinatesWhenAbsent(
+                anyLong(), anyLong(), any(), any());
+    }
+
+    @Test
+    void rejectsDifferentCoordinatesAfterFirstConfirmation() {
+        when(workplaceMapper.findOwnedActiveCoordinatesForUpdate(11L, 7L))
+                .thenReturn(new WorkplaceCoordinateLockRow(
+                        11L,
+                        new BigDecimal("37.1234567"),
+                        new BigDecimal("127.1234567")));
+
+        assertThrows(
+                WorkplaceCoordinatesAlreadySetException.class,
+                () -> service.confirmCoordinates(owner(7L), coordinateCommand(
+                        new BigDecimal("37.0000000"),
+                        new BigDecimal("127.0000000"),
+                        Instant.now())));
+    }
+
+    @Test
+    void rejectsStaleCoordinateCaptureBeforeLockingWorkplace() {
+        assertThrows(
+                ValidationException.class,
+                () -> service.confirmCoordinates(owner(7L), coordinateCommand(
+                        new BigDecimal("37.1234567"),
+                        new BigDecimal("127.1234567"),
+                        Instant.now().minusSeconds(301))));
+
+        verify(workplaceMapper, never()).findOwnedActiveCoordinatesForUpdate(anyLong(), anyLong());
     }
 
     @Test
@@ -222,7 +294,21 @@ class WorkplaceServiceImplTest {
                 .detailAddress("2층")
                 .phone("0212345678")
                 .radiusMeters(new BigDecimal("100.00"))
+                .attendanceLocationConfirmed(true)
                 .status(status)
+                .build();
+    }
+
+    private WorkplaceCoordinateConfirmCommand coordinateCommand(
+            BigDecimal latitude,
+            BigDecimal longitude,
+            Instant capturedAt) {
+        return WorkplaceCoordinateConfirmCommand.builder()
+                .workplaceId(11L)
+                .latitude(latitude)
+                .longitude(longitude)
+                .accuracyMeters(new BigDecimal("10.25"))
+                .capturedAt(capturedAt)
                 .build();
     }
 

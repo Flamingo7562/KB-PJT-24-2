@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.gighub.work.mapper.WorkerWorkCaseMapper">
+
+    <resultMap id="workerWorkCaseResult" type="com.gighub.work.mapper.result.WorkerWorkCaseRow">
+        <constructor>
+            <idArg column="workCaseId" javaType="java.lang.Long"/>
+            <arg column="title" javaType="java.lang.String"/>
+            <arg column="workplaceName" javaType="java.lang.String"/>
+            <arg column="startsAt" javaType="java.time.LocalDateTime"/>
+            <arg column="endsAt" javaType="java.time.LocalDateTime"/>
+            <arg column="breakMinutes" javaType="java.lang.Integer"/>
+            <arg column="breakPaid" javaType="java.lang.Boolean"/>
+            <arg column="dailyWage" javaType="java.lang.Long"/>
+            <arg column="status" javaType="com.gighub.work.domain.WorkCaseStatus"/>
+            <arg column="checkedInAt" javaType="java.time.LocalDateTime"/>
+            <arg column="checkedOutAt" javaType="java.time.LocalDateTime"/>
+            <arg column="escrowStatus" javaType="java.lang.String"/>
+            <arg column="settlementStatus" javaType="com.gighub.settlement.domain.SettlementStatus"/>
+            <arg column="settlementDueAt" javaType="java.time.LocalDateTime"/>
+        </constructor>
+    </resultMap>
+
+    <sql id="workerWorkCaseColumns">
+        wc.id AS workCaseId,
+        wc.title AS title,
+        wc.workplace_name AS workplaceName,
+        wc.starts_at AS startsAt,
+        wc.ends_at AS endsAt,
+        wc.break_minutes AS breakMinutes,
+        wc.break_paid AS breakPaid,
+        wc.agreed_wage AS dailyWage,
+        wc.status AS status,
+        (SELECT ar.attempted_at
+         FROM attendance_records ar
+         WHERE ar.work_case_id = wc.id
+           AND ar.attendance_type = 'CHECK_IN'
+           AND ar.result = 'SUCCESS'
+         LIMIT 1) AS checkedInAt,
+        (SELECT ar.attempted_at
+         FROM attendance_records ar
+         WHERE ar.work_case_id = wc.id
+           AND ar.attendance_type = 'CHECK_OUT'
+           AND ar.result = 'SUCCESS'
+         LIMIT 1) AS checkedOutAt,
+        e.status AS escrowStatus,
+        s.status AS settlementStatus,
+        s.due_at AS settlementDueAt
+    </sql>
+
+    <select id="findToday" resultMap="workerWorkCaseResult">
+        SELECT <include refid="workerWorkCaseColumns"/>
+        FROM work_cases wc
+        LEFT JOIN escrows e ON e.work_case_id = wc.id
+        LEFT JOIN settlements s ON s.work_case_id = wc.id
+        WHERE wc.worker_id = #{workerId}
+          AND wc.status IN ('ACCEPTED', 'READY', 'IN_PROGRESS', 'CHECK_OUT_MISSING', 'COMPLETED', 'NO_SHOW')
+          AND ((wc.starts_at &gt;= #{todayStart} AND wc.starts_at &lt; #{tomorrowStart})
+            OR (wc.starts_at &gt;= #{previousDayStart} AND wc.starts_at &lt; #{todayStart}
+                AND wc.status IN ('IN_PROGRESS', 'CHECK_OUT_MISSING')))
+        ORDER BY CASE wc.status
+                     WHEN 'IN_PROGRESS' THEN 1
+                     WHEN 'CHECK_OUT_MISSING' THEN 2
+                     WHEN 'READY' THEN 3
+                     WHEN 'ACCEPTED' THEN 4
+                     WHEN 'COMPLETED' THEN 5
+                     WHEN 'NO_SHOW' THEN 6
+                     ELSE 7
+                 END,
+                 wc.starts_at ASC,
+                 wc.id ASC
+        LIMIT 1
+    </select>
+
+    <select id="findPage" resultMap="workerWorkCaseResult">
+        SELECT <include refid="workerWorkCaseColumns"/>
+        FROM work_cases wc
+        LEFT JOIN escrows e ON e.work_case_id = wc.id
+        LEFT JOIN settlements s ON s.work_case_id = wc.id
+        WHERE wc.worker_id = #{workerId}
+          AND wc.status IN ('ACCEPTED', 'READY', 'IN_PROGRESS', 'CHECK_OUT_MISSING', 'COMPLETED', 'NO_SHOW')
+        ORDER BY wc.starts_at DESC, wc.id DESC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <select id="count" resultType="long">
+        SELECT COUNT(*)
+        FROM work_cases
+        WHERE worker_id = #{workerId}
+          AND status IN ('ACCEPTED', 'READY', 'IN_PROGRESS', 'CHECK_OUT_MISSING', 'COMPLETED', 'NO_SHOW')
+    </select>
+
+</mapper>

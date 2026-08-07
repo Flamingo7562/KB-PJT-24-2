@@ -1,6 +1,9 @@
 <script setup>
-import { CalendarX, Clock, TriangleAlert, UserX } from 'lucide-vue-next'
+import { CalendarX } from 'lucide-vue-next'
 import { computed } from 'vue'
+
+import StatusChip from '@/components/common/StatusChip.vue'
+import { formatSeoulTimeRange } from '@/utils/format'
 
 const props = defineProps({
   workCase: { type: Object, default: null }
@@ -8,34 +11,15 @@ const props = defineProps({
 
 const isEmpty = computed(() => !props.workCase || props.workCase.status === 'NONE')
 
-// 상태 → 뱃지 라벨·색·아이콘
-const meta = computed(() => {
-  switch (props.workCase?.status) {
-    case 'BEFORE_WORK':
-      return {
-        label: '출근 전',
-        color: 'var(--color-text-sub)',
-        bg: 'var(--color-bg)',
-        icon: Clock
-      }
-    case 'LATE':
-      return {
-        label: '지각',
-        color: 'var(--color-warning)',
-        bg: 'var(--color-warning-bg)',
-        icon: TriangleAlert
-      }
-    case 'NO_SHOW':
-      return {
-        label: '노쇼',
-        color: 'var(--color-danger)',
-        bg: 'var(--color-danger-bg)',
-        icon: UserX
-      }
-    default:
-      return null
-  }
-})
+const statusKind = computed(() =>
+  ['BEFORE_WORK', 'LATE', 'NONE'].includes(props.workCase?.status) ? 'today' : 'workCase'
+)
+
+const timeRange = computed(() =>
+  props.workCase?.startsAt
+    ? formatSeoulTimeRange(props.workCase.startsAt, props.workCase.endsAt)
+    : `${props.workCase?.startTime ?? ''}–${props.workCase?.endTime ?? ''}`
+)
 </script>
 
 <template>
@@ -48,14 +32,9 @@ const meta = computed(() => {
     </div>
 
     <div v-else class="work-case">
-      <span class="badge" :style="{ color: meta.color, background: meta.bg }">
-        <component :is="meta.icon" :size="14" />
-        {{ meta.label }}
-      </span>
+      <StatusChip :status="workCase.status" :kind="statusKind" />
       <p class="work-case-title">{{ workCase.title }}</p>
-      <p class="work-case-info">
-        {{ workCase.workplaceName }} · {{ workCase.startTime }}–{{ workCase.endTime }}
-      </p>
+      <p class="work-case-info">{{ workCase.workplaceName }} · {{ timeRange }}</p>
     </div>
   </section>
 </template>
@@ -82,16 +61,6 @@ const meta = computed(() => {
   margin-top: var(--space-md);
   color: var(--color-text-sub);
   font-size: var(--text-md);
-}
-
-.badge {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-xs);
-  padding: var(--space-xs) var(--space-sm);
-  border-radius: var(--radius-pill);
-  font-size: var(--text-sm);
-  font-weight: var(--weight-medium);
 }
 
 .work-case-title {

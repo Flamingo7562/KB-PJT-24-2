@@ -32,7 +32,10 @@ const walletError = ref(false)
 
 // 확보 안심금액은 오늘 진행 중인 근무가 있을 때만 노출(없음/미배정이면 숨김).
 const showEarning = computed(
-  () => !!earning.value && !!todayWorkCase.value && todayWorkCase.value.status !== 'NONE'
+  () =>
+    !!earning.value &&
+    !!todayWorkCase.value &&
+    ['IN_PROGRESS', 'LATE'].includes(todayWorkCase.value.status)
 )
 const hasError = computed(() => !!error.value || walletError.value)
 

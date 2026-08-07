@@ -5,6 +5,7 @@ import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
 import java.util.List;
+import java.time.LocalDateTime;
 
 @Mapper
 public interface SettlementMapper {
@@ -33,8 +34,8 @@ public interface SettlementMapper {
     List<Long> findBlockingDisputeIdsForUpdate(
             @Param("workCaseId") Long workCaseId);
 
-    // 상태 전이: 수동 승인 가능한 WAITING 정산만 처리 중으로 바꾼다.
-    int transitionWaitingToProcessing(
+    // 정상 퇴근으로 지급 예약된 정산만 수동 승인 처리로 진입시킨다.
+    int transitionScheduledToProcessing(
             @Param("settlementId") Long settlementId,
             @Param("approvedByUserId") Long approvedByUserId);
 
@@ -42,4 +43,9 @@ public interface SettlementMapper {
     int transitionProcessingToCompleted(
             @Param("settlementId") Long settlementId,
             @Param("approvedByUserId") Long approvedByUserId);
+
+    /** 정상 퇴근과 같은 Transaction에서 24시간 뒤 지급 대상으로 예약합니다. */
+    int scheduleWaiting(
+            @Param("workCaseId") Long workCaseId,
+            @Param("dueAt") LocalDateTime dueAt);
 }

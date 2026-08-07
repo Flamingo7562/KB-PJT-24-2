@@ -4,8 +4,10 @@ import java.util.List;
 
 import com.gighub.workplace.mapper.param.WorkplaceInsertParam;
 import com.gighub.workplace.mapper.result.WorkplaceListRow;
+import com.gighub.workplace.mapper.result.WorkplaceCoordinateLockRow;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
+import java.math.BigDecimal;
 
 /** 사업장 등록과 소유 사업장 조회 SQL 진입점입니다. */
 @Mapper
@@ -93,4 +95,16 @@ public interface WorkplaceMapper {
     Long findOwnedActiveIdForUpdate(
             @Param("workplaceId") Long workplaceId,
             @Param("ownerUserId") Long ownerUserId);
+
+    /** 좌표 확정 전에 ACTIVE 사업장과 기존 좌표를 함께 잠급니다. */
+    WorkplaceCoordinateLockRow findOwnedActiveCoordinatesForUpdate(
+            @Param("workplaceId") Long workplaceId,
+            @Param("ownerUserId") Long ownerUserId);
+
+    /** 두 좌표가 모두 비어 있을 때만 최초 좌표를 저장합니다. */
+    int setCoordinatesWhenAbsent(
+            @Param("workplaceId") Long workplaceId,
+            @Param("ownerUserId") Long ownerUserId,
+            @Param("latitude") BigDecimal latitude,
+            @Param("longitude") BigDecimal longitude);
 }
