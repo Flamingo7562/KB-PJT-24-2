@@ -45,6 +45,7 @@ const ICONS = {
   ACCEPTED: FileCheck,
   READY: Clock,
   IN_PROGRESS: Loader,
+  CHECK_OUT_MISSING: TriangleAlert,
   COMPLETED: CircleCheck,
   NO_SHOW: UserX,
   CANCELED: Ban,

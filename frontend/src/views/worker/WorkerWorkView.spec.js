@@ -14,11 +14,11 @@ import { listWorkerWorkCases } from '@/services/worker'
 const sampleWorkCase = {
   workCaseId: 101,
   workplaceName: '강남점',
-  workDate: '2026-07-22',
-  time: '10:00 ~ 18:00',
+  startsAt: '2026-07-22T01:00:00Z',
+  endsAt: '2026-07-22T09:00:00Z',
   dailyWage: 90000,
   status: 'IN_PROGRESS',
-  settleStatus: 'HOLD'
+  settlementStatus: 'SCHEDULED'
 }
 
 describe('WorkerWorkView', () => {

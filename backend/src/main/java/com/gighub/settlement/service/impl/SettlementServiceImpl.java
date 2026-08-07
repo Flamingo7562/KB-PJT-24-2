@@ -24,7 +24,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 @Service
@@ -34,8 +33,6 @@ public class SettlementServiceImpl implements SettlementService {
     private static final String ESCROW_HELD = "HELD";
     private static final String ESCROW_RELEASED = "RELEASED";
     private static final String WORK_COMPLETED = "COMPLETED";
-    private static final List<String> RELEASABLE_WORK_STATUSES =
-            List.of("ACCEPTED", "READY", "IN_PROGRESS");
     private static final String TX_ESCROW_HOLD = "ESCROW_HOLD";
     private static final String TX_ESCROW_RELEASE = "ESCROW_RELEASE";
     private static final String REF_ESCROW = "ESCROW";
@@ -84,7 +81,7 @@ public class SettlementServiceImpl implements SettlementService {
                     "처리 중인 분쟁이 있는 근무 건은 정산할 수 없습니다."
             );
         }
-        if (settlementMapper.transitionWaitingToProcessing(
+        if (settlementMapper.transitionScheduledToProcessing(
                 settlement.getSettlementId(), command.getApproverUserId()) != 1) {
             throw new EscrowIntegrityException(
                     "정산 원장을 처리 중 상태로 전환하지 못했습니다."
@@ -245,16 +242,6 @@ public class SettlementServiceImpl implements SettlementService {
                     "근로자 지갑에 정산금을 반영하지 못했습니다."
             );
         }
-        if (!WORK_COMPLETED.equals(context.getStatus())
-                && workMapper.updateWorkStatus(
-                        context.getWorkCaseId(),
-                        RELEASABLE_WORK_STATUSES,
-                        WORK_COMPLETED
-                ) != 1) {
-            throw new EscrowIntegrityException(
-                    "근무 건 완료 상태를 반영하지 못했습니다."
-            );
-        }
     }
 
     private void validateCommand(SettlementApproveCommand command) {
@@ -336,21 +323,21 @@ public class SettlementServiceImpl implements SettlementService {
                     "처리 중 상태로 남아 있는 정산 원장은 자동 재개할 수 없습니다."
             );
         }
-        if (SettlementStatus.WAITING != settlement.getStatus()) {
+        if (SettlementStatus.SCHEDULED != settlement.getStatus()) {
             throw new InvalidEscrowStateException(
                     "수동 승인할 수 없는 정산 상태입니다."
             );
         }
-        if (settlement.getApprovedByUserId() != null
+        if (settlement.getDueAt() == null
+                || settlement.getApprovedByUserId() != null
                 || settlement.getProcessingAt() != null
                 || settlement.getCompletedAt() != null
                 || settlement.getFailureCode() != null) {
             throw new EscrowIntegrityException(
-                    "대기 중 정산 원장의 상태 스냅샷이 올바르지 않습니다."
+                    "예약된 정산 원장의 상태 스냅샷이 올바르지 않습니다."
             );
         }
-        if (!WORK_COMPLETED.equals(context.getStatus())
-                && !RELEASABLE_WORK_STATUSES.contains(context.getStatus())) {
+        if (!WORK_COMPLETED.equals(context.getStatus())) {
             throw new InvalidEscrowStateException(
                     "정산할 수 없는 근무 건 상태입니다."
             );

@@ -53,8 +53,8 @@ class SettlementServiceTest {
     private static final Long ESCROW_ID = 11L;
     private static final Long AGREED_WAGE = 300_000L;
     private static final String KEY = "SETTLEMENT-KEY-001";
-    private static final List<String> RELEASABLE =
-            List.of("ACCEPTED", "READY", "IN_PROGRESS");
+    private static final LocalDateTime DUE_AT =
+            LocalDateTime.of(2026, 7, 25, 17, 0);
     private static final LocalDateTime PROCESSING_AT =
             LocalDateTime.of(2026, 7, 24, 17, 10);
     private static final LocalDateTime COMPLETED_AT =
@@ -77,7 +77,7 @@ class SettlementServiceTest {
 
     @Test
     void approveTransitionsAllStateAndReturnsStoredCompletionSnapshot() {
-        stubNewApproval(context("ACCEPTED"));
+        stubNewApproval(context("COMPLETED"));
 
         SettlementResult result = settlementService.approve(command(EMPLOYER_ID));
 
@@ -90,7 +90,7 @@ class SettlementServiceTest {
         order.verify(workMapper).getEscrowContextForUpdate(WORK_CASE_ID);
         order.verify(settlementMapper).findByWorkCaseIdForUpdate(WORK_CASE_ID);
         order.verify(settlementMapper)
-                .transitionWaitingToProcessing(SETTLEMENT_ID, EMPLOYER_ID);
+                .transitionScheduledToProcessing(SETTLEMENT_ID, EMPLOYER_ID);
         order.verify(walletMapper).getWalletSnapshotForUpdate(EMPLOYER_ID);
         order.verify(walletMapper).getWalletSnapshotForUpdate(WORKER_ID);
         order.verify(walletMapper).getEscrowStatusForUpdate(WORK_CASE_ID);
@@ -142,18 +142,18 @@ class SettlementServiceTest {
         verify(walletMapper, never()).getWalletSnapshotForUpdate(anyLong());
         verify(walletMapper, never()).releaseEscrow(anyLong());
         verify(settlementMapper, never())
-                .transitionWaitingToProcessing(anyLong(), anyLong());
+                .transitionScheduledToProcessing(anyLong(), anyLong());
     }
 
     @Test
     void approveLocksWalletsByUserIdWithoutChangingParticipantRoles() {
         Long employerId = 8L;
         Long workerId = 2L;
-        WorkCaseEscrowContext context = context("READY").toBuilder()
+        WorkCaseEscrowContext context = context("COMPLETED").toBuilder()
                 .employerId(employerId)
                 .workerId(workerId)
                 .build();
-        SettlementSnapshot waiting = settlement(SettlementStatus.WAITING);
+        SettlementSnapshot scheduled = settlement(SettlementStatus.SCHEDULED);
         SettlementSnapshot completed = settlement(SettlementStatus.COMPLETED)
                 .toBuilder().approvedByUserId(employerId).build();
         WalletTransactionSnapshot held = holdLedger().toBuilder()
@@ -164,8 +164,8 @@ class SettlementServiceTest {
         when(workMapper.getEscrowContextForUpdate(WORK_CASE_ID))
                 .thenReturn(context);
         when(settlementMapper.findByWorkCaseIdForUpdate(WORK_CASE_ID))
-                .thenReturn(waiting, completed);
-        when(settlementMapper.transitionWaitingToProcessing(
+                .thenReturn(scheduled, completed);
+        when(settlementMapper.transitionScheduledToProcessing(
                 SETTLEMENT_ID, employerId)).thenReturn(1);
         when(settlementMapper.transitionProcessingToCompleted(
                 SETTLEMENT_ID, employerId)).thenReturn(1);
@@ -186,8 +186,6 @@ class SettlementServiceTest {
                 .thenReturn(1);
         when(walletMapper.addAvailableBalance(workerId, AGREED_WAGE))
                 .thenReturn(1);
-        when(workMapper.updateWorkStatus(
-                WORK_CASE_ID, RELEASABLE, "COMPLETED")).thenReturn(1);
         when(walletMapper.insertWalletTransaction(any())).thenReturn(1);
 
         settlementService.approve(SettlementApproveCommand.builder()
@@ -223,10 +221,10 @@ class SettlementServiceTest {
 
     @Test
     void approveRejectsSettlementAmountMismatch() {
-        SettlementSnapshot settlement = settlement(SettlementStatus.WAITING)
+        SettlementSnapshot settlement = settlement(SettlementStatus.SCHEDULED)
                 .toBuilder().amount(AGREED_WAGE - 1).build();
         when(workMapper.getEscrowContextForUpdate(WORK_CASE_ID))
-                .thenReturn(context("ACCEPTED"));
+                .thenReturn(context("COMPLETED"));
         when(settlementMapper.findByWorkCaseIdForUpdate(WORK_CASE_ID))
                 .thenReturn(settlement);
 
@@ -236,13 +234,13 @@ class SettlementServiceTest {
         );
 
         verify(settlementMapper, never())
-                .transitionWaitingToProcessing(anyLong(), anyLong());
+                .transitionScheduledToProcessing(anyLong(), anyLong());
     }
 
     @Test
     void approveRejectsOnHoldSettlement() {
         when(workMapper.getEscrowContextForUpdate(WORK_CASE_ID))
-                .thenReturn(context("ACCEPTED"));
+                .thenReturn(context("COMPLETED"));
         when(settlementMapper.findByWorkCaseIdForUpdate(WORK_CASE_ID))
                 .thenReturn(settlement(SettlementStatus.ON_HOLD));
 
@@ -255,11 +253,63 @@ class SettlementServiceTest {
     }
 
     @Test
-    void approveRejectsWorkCaseWithBlockingDispute() {
+    void approveRejectsWaitingSettlementBeforeNormalCheckout() {
         when(workMapper.getEscrowContextForUpdate(WORK_CASE_ID))
-                .thenReturn(context("ACCEPTED"));
+                .thenReturn(context("COMPLETED"));
         when(settlementMapper.findByWorkCaseIdForUpdate(WORK_CASE_ID))
                 .thenReturn(settlement(SettlementStatus.WAITING));
+
+        assertThrows(
+                InvalidEscrowStateException.class,
+                () -> settlementService.approve(command(EMPLOYER_ID))
+        );
+
+        verify(settlementMapper, never())
+                .transitionScheduledToProcessing(anyLong(), anyLong());
+        verify(walletMapper, never()).releaseEscrow(anyLong());
+    }
+
+    @Test
+    void approveRejectsScheduledSettlementBeforeWorkCompletion() {
+        when(workMapper.getEscrowContextForUpdate(WORK_CASE_ID))
+                .thenReturn(context("IN_PROGRESS"));
+        when(settlementMapper.findByWorkCaseIdForUpdate(WORK_CASE_ID))
+                .thenReturn(settlement(SettlementStatus.SCHEDULED));
+
+        assertThrows(
+                InvalidEscrowStateException.class,
+                () -> settlementService.approve(command(EMPLOYER_ID))
+        );
+
+        verify(settlementMapper, never())
+                .transitionScheduledToProcessing(anyLong(), anyLong());
+        verify(walletMapper, never()).releaseEscrow(anyLong());
+    }
+
+    @Test
+    void approveRejectsScheduledSettlementWithoutDueAt() {
+        SettlementSnapshot invalid = settlement(SettlementStatus.SCHEDULED)
+                .toBuilder().dueAt(null).build();
+        when(workMapper.getEscrowContextForUpdate(WORK_CASE_ID))
+                .thenReturn(context("COMPLETED"));
+        when(settlementMapper.findByWorkCaseIdForUpdate(WORK_CASE_ID))
+                .thenReturn(invalid);
+
+        assertThrows(
+                EscrowIntegrityException.class,
+                () -> settlementService.approve(command(EMPLOYER_ID))
+        );
+
+        verify(settlementMapper, never())
+                .transitionScheduledToProcessing(anyLong(), anyLong());
+    }
+
+    @Test
+    void approveRejectsWorkCaseWithBlockingDispute() {
+        when(workMapper.getEscrowContextForUpdate(WORK_CASE_ID))
+                .thenReturn(context("COMPLETED"));
+        when(settlementMapper.findByWorkCaseIdForUpdate(WORK_CASE_ID))
+                .thenReturn(settlement(SettlementStatus.SCHEDULED));
         when(settlementMapper.findBlockingDisputeIdsForUpdate(WORK_CASE_ID))
                 .thenReturn(List.of(9L));
 
@@ -269,14 +319,14 @@ class SettlementServiceTest {
         );
 
         verify(settlementMapper, never())
-                .transitionWaitingToProcessing(anyLong(), anyLong());
+                .transitionScheduledToProcessing(anyLong(), anyLong());
         verify(walletMapper, never()).getWalletSnapshotForUpdate(anyLong());
     }
 
     @Test
     void approveRejectsProcessingSettlementAsIntegrityFailure() {
         when(workMapper.getEscrowContextForUpdate(WORK_CASE_ID))
-                .thenReturn(context("ACCEPTED"));
+                .thenReturn(context("COMPLETED"));
         when(settlementMapper.findByWorkCaseIdForUpdate(WORK_CASE_ID))
                 .thenReturn(settlement(SettlementStatus.PROCESSING));
 
@@ -335,7 +385,7 @@ class SettlementServiceTest {
     @Test
     void approveRejectsSameEmployerAndWorker() {
         WorkCaseEscrowContext invalid =
-                context("ACCEPTED").toBuilder().workerId(EMPLOYER_ID).build();
+                context("COMPLETED").toBuilder().workerId(EMPLOYER_ID).build();
         when(workMapper.getEscrowContextForUpdate(WORK_CASE_ID))
                 .thenReturn(invalid);
 
@@ -351,13 +401,13 @@ class SettlementServiceTest {
     void approveRejectsChangedEmployerAgainstHeldLedgerOwner() {
         Long changedEmployerId = 8L;
         WorkCaseEscrowContext context =
-                context("ACCEPTED").toBuilder().employerId(changedEmployerId).build();
-        SettlementSnapshot waiting = settlement(SettlementStatus.WAITING);
+                context("COMPLETED").toBuilder().employerId(changedEmployerId).build();
+        SettlementSnapshot scheduled = settlement(SettlementStatus.SCHEDULED);
         when(workMapper.getEscrowContextForUpdate(WORK_CASE_ID))
                 .thenReturn(context);
         when(settlementMapper.findByWorkCaseIdForUpdate(WORK_CASE_ID))
-                .thenReturn(waiting);
-        when(settlementMapper.transitionWaitingToProcessing(
+                .thenReturn(scheduled);
+        when(settlementMapper.transitionScheduledToProcessing(
                 SETTLEMENT_ID, changedEmployerId)).thenReturn(1);
         when(walletMapper.getWalletSnapshotForUpdate(WORKER_ID))
                 .thenReturn(wallet(40L, WORKER_ID, 0L, 0L));
@@ -391,7 +441,7 @@ class SettlementServiceTest {
 
     @Test
     void approveTranslatesConcurrentReleaseLedgerCollision() {
-        stubNewApproval(context("ACCEPTED"));
+        stubNewApproval(context("COMPLETED"));
         when(walletMapper.insertWalletTransaction(any()))
                 .thenReturn(1)
                 .thenThrow(new DuplicateKeyException("concurrent ledger"));
@@ -406,7 +456,7 @@ class SettlementServiceTest {
 
     @Test
     void approveRejectsFailedCompletedTransitionAfterPayoutWrites() {
-        stubNewApproval(context("ACCEPTED"));
+        stubNewApproval(context("COMPLETED"));
         when(settlementMapper.transitionProcessingToCompleted(
                 SETTLEMENT_ID, EMPLOYER_ID)).thenReturn(0);
 
@@ -439,9 +489,9 @@ class SettlementServiceTest {
     @Test
     void approveStopsWhenProcessingTransitionAffectsNoRow() {
         when(workMapper.getEscrowContextForUpdate(WORK_CASE_ID))
-                .thenReturn(context("ACCEPTED"));
+                .thenReturn(context("COMPLETED"));
         when(settlementMapper.findByWorkCaseIdForUpdate(WORK_CASE_ID))
-                .thenReturn(settlement(SettlementStatus.WAITING));
+                .thenReturn(settlement(SettlementStatus.SCHEDULED));
 
         assertThrows(
                 EscrowIntegrityException.class,
@@ -456,10 +506,10 @@ class SettlementServiceTest {
                 .thenReturn(context);
         when(settlementMapper.findByWorkCaseIdForUpdate(WORK_CASE_ID))
                 .thenReturn(
-                        settlement(SettlementStatus.WAITING),
+                        settlement(SettlementStatus.SCHEDULED),
                         settlement(SettlementStatus.COMPLETED)
                 );
-        when(settlementMapper.transitionWaitingToProcessing(
+        when(settlementMapper.transitionScheduledToProcessing(
                 SETTLEMENT_ID, EMPLOYER_ID)).thenReturn(1);
         lenient().when(settlementMapper.transitionProcessingToCompleted(
                 SETTLEMENT_ID, EMPLOYER_ID)).thenReturn(1);
@@ -481,11 +531,6 @@ class SettlementServiceTest {
                 .thenReturn(1);
         when(walletMapper.addAvailableBalance(WORKER_ID, AGREED_WAGE))
                 .thenReturn(1);
-        if (!"COMPLETED".equals(context.getStatus())) {
-            when(workMapper.updateWorkStatus(
-                    WORK_CASE_ID, RELEASABLE, "COMPLETED"))
-                    .thenReturn(1);
-        }
         when(walletMapper.insertWalletTransaction(any())).thenReturn(1);
     }
 
@@ -513,6 +558,9 @@ class SettlementServiceTest {
                 .workCaseId(WORK_CASE_ID)
                 .amount(AGREED_WAGE)
                 .status(status);
+        if (SettlementStatus.SCHEDULED == status) {
+            builder.dueAt(DUE_AT);
+        }
         if (SettlementStatus.COMPLETED == status) {
             builder.approvedByUserId(EMPLOYER_ID)
                     .processingAt(PROCESSING_AT)

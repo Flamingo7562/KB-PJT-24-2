@@ -44,6 +44,7 @@
                detail_address,
                phone,
                radius_meters,
+               latitude IS NOT NULL AND longitude IS NOT NULL AS attendance_location_confirmed,
                status
         <include refid="ownedManageableWorkplaces"/>
         ORDER BY created_at DESC, id DESC
@@ -89,5 +90,28 @@
           AND status = 'ACTIVE'
         FOR UPDATE
     </select>
+
+    <select id="findOwnedActiveCoordinatesForUpdate"
+            resultType="com.gighub.workplace.mapper.result.WorkplaceCoordinateLockRow">
+        SELECT id,
+               latitude,
+               longitude
+        FROM workplaces
+        WHERE id = #{workplaceId}
+          AND owner_user_id = #{ownerUserId}
+          AND status = 'ACTIVE'
+        FOR UPDATE
+    </select>
+
+    <update id="setCoordinatesWhenAbsent">
+        UPDATE workplaces
+        SET latitude = #{latitude},
+            longitude = #{longitude}
+        WHERE id = #{workplaceId}
+          AND owner_user_id = #{ownerUserId}
+          AND status = 'ACTIVE'
+          AND latitude IS NULL
+          AND longitude IS NULL
+    </update>
 
 </mapper>

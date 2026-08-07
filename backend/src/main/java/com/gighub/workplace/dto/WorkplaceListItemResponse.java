@@ -20,6 +20,7 @@ public final class WorkplaceListItemResponse {
     private final String detailAddress;
     private final String phone;
     private final int radiusMeters;
+    private final boolean attendanceLocationConfirmed;
     private final String status;
 
     private WorkplaceListItemResponse(WorkplaceListRow row) {
@@ -33,6 +34,7 @@ public final class WorkplaceListItemResponse {
         // 명세의 반경은 정수 100입니다. DECIMAL(8,2)를 그대로 직렬화하면 100.00이 나가므로
         // 저장 정밀도를 응답 계약으로 흘리지 않고 여기서 정수로 맞춥니다.
         this.radiusMeters = row.getRadiusMeters().intValue();
+        this.attendanceLocationConfirmed = row.isAttendanceLocationConfirmed();
         this.status = row.getStatus();
     }
 

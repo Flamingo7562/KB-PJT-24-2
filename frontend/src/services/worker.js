@@ -9,9 +9,11 @@
  *   GET  /api/worker/home   GET /api/worker/work-cases   GET /api/worker/workplaces
  *   POST /api/attendance/scans
  */
-import http from '@/services/http'
+import http, { idempotentPost } from '@/services/http'
+import { USE_MOCK } from '@/services/mockFlag'
 
-const USE_MOCK = true
+// 보건증 공유 대상 API는 필드 계약이 아직 열려 있어 이번 근태 실연동 범위에서 제외합니다.
+const USE_SHARE_WORKPLACES_MOCK = true
 
 // 오늘 근무 중(지각 출근) 시나리오 — 확보 안심금액 진행 상태를 함께 보여준다.
 // todayWorkCase.status: BEFORE_WORK / LATE / NO_SHOW / NONE
@@ -75,13 +77,13 @@ export async function getWorkerHome() {
 /** 근무 히스토리 조회 → { content[], totalPages } (WORKER-001) */
 export async function listWorkerWorkCases(params = {}) {
   if (USE_MOCK) return { content: mockWorkCases.map((s) => ({ ...s })), totalPages: 1 }
-  // 페이지 응답 { content, page, size, totalElements } 은 data 래핑이 없어 본문을 그대로 반환.
-  return http.get('/worker/work-cases', { params })
+  const { data } = await http.get('/worker/work-cases', { params })
+  return data
 }
 
 /** 근무 예정 지점 목록(보건증 공유 드롭다운 전용) (명세 32) */
 export async function listWorkerWorkplaces() {
-  if (USE_MOCK) return mockShareWorkplaces.map((w) => ({ ...w }))
+  if (USE_SHARE_WORKPLACES_MOCK) return mockShareWorkplaces.map((w) => ({ ...w }))
   const { data } = await http.get('/worker/workplaces')
   return data
 }
@@ -91,15 +93,18 @@ export async function listWorkerWorkplaces() {
  * 서버가 기록 상태로 출근/퇴근 자동 판별 + QR 유효성·GPS 반경 검증(실패 422).
  * @param {object} payload qrToken, latitude, longitude
  */
-export async function scan({ qrToken, latitude, longitude }) {
+export async function scan(payload, { idempotencyKey = null } = {}) {
   if (USE_MOCK) {
     return {
+      result: 'RECORDED',
       scanType: 'CHECK_IN',
-      scanTime: new Date().toISOString(),
+      recordedAt: new Date().toISOString(),
       isLate: false,
-      lateMinutes: 0
+      lateMinutes: 0,
+      earlyCheckoutConfirmedAt: null,
+      settlementDueAt: null
     }
   }
-  const { data } = await http.post('/attendance/scans', { qrToken, latitude, longitude })
+  const { data } = await idempotentPost('/attendance/scans', payload, { idempotencyKey })
   return data
 }

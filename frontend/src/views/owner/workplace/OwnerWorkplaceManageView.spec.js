@@ -10,6 +10,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 vi.mock('vue-router', () => ({ useRouter: () => ({ push: vi.fn() }) }))
 vi.mock('@/services/workplaces', () => ({
   listWorkplaces: vi.fn(),
+  confirmWorkplaceCoordinates: vi.fn(),
   updateWorkplace: vi.fn(),
   deleteWorkplace: vi.fn()
 }))
@@ -31,6 +32,7 @@ const WORKPLACE = {
   detailAddress: '2층',
   phone: '0212345678',
   radiusMeters: 100,
+  attendanceLocationConfirmed: true,
   status: 'ACTIVE'
 }
 
@@ -79,6 +81,15 @@ describe('OwnerWorkplaceManageView', () => {
     const values = wrapper.findAll('input').map((i) => i.element.value)
     expect(values).toContain('서울 강남구 테헤란로 1')
     expect(values).toContain('2층')
+  })
+
+  it('출퇴근 위치가 확정된 사업장은 주소 입력을 잠근다', async () => {
+    const wrapper = await openEditDialog()
+    const inputs = wrapper.findAll('input')
+
+    expect(inputs[1].attributes()).toHaveProperty('disabled')
+    expect(inputs[2].attributes()).toHaveProperty('disabled')
+    expect(wrapper.text()).toContain('출퇴근 위치가 확정되어 주소를 변경할 수 없습니다.')
   })
 
   it('상호명·도로명주소·세부주소는 서버 @Size 제한과 같은 maxlength 를 갖는다', async () => {

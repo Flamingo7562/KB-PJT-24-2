@@ -31,5 +31,6 @@ public class WorkplaceListRow {
     private String detailAddress;
     private String phone;
     private BigDecimal radiusMeters;
+    private boolean attendanceLocationConfirmed;
     private String status;
 }

@@ -1,0 +1,155 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.gighub.attendance.mapper.AttendanceLifecycleMapper">
+
+    <resultMap id="lifecycleWorkCaseResult"
+               type="com.gighub.attendance.mapper.result.AttendanceLifecycleWorkCaseRow">
+        <constructor>
+            <idArg column="workCaseId" javaType="java.lang.Long"/>
+            <arg column="status" javaType="com.gighub.work.domain.WorkCaseStatus"/>
+            <arg column="startsAt" javaType="java.time.LocalDateTime"/>
+            <arg column="endsAt" javaType="java.time.LocalDateTime"/>
+        </constructor>
+    </resultMap>
+
+    <select id="findReadyCandidateIds" resultType="java.lang.Long">
+        SELECT id
+        FROM work_cases
+        WHERE status = 'ACCEPTED'
+          AND starts_at &lt;= #{readyAt}
+          AND starts_at &gt; #{noShowAfter}
+        ORDER BY starts_at, id
+    </select>
+
+    <select id="findNoShowCandidateIds" resultType="java.lang.Long">
+        SELECT wc.id
+        FROM work_cases wc
+        WHERE wc.status = 'READY'
+          AND wc.starts_at &lt;= #{noShowAt}
+          AND NOT EXISTS (
+              SELECT 1
+              FROM attendance_records ar
+              WHERE ar.work_case_id = wc.id
+                AND ar.attendance_type = 'CHECK_IN'
+                AND ar.result = 'SUCCESS'
+          )
+        ORDER BY wc.starts_at, wc.id
+    </select>
+
+    <select id="findCheckoutMissingCandidateIds" resultType="java.lang.Long">
+        SELECT wc.id
+        FROM work_cases wc
+        WHERE wc.status = 'IN_PROGRESS'
+          AND wc.ends_at &lt;= #{checkoutMissingAt}
+          AND EXISTS (
+              SELECT 1
+              FROM attendance_records check_in
+              WHERE check_in.work_case_id = wc.id
+                AND check_in.attendance_type = 'CHECK_IN'
+                AND check_in.result = 'SUCCESS'
+          )
+          AND NOT EXISTS (
+              SELECT 1
+              FROM attendance_records check_out
+              WHERE check_out.work_case_id = wc.id
+                AND check_out.attendance_type = 'CHECK_OUT'
+                AND check_out.result = 'SUCCESS'
+          )
+        ORDER BY wc.ends_at, wc.id
+    </select>
+
+    <select id="lockById" resultMap="lifecycleWorkCaseResult">
+        SELECT id        AS workCaseId,
+               status    AS status,
+               starts_at AS startsAt,
+               ends_at   AS endsAt
+        FROM work_cases
+        WHERE id = #{workCaseId}
+            FOR UPDATE
+    </select>
+
+    <!--
+        READY는 단순 시각 전이가 아닙니다. 수락 Transaction이 남긴 계약 Aggregate와
+        에스크로·정산, 그리고 실제 스캔에 쓸 현재 사업장 좌표까지 모두 확인합니다.
+    -->
+    <select id="isReadyAggregateComplete" resultType="boolean">
+        SELECT EXISTS(
+            SELECT 1
+            FROM work_cases wc
+                     JOIN workplaces w
+                          ON w.id = wc.workplace_id
+                         AND w.owner_user_id = wc.employer_id
+                     JOIN work_invitations wi
+                          ON wi.work_case_id = wc.id
+                         AND wi.status = 'ACCEPTED'
+                         AND wi.accepted_by_user_id = wc.worker_id
+                         AND wi.expected_terms_version = wc.terms_version
+                         AND wi.accepted_terms_version = wc.terms_version
+                         AND wi.accepted_at IS NOT NULL
+                     JOIN work_contracts contract
+                          ON contract.work_case_id = wc.id
+                         AND contract.employer_id = wc.employer_id
+                         AND contract.worker_id = wc.worker_id
+                         AND contract.agreed_wage = wc.agreed_wage
+                         AND contract.source_terms_version = wc.terms_version
+                     JOIN escrows escrow
+                          ON escrow.work_case_id = wc.id
+                         AND escrow.amount = wc.agreed_wage
+                         AND escrow.status = 'HELD'
+                     JOIN settlements settlement
+                          ON settlement.work_case_id = wc.id
+                         AND settlement.amount = wc.agreed_wage
+                         AND settlement.status = 'WAITING'
+                         AND settlement.due_at IS NULL
+                     JOIN documents document
+                          ON document.work_case_id = wc.id
+                         AND document.document_type = 'EMPLOYMENT_CONTRACT'
+                         AND document.status = 'ACTIVE'
+                     JOIN document_versions original_version
+                          ON original_version.document_id = document.id
+                         AND original_version.version_type = 'ORIGINAL'
+                     JOIN document_versions signed_version
+                          ON signed_version.document_id = document.id
+                         AND signed_version.version_type = 'SIGNED'
+                     JOIN document_signatures signature
+                          ON signature.document_id = document.id
+                         AND signature.source_version_id = original_version.id
+                         AND signature.signed_version_id = signed_version.id
+                         AND signature.signer_user_id = wc.worker_id
+                         AND signature.source_checksum = original_version.checksum
+                         AND signature.signed_checksum = signed_version.checksum
+                     JOIN document_shares share
+                          ON share.document_id = document.id
+                         AND share.work_case_id = wc.id
+                         AND share.shared_with_user_id = wc.worker_id
+                         AND share.purpose = 'CONTRACT_PARTY'
+                         AND share.status = 'ACTIVE'
+            WHERE wc.id = #{workCaseId}
+              AND wc.status = 'ACCEPTED'
+              AND wc.worker_id IS NOT NULL
+              AND w.status = 'ACTIVE'
+              AND w.latitude IS NOT NULL
+              AND w.longitude IS NOT NULL
+        )
+    </select>
+
+    <select id="hasSuccessfulAttendance" resultType="boolean">
+        SELECT EXISTS(
+            SELECT 1
+            FROM attendance_records
+            WHERE work_case_id = #{workCaseId}
+              AND attendance_type = #{attendanceType}
+              AND result = 'SUCCESS'
+        )
+    </select>
+
+    <update id="transitionStatus">
+        UPDATE work_cases
+        SET status = #{status}
+        WHERE id = #{workCaseId}
+          AND status = #{expectedStatus}
+    </update>
+
+</mapper>

@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.gighub.attendance.mapper.AttendanceScanMapper">
+
+    <sql id="workplaceScanColumns">
+        w.id            AS workplaceId,
+        w.status        AS status,
+        w.latitude      AS latitude,
+        w.longitude     AS longitude,
+        w.radius_meters AS radiusMeters,
+        qr.id           AS qrTokenId,
+        qr.token_nonce  AS tokenNonce
+    </sql>
+
+    <sql id="workplaceWithActiveQr">
+        FROM workplaces w
+                 LEFT JOIN qr_tokens qr
+                           ON qr.workplace_id = w.id
+                          AND qr.status = 'ACTIVE'
+        WHERE w.id = #{workplaceId}
+    </sql>
+
+    <select id="findWorkplace"
+            resultType="com.gighub.attendance.mapper.result.AttendanceWorkplaceRow">
+        SELECT <include refid="workplaceScanColumns"/>
+        <include refid="workplaceWithActiveQr"/>
+    </select>
+
+    <!-- QR 재발급과 같은 순서로 사업장을 먼저 잠근 뒤 근무 행을 잠급니다. -->
+    <select id="lockWorkplace"
+            resultType="com.gighub.attendance.mapper.result.AttendanceWorkplaceRow">
+        SELECT <include refid="workplaceScanColumns"/>
+        <include refid="workplaceWithActiveQr"/>
+        FOR UPDATE
+    </select>
+
+    <select id="findCandidates"
+            resultType="com.gighub.attendance.mapper.result.AttendanceCandidateRow">
+        SELECT wc.id AS workCaseId,
+               CASE
+                   WHEN wc.status = 'READY' THEN 'CHECK_IN'
+                   WHEN wc.status = 'IN_PROGRESS' THEN 'CHECK_OUT'
+               END AS scanType
+        FROM work_cases wc
+        WHERE wc.worker_id = #{workerId}
+          AND wc.workplace_id = #{workplaceId}
+          AND (
+              (wc.status = 'READY'
+                  AND wc.starts_at &lt;= #{readyAt}
+                  AND wc.starts_at &gt; #{noShowAfter})
+              OR
+              (wc.status = 'IN_PROGRESS'
+                  AND wc.ends_at &gt; #{checkoutAfter}
+                  AND EXISTS (
+                      SELECT 1
+                      FROM attendance_records check_in
+                      WHERE check_in.work_case_id = wc.id
+                        AND check_in.attendance_type = 'CHECK_IN'
+                        AND check_in.result = 'SUCCESS'
+                  ))
+          )
+        ORDER BY wc.starts_at, wc.id
+    </select>
+
+    <select id="findCompletedCandidateIds" resultType="java.lang.Long">
+        SELECT wc.id
+        FROM work_cases wc
+        WHERE wc.worker_id = #{workerId}
+          AND wc.workplace_id = #{workplaceId}
+          AND wc.status = 'COMPLETED'
+          AND wc.starts_at &lt;= #{readyAt}
+          AND wc.ends_at &gt; #{checkoutAfter}
+        ORDER BY wc.starts_at, wc.id
+    </select>
+
+    <select id="lockWorkCase"
+            resultType="com.gighub.attendance.mapper.result.AttendanceScanWorkCaseRow">
+        SELECT id           AS workCaseId,
+               worker_id    AS workerId,
+               workplace_id AS workplaceId,
+               status       AS status,
+               starts_at    AS startsAt,
+               ends_at      AS endsAt
+        FROM work_cases
+        WHERE id = #{workCaseId}
+        FOR UPDATE
+    </select>
+
+    <select id="hasSuccessfulAttendance" resultType="boolean">
+        SELECT EXISTS(
+            SELECT 1
+            FROM attendance_records
+            WHERE work_case_id = #{workCaseId}
+              AND attendance_type = #{attendanceType}
+              AND result = 'SUCCESS'
+        )
+    </select>
+
+    <insert id="insertRecord">
+        INSERT INTO attendance_records
+            (work_case_id, worker_id, qr_token_id, attendance_type,
+             captured_at, attempted_at, distance_meters, accuracy_meters,
+             result, failure_reason, early_checkout_confirmed_at)
+        VALUES
+            (#{workCaseId}, #{workerId}, #{qrTokenId}, #{attendanceType},
+             #{capturedAt}, #{attemptedAt}, #{distanceMeters}, #{accuracyMeters},
+             #{result}, #{failureReason}, #{earlyCheckoutConfirmedAt})
+    </insert>
+
+    <update id="transitionStatus">
+        UPDATE work_cases
+        SET status = #{status}
+        WHERE id = #{workCaseId}
+          AND status = #{expectedStatus}
+    </update>
+
+</mapper>

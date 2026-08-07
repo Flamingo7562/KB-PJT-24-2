@@ -13,7 +13,7 @@ import EmptyState from '@/components/common/EmptyState.vue'
 import StatusChip from '@/components/common/StatusChip.vue'
 import { listWorkerWorkCases } from '@/services/worker'
 import { useUiStore } from '@/stores/ui'
-import { formatDate, formatKRW } from '@/utils/format'
+import { formatDate, formatKRW, formatSeoulDateTime, formatSeoulTimeRange } from '@/utils/format'
 
 const router = useRouter()
 const ui = useUiStore()
@@ -38,6 +38,18 @@ async function load() {
 function goDetail(workCase) {
   router.push(`/worker/work/work-cases/${workCase.workCaseId}`)
 }
+
+function workDate(workCase) {
+  return workCase.startsAt
+    ? formatSeoulDateTime(workCase.startsAt).split(' ')[0]
+    : formatDate(workCase.workDate)
+}
+
+function workTime(workCase) {
+  return workCase.startsAt
+    ? formatSeoulTimeRange(workCase.startsAt, workCase.endsAt)
+    : workCase.time
+}
 </script>
 
 <template>
@@ -53,15 +65,19 @@ function goDetail(workCase) {
         <button type="button" class="work-case-main" @click="goDetail(workCase)">
           <div class="work-case-head">
             <span class="workplace">{{ workCase.workplaceName }}</span>
-            <span class="date">{{ formatDate(workCase.workDate) }}</span>
+            <span class="date">{{ workDate(workCase) }}</span>
           </div>
           <div class="work-case-sub">
-            <span class="time">{{ workCase.time }}</span>
+            <span class="time">{{ workTime(workCase) }}</span>
             <span class="wage">{{ formatKRW(workCase.dailyWage) }}</span>
           </div>
           <div class="work-case-status">
             <StatusChip :status="workCase.status" kind="workCase" />
-            <StatusChip :status="workCase.settleStatus" kind="settle" />
+            <StatusChip
+              v-if="workCase.settlementStatus ?? workCase.settleStatus"
+              :status="workCase.settlementStatus ?? workCase.settleStatus"
+              kind="settle"
+            />
           </div>
         </button>
       </li>

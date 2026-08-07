@@ -15,23 +15,17 @@ import { getWorkerHome } from '@/services/worker'
 
 const homePayload = {
   todayWorkCase: {
-    status: 'LATE',
+    workCaseId: 101,
+    status: 'IN_PROGRESS',
     title: '주말 홀 서빙',
     workplaceName: '카페 봄',
-    workDate: '2026-07-22',
-    startTime: '10:00',
-    endTime: '18:00'
-  },
-  earning: {
-    agreedWage: 90000,
-    totalMinutes: 480,
-    unpaidBreakMinutes: 60,
-    elapsedPayDisplay: 34526,
-    progressRatio: 0.42,
+    startsAt: '2026-07-22T01:00:00Z',
+    endsAt: '2026-07-22T09:00:00Z',
+    dailyWage: 90000,
     expectedNetAmount: 90000,
-    isLate: true,
-    lateMinutes: 15
-  }
+    attendance: { isLate: true, lateMinutes: 15 }
+  },
+  earning: null
 }
 
 describe('WorkerHomeView', () => {
@@ -56,7 +50,7 @@ describe('WorkerHomeView', () => {
 
   it('오늘 근무가 없으면 안심금액 카드를 숨긴다', async () => {
     getWorkerHome.mockResolvedValue({
-      todayWorkCase: { status: 'NONE' },
+      todayWorkCase: null,
       earning: null
     })
     const wrapper = mount(WorkerHomeView)

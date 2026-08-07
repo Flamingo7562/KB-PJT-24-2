@@ -4,7 +4,8 @@
  * 폼: 사업자등록번호·상호명·대표자명·사업장 주소·사업장 전화번호.
  * 주소는 도로명(다음 우편번호 검색 embed, @/utils/daumPostcode · 실패 시 직접 입력)과 세부주소를
  * 나눠 입력받아 승인 계약대로 roadAddress·detailAddress 로 각각 보낸다.
- * 좌표 자동 변환은 별도 지오코딩 API 필요(미구현). 인증 반경은 서버가 100m 를 적용한다(미전송).
+ * 등록 시 현장 브라우저 위치를 요청해 latitude·longitude 를 함께 보내며, 거부·미지원이면
+ * 좌표 없이 등록한 뒤 관리 화면의 일회성 위치 확정으로 보완한다.
  * 진입 경로 2가지: ① 첫 로그인(G7, 사업장 0개) 강제 진입 ② /owner/mypage/workplaces 에서 수동 추가.
  * 연계 API: POST /workplaces  →  @/services/workplaces (createWorkplace)
  * 등록 성공 후: useWorkplaceStore().load({force:true}) 갱신(실패해도 무시) →
@@ -71,6 +72,30 @@ const { errors, handleBlur, validateAll } = useFieldValidation(
 )
 
 const submitting = ref(false)
+const locationNotice = ref('등록할 사업장에서 위치 권한을 허용하면 출퇴근 위치가 함께 확정됩니다.')
+
+function captureCurrentCoordinates() {
+  return new Promise((resolve) => {
+    if (!navigator.geolocation) {
+      resolve(null)
+      return
+    }
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        if (!Number.isFinite(position.coords.accuracy) || position.coords.accuracy > 100) {
+          resolve(null)
+          return
+        }
+        resolve({
+          latitude: Number(position.coords.latitude.toFixed(7)),
+          longitude: Number(position.coords.longitude.toFixed(7))
+        })
+      },
+      () => resolve(null),
+      { enableHighAccuracy: true, timeout: 10_000, maximumAge: 0 }
+    )
+  })
+}
 
 function onBusinessNumberInput(v) {
   businessRegistrationNumber.value = formatBusinessNumberInput(v)
@@ -106,15 +131,20 @@ async function handleSubmit() {
 
   submitting.value = true
   try {
+    const location = await captureCurrentCoordinates()
+    if (!location) {
+      locationNotice.value = '위치 없이 등록합니다. 현장에서 사업장 관리 화면을 통해 확정해주세요.'
+      ui.toast('위치 없이 등록합니다. 출퇴근 전 현장 위치를 확정해주세요.', { type: 'info' })
+    }
     // 승인 Body 는 radius 를 받지 않는다 — 서버가 100m 를 적용한다(API_SPEC.md:341).
-    // 좌표는 지오코딩 미연동이라 보내지 않는다(둘 다 생략은 유효하다).
     await createWorkplace({
       businessRegistrationNumber: businessRegistrationNumber.value,
       name: name.value,
       representativeName: representativeName.value,
       roadAddress: roadAddress.value,
       detailAddress: detailAddress.value,
-      phone: phone.value
+      phone: phone.value,
+      ...(location ?? {})
     })
     // 목록 갱신은 편의 동작이다. 실패해도 등록 자체는 이미 성공했으므로 전파하지
     // 않는다 — GET /api/workplaces 는 아직 서버에 없어서(#145 후속) 지금은 항상
@@ -220,6 +250,8 @@ async function handleSubmit() {
           @blur="handleBlur('phone')"
         />
 
+        <p class="location-notice">{{ locationNotice }}</p>
+
         <BaseButton type="submit" variant="owner" block :disabled="submitting">등록</BaseButton>
       </form>
     </main>
@@ -241,5 +273,10 @@ async function handleSubmit() {
 }
 .postcode-embed {
   height: 400px;
+}
+.location-notice {
+  font-size: var(--text-sm);
+  color: var(--color-text-sub);
+  line-height: 1.5;
 }
 </style>
