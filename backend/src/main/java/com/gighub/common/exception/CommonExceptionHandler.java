@@ -37,7 +37,7 @@ public class CommonExceptionHandler {
                 exception.getStatus(),
                 exception.getCode(),
                 exception.getMessage(),
-                null,
+                exception.getFieldErrors(),
                 request
         );
     }

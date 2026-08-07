@@ -24,16 +24,24 @@ const props = defineProps({
   placeholder: { type: String, default: '' },
   error: { type: String, default: '' },
   hint: { type: String, default: '' },
+  // 중복확인처럼 서버에 물어야만 알 수 있는 결과만 성공으로 표시한다.
+  success: { type: String, default: '' },
   required: { type: Boolean, default: false },
   disabled: { type: Boolean, default: false },
   maxlength: { type: [String, Number], default: null }
 })
 
-const emit = defineEmits(['update:modelValue'])
+const emit = defineEmits(['update:modelValue', 'blur'])
 
 const fieldId = useId()
+// 에러·성공·힌트 메시지(셋 중 하나만 보인다)의 id. aria-describedby 로 input 과 이어서
+// 스크린리더가 값과 함께 이 메시지를 읽게 한다.
+const messageId = `${fieldId}-msg`
 const inputEl = ref(null)
 const composing = ref(false)
+// 조합 취소용 내부 blur 인지 표시한다. 이 구간의 blur 는 사용자가 필드를 떠난 것이
+// 아니므로 부모에게 올리지 않는다.
+const cancelingComposition = ref(false)
 
 // 부모가 정제한 값이 직전 값과 같으면 Vue 가 DOM 을 패치하지 않아 입력 문자가 남는다.
 // 그래서 DOM 값을 모델값에 직접 맞춘다.
@@ -54,12 +62,19 @@ function onInput(e) {
   if (props.digitsOnly) syncDomValue()
 }
 
+function onBlur(e) {
+  if (cancelingComposition.value) return
+  emit('blur', e)
+}
+
 function onCompositionStart(e) {
   if (props.digitsOnly) {
     // keydown preventDefault 로는 IME 가 막히지 않는다. 포커스를 끊었다 되돌려 조합을 취소한다.
     const el = e.target
+    cancelingComposition.value = true
     el.blur()
     el.focus()
+    cancelingComposition.value = false
     syncDomValue()
     return
   }
@@ -91,15 +106,19 @@ function onCompositionEnd(e) {
         :placeholder="placeholder"
         :disabled="disabled"
         :maxlength="maxlength"
+        :aria-describedby="error || success || hint ? messageId : undefined"
+        :aria-invalid="error ? 'true' : undefined"
         @input="onInput"
         @compositionstart="onCompositionStart"
         @compositionend="onCompositionEnd"
+        @blur="onBlur"
       />
       <div v-if="$slots.suffix" class="suffix"><slot name="suffix" /></div>
     </div>
 
-    <p v-if="error" class="msg error">{{ error }}</p>
-    <p v-else-if="hint" class="msg hint">{{ hint }}</p>
+    <p v-if="error" :id="messageId" class="msg error" role="alert">{{ error }}</p>
+    <p v-else-if="success" :id="messageId" class="msg success">{{ success }}</p>
+    <p v-else-if="hint" :id="messageId" class="msg hint">{{ hint }}</p>
   </div>
 </template>
 
@@ -151,6 +170,9 @@ function onCompositionEnd(e) {
 }
 .msg.error {
   color: var(--color-danger);
+}
+.msg.success {
+  color: var(--color-success);
 }
 .msg.hint {
   color: var(--color-text-sub);

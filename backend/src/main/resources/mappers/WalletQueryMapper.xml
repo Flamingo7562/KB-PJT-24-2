@@ -18,7 +18,9 @@
             <idArg column="transactionId" javaType="java.lang.Long"/>
             <arg column="type" javaType="java.lang.String"/>
             <arg column="amount" javaType="java.lang.Long"/>
+            <arg column="availableBefore" javaType="java.lang.Long"/>
             <arg column="availableAfter" javaType="java.lang.Long"/>
+            <arg column="lockedBefore" javaType="java.lang.Long"/>
             <arg column="lockedAfter" javaType="java.lang.Long"/>
             <arg column="workCaseId" javaType="java.lang.Long"/>
             <arg column="workTitle" javaType="java.lang.String"/>
@@ -57,7 +59,10 @@
             AND wt.amount &lt;= #{maxAmount}
         </if>
         <if test="keyword != null">
-            AND wc.title LIKE CONCAT('%', #{keyword}, '%')
+            AND (
+                wc.title LIKE CONCAT('%', #{keyword}, '%')
+                OR wp.name LIKE CONCAT('%', #{keyword}, '%')
+            )
         </if>
     </sql>
 
@@ -66,7 +71,9 @@
         SELECT wt.id               AS transactionId,
         wt.transaction_type AS type,
         wt.amount           AS amount,
+        wt.available_before AS availableBefore,
         wt.available_after  AS availableAfter,
+        wt.locked_before    AS lockedBefore,
         wt.locked_after     AS lockedAfter,
         wt.work_case_id     AS workCaseId,
         wc.title            AS workTitle,
@@ -92,6 +99,7 @@
         FROM wallet_transactions wt
         JOIN wallets w ON w.id = wt.wallet_id
         LEFT JOIN work_cases wc ON wc.id = wt.work_case_id
+        LEFT JOIN workplaces wp ON wp.id = wc.workplace_id
         <include refid="transactionConditions"/>
     </select>
 

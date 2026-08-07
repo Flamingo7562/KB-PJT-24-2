@@ -39,4 +39,13 @@ describe('buildTransactionFilterParams', () => {
     expect(params).not.toHaveProperty('minAmount')
     expect(params).not.toHaveProperty('maxAmount')
   })
+
+  it('사업장과 Page 입력은 승인 Query 이름과 숫자형으로 전달한다', () => {
+    expect(buildTransactionFilterParams({ workplaceId: '7', page: '2', size: '50' })).toEqual({
+      workplaceId: 7,
+      sort: 'LATEST',
+      page: 2,
+      size: 50
+    })
+  })
 })

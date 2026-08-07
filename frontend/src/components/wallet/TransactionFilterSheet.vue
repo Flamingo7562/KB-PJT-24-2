@@ -7,6 +7,7 @@
  * 빈 값/기본값을 제외한 GET /wallet/transactions 파라미터를 만든다.
  */
 export const DEFAULT_FILTER = {
+  workplaceId: '',
   keyword: '',
   type: 'ALL',
   sort: 'LATEST',
@@ -20,6 +21,9 @@ export const DEFAULT_FILTER = {
 export function buildTransactionFilterParams(draft = {}) {
   const f = { ...DEFAULT_FILTER, ...draft }
   const params = {}
+  if (f.workplaceId !== '' && Number(f.workplaceId) > 0) {
+    params.workplaceId = Number(f.workplaceId)
+  }
   const keyword = String(f.keyword).trim()
   if (keyword) params.keyword = keyword
   if (f.type && f.type !== 'ALL') params.type = f.type
@@ -28,6 +32,8 @@ export function buildTransactionFilterParams(draft = {}) {
   if (f.to) params.to = f.to
   if (f.minAmount !== '' && Number(f.minAmount) >= 0) params.minAmount = Number(f.minAmount)
   if (f.maxAmount !== '' && Number(f.maxAmount) >= 0) params.maxAmount = Number(f.maxAmount)
+  if (Number.isInteger(Number(f.page)) && Number(f.page) >= 0) params.page = Number(f.page)
+  if (Number.isInteger(Number(f.size)) && Number(f.size) > 0) params.size = Number(f.size)
   return params
 }
 </script>
@@ -44,7 +50,8 @@ import { blockNonDigitKeydown } from '@/utils/format'
 const props = defineProps({
   open: { type: Boolean, default: false },
   // 현재 적용 중인 필터(시트를 다시 열 때 초안 복원용)
-  modelValue: { type: Object, default: () => ({}) }
+  modelValue: { type: Object, default: () => ({}) },
+  workplaces: { type: Array, default: () => [] }
 })
 
 const emit = defineEmits(['close', 'apply'])
@@ -82,6 +89,20 @@ function onApply() {
 <template>
   <BaseBottomSheet :open="open" title="검색·필터" @close="emit('close')">
     <div class="filter-body">
+      <div v-if="workplaces.length" class="group">
+        <label class="group-label" for="wallet-workplace-filter">사업장</label>
+        <select id="wallet-workplace-filter" v-model="draft.workplaceId" class="select">
+          <option value="">전체 사업장</option>
+          <option
+            v-for="workplace in workplaces"
+            :key="workplace.workplaceId"
+            :value="workplace.workplaceId"
+          >
+            {{ workplace.name }}
+          </option>
+        </select>
+      </div>
+
       <AppField v-model="draft.keyword" label="검색어" placeholder="내용·설명 검색" />
 
       <div class="group">
@@ -163,10 +184,19 @@ function onApply() {
   gap: var(--space-lg);
 }
 .group-label {
+  display: block;
   margin-bottom: var(--space-sm);
   font-size: var(--text-sm);
   font-weight: var(--weight-medium);
   color: var(--color-text-sub);
+}
+.select {
+  width: 100%;
+  padding: var(--space-md);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
 }
 .chips {
   display: flex;

@@ -5,19 +5,23 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  bankAccountRule,
   isEmail,
   isPhone,
+  isWalletAmount,
   loginIdRule,
   NAME_MAX_LENGTH,
   nameRule,
   normalizeEmail,
+  normalizeBankAccountNo,
   normalizeLoginId,
   normalizeName,
   normalizePhone,
   PASSWORD_MAX_BYTES,
   PASSWORD_MAX_LENGTH,
   PASSWORD_MIN_LENGTH,
-  passwordRule
+  passwordRule,
+  WALLET_AMOUNT_MAX
 } from '@/utils/validators'
 
 const repeat = (char, count) => char.repeat(count)
@@ -40,9 +44,31 @@ describe('정규화', () => {
     expect(normalizePhone('02 123 4567')).toBe('021234567')
   })
 
+  it('계좌번호는 공백과 하이픈만 제거한다', () => {
+    expect(normalizeBankAccountNo('170-0000 00001')).toBe('170000000001')
+    expect(normalizeBankAccountNo('170A00000001')).toBe('170A00000001')
+  })
+
   it('null·undefined 는 빈 문자열로 다룬다', () => {
     expect(normalizeLoginId(null)).toBe('')
     expect(normalizePhone(undefined)).toBe('')
+  })
+})
+
+describe('지갑 계좌·금액 검증', () => {
+  it('정규화한 계좌번호가 숫자 10~14자리일 때만 통과한다', () => {
+    expect(bankAccountRule('170-0000-0001').valid).toBe(true)
+    expect(bankAccountRule('123456789').valid).toBe(false)
+    expect(bankAccountRule('123456789012345').valid).toBe(false)
+    expect(bankAccountRule('170A00000001').valid).toBe(false)
+  })
+
+  it('지갑 금액은 1원부터 1억원까지의 정수만 통과한다', () => {
+    expect(isWalletAmount(1).valid).toBe(true)
+    expect(isWalletAmount(WALLET_AMOUNT_MAX).valid).toBe(true)
+    expect(isWalletAmount(0).valid).toBe(false)
+    expect(isWalletAmount(WALLET_AMOUNT_MAX + 1).valid).toBe(false)
+    expect(isWalletAmount(1.5).valid).toBe(false)
   })
 })
 

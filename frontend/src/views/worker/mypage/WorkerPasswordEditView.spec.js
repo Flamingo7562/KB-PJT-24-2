@@ -15,6 +15,7 @@ vi.mock('@/services/users', () => ({ changePassword: vi.fn() }))
 import { changePassword } from '@/services/users'
 import { useUiStore } from '@/stores/ui'
 import WorkerPasswordEditView from '@/views/worker/mypage/WorkerPasswordEditView.vue'
+import { PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH } from '@/utils/validators'
 
 /** [0] 현재 비밀번호 [1] 새 비밀번호 [2] 새 비밀번호 확인 */
 async function fillValidForm(wrapper) {
@@ -119,5 +120,72 @@ describe('WorkerPasswordEditView 준비 중 안내', () => {
 
     expect(wrapper.text()).toContain('비밀번호 변경은 준비 중입니다')
     expect(wrapper.find('button[type="submit"]').attributes('disabled')).toBeDefined()
+  })
+})
+
+// 실시간 검증(#238): 제출 버튼은 #187 이 아직 안 끝나 비활성화돼 있지만, 배선 자체는
+// AuthSignupForm 과 같은 패턴으로 살아 있어야 한다 — Endpoint 가 열리는 순간 바로 맞아야 한다.
+describe('WorkerPasswordEditView 실시간 검증(#238)', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+  })
+
+  // Finding 1: 서버가 currentPassword 를 지목한 뒤 사용자가 newPassword(관계없는 필드)를
+  // 고쳐도 메시지는 남아 있어야 한다. handleSubmit 이 validateAll() 로 이미 모든 필드를
+  // touched 로 올려놨으므로, 서버 오류를 errors 슬롯에 쓰면 newPassword 를 고치는 순간
+  // 재검증 watcher 가 currentPassword 규칙(형식은 여전히 유효)을 다시 평가해 지워버린다.
+  it('서버가 지목한 현재 비밀번호 오류는 새 비밀번호를 고쳐도 사라지지 않는다', async () => {
+    const fieldError = { field: 'currentPassword', reason: '현재 비밀번호가 올바르지 않습니다.' }
+    changePassword.mockRejectedValue({
+      response: { status: 400, data: { fieldErrors: [fieldError] } },
+      fieldErrors: [fieldError]
+    })
+
+    const wrapper = mount(WorkerPasswordEditView)
+    await fillValidForm(wrapper)
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+    expect(wrapper.text()).toContain('현재 비밀번호가 올바르지 않습니다.')
+
+    // currentPassword 가 아니라 newPassword(관계없는 필드)를 고친다. 확인란도 같이 맞춰
+    // passwordsMatch 교차 규칙이 끼어들지 않게 한다 — 순수하게 F1 버그만 본다.
+    await wrapper.findAll('input')[1].setValue('newpassword2')
+    await wrapper.findAll('input')[2].setValue('newpassword2')
+
+    expect(wrapper.text()).toContain('현재 비밀번호가 올바르지 않습니다.')
+  })
+
+  it('새 비밀번호 필드를 떠나면 형식 오류가 뜨고 고치면 사라진다', async () => {
+    const wrapper = mount(WorkerPasswordEditView)
+    // [0] 현재 비밀번호 [1] 새 비밀번호 [2] 새 비밀번호 확인
+    const newPassword = wrapper.findAll('input')[1]
+
+    await newPassword.setValue('abc')
+    await newPassword.trigger('blur')
+    expect(wrapper.text()).toContain(
+      `비밀번호는 ${PASSWORD_MIN_LENGTH}~${PASSWORD_MAX_LENGTH}자여야 합니다.`
+    )
+
+    await newPassword.setValue('validpassword1')
+    expect(wrapper.text()).not.toContain(
+      `비밀번호는 ${PASSWORD_MIN_LENGTH}~${PASSWORD_MAX_LENGTH}자여야 합니다.`
+    )
+  })
+
+  it('새 비밀번호를 고치면 확인란의 불일치 오류도 사라진다', async () => {
+    const wrapper = mount(WorkerPasswordEditView)
+    const inputs = wrapper.findAll('input')
+    const newPassword = inputs[1]
+    const confirm = inputs[2]
+
+    await newPassword.setValue('abcdefgh')
+    await confirm.setValue('mismatch1')
+    await confirm.trigger('blur')
+    expect(wrapper.text()).toContain('비밀번호가 일치하지 않습니다.')
+
+    // 확인란이 아니라 새 비밀번호 쪽을 고쳤다.
+    await newPassword.setValue('mismatch1')
+
+    expect(wrapper.text()).not.toContain('비밀번호가 일치하지 않습니다.')
   })
 })

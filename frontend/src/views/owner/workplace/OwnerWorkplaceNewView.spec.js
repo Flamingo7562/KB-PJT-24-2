@@ -185,4 +185,19 @@ describe('OwnerWorkplaceNewView', () => {
     const [payload] = createWorkplace.mock.calls[0]
     expect(payload.businessRegistrationNumber).toBe('123-45-67890')
   })
+
+  // 실시간 검증(#238): AuthSignupForm 과 같은 패턴 — 필드를 떠나면 형식 오류가 뜨고
+  // 값을 고치면 즉시 사라진다. 대표자명(순수 v-model, isRequired 규칙)으로 배선을 고정한다.
+  it('대표자명 필드를 비우고 떠나면 오류가 뜨고 채우면 사라진다', async () => {
+    const wrapper = mount(OwnerWorkplaceNewView)
+    // [0] 사업자등록번호 [1] 상호명 [2] 대표자명 [3] 도로명주소 [4] 세부주소 [5] 전화번호
+    const representativeName = wrapper.findAll('input')[2]
+
+    await representativeName.setValue('   ')
+    await representativeName.trigger('blur')
+    expect(wrapper.text()).toContain('대표자명을(를) 입력해주세요.')
+
+    await representativeName.setValue('김사장')
+    expect(wrapper.text()).not.toContain('대표자명을(를) 입력해주세요.')
+  })
 })
