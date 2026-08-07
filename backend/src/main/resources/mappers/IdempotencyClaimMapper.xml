@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.gighub.idempotency.mapper.IdempotencyClaimMapper">
+
+    <!--
+        status 는 Column DEFAULT에 기대지 않고 'PROCESSING'을 직접 적습니다. DEFAULT에 맡기면
+        "선점은 항상 처리 중으로 시작한다"는 계약이 코드에서 사라집니다.
+
+        응답 Column을 비워 두는 것은 ck_idempotency_requests_lifecycle 이 요구하는 형태입니다.
+    -->
+    <insert id="insertProcessing" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO idempotency_requests
+            (user_id, operation_code, idempotency_key, request_fingerprint, status, expires_at)
+        VALUES
+            (#{userId}, #{operationCode}, #{idempotencyKey}, #{requestFingerprint},
+             'PROCESSING', #{expiresAt})
+    </insert>
+
+    <select id="findForUpdate"
+            resultType="com.gighub.idempotency.mapper.result.IdempotencyClaimRow">
+        SELECT id,
+               user_id,
+               operation_code,
+               request_fingerprint,
+               status,
+               response_http_status,
+               response_body,
+               expires_at
+        FROM idempotency_requests
+        WHERE user_id = #{userId}
+          AND operation_code = #{operationCode}
+          AND idempotency_key = #{idempotencyKey}
+        FOR UPDATE
+    </select>
+
+    <!--
+        status 조건을 WHERE 에 두어 확인과 전이가 한 문장에서 원자적으로 끝나게 합니다.
+        호출부는 변경된 행 수가 0인지로 이미 완료된 Claim을 판단합니다.
+    -->
+    <update id="complete">
+        UPDATE idempotency_requests
+        SET status               = 'COMPLETED',
+            response_http_status = #{responseHttpStatus},
+            response_body        = #{responseBody},
+            completed_at         = #{completedAt}
+        WHERE id = #{claimId}
+          AND status = 'PROCESSING'
+    </update>
+
+    <delete id="deleteProcessing">
+        DELETE FROM idempotency_requests
+        WHERE id = #{claimId}
+          AND status = 'PROCESSING'
+    </delete>
+
+    <!--
+        완료 Claim도 만료되면 지웁니다. 보존 기간이 지난 뒤에는 Replay를 보장하지 않으므로
+        같은 Key를 새 요청에 다시 쓸 수 있어야 합니다.
+    -->
+    <delete id="deleteExpired">
+        DELETE FROM idempotency_requests
+        WHERE expires_at &lt;= #{now}
+    </delete>
+
+</mapper>
