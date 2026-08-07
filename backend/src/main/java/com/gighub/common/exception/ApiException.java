@@ -1,9 +1,11 @@
 package com.gighub.common.exception;
 
 import com.gighub.common.api.ApiErrorCode;
+import com.gighub.common.api.ApiFieldError;
 import lombok.Getter;
 import org.springframework.http.HttpStatus;
 
+import java.util.List;
 import java.util.Objects;
 
 /**
@@ -16,11 +18,21 @@ public class ApiException extends RuntimeException {
 
     private final HttpStatus status;
     private final ApiErrorCode code;
+    private final List<ApiFieldError> fieldErrors;
 
     protected ApiException(HttpStatus status, ApiErrorCode code, String message) {
+        this(status, code, message, null);
+    }
+
+    protected ApiException(
+            HttpStatus status,
+            ApiErrorCode code,
+            String message,
+            List<ApiFieldError> fieldErrors) {
         super(Objects.requireNonNull(message, "message"));
         this.status = Objects.requireNonNull(status, "status");
         this.code = Objects.requireNonNull(code, "code");
+        this.fieldErrors = fieldErrors == null ? null : List.copyOf(fieldErrors);
     }
 
 }

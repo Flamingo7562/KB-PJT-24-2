@@ -18,7 +18,9 @@ public class WalletTransactionView {
     private final Long transactionId;
     private final String type;
     private final Long amount;
+    private final Long availableBefore;
     private final Long availableAfter;
+    private final Long lockedBefore;
     private final Long lockedAfter;
     private final Long workCaseId;
     private final String workTitle;
