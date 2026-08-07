@@ -2,7 +2,7 @@
 
 | 항목        | 값              |
 | ----------- | --------------- |
-| 명세 릴리스 | `4.1.0`         |
+| 명세 릴리스 | `4.2.0`         |
 | 승인일      | 2026-08-07      |
 | 소유자      | PM/Admin Master |
 
@@ -32,7 +32,7 @@
 
 | 요구사항      | REST Operation                                                            | 도메인·데이터                                                                                                                   | 연결 결정                                                                                                                                                                    |
 | ------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| WORKPLACE-001 | `POST /api/workplaces`                                                    | `workplaces`                                                                                                                    | DEC-WORKPLACE-RADIUS, DEC-AUTH-INPUT, DEC-PHONE-STORAGE, DEC-OWNER-ONBOARDING                                                                                                |
+| WORKPLACE-001 | `POST /api/workplaces`                                                    | `workplaces`, `qr_tokens`                                                                                                       | DEC-WORKPLACE-RADIUS, DEC-AUTH-INPUT, DEC-PHONE-STORAGE, DEC-OWNER-ONBOARDING, DEC-QR-FIXED                                                                                  |
 | WORKPLACE-002 | `PATCH /api/workplaces/{workplaceId}`                                     | `workplaces`, 근무 조건 Snapshot                                                                                                | DEC-WORKPLACE-IMMUTABLE, DEC-AUTH-INPUT, DEC-PHONE-STORAGE, DEC-OPEN-WORKPLACE-COORDINATES                                                                                   |
 | WORKPLACE-003 | `DELETE /api/workplaces/{workplaceId}`                                    | `workplaces.status`, `deleted_at`                                                                                               | DEC-WORKPLACE-IMMUTABLE, DEC-WORKPLACE-LIST                                                                                                                                  |
 | WORKPLACE-004 | `GET /api/workplaces`                                                     | `workplaces.owner_user_id`, `workplaces.status`                                                                                 | DEC-AUTH-SESSION, DEC-OWNER-ONBOARDING, DEC-WORKPLACE-LIST                                                                                                                   |
@@ -44,11 +44,18 @@
 | WALLET-005    | 지갑·계좌 금액 변경 Operation                                             | `wallet_transactions`, `mock_bank_transactions`                                                                                 | DEC-IDEMPOTENCY                                                                                                                                                              |
 | WALLET-006    | 충전·출금·초대 수락·정산 승인 Operation                                   | `idempotency_requests`, 멱등 Key, 금융 Aggregate                                                                                | DEC-IDEMPOTENCY, DEC-IDEMPOTENCY-STORAGE, DEC-IDEMPOTENCY-CLAIM-LIFECYCLE                                                                                                    |
 
+### `4.2.0` Patch 수락 행정 추적
+
+| 구분             | 추적 대상                                                                                                                      | 연결 계약                                                                                                           |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------- |
+| 보호 명세 릴리스 | [Issue #255](https://github.com/Flamingo7562/KB-PJT-24-2/issues/255), `SPEC-151-01`, `SPEC-162-01`                             | `BANK-001`, `ATT-001`, `DEC-BANK-CODE-TABLE`, `DEC-QR-FIXED`, `DEC-QR-ERROR-CATALOG`, 고정 QR 조회·재발급 Operation |
+| 호환성 경계      | 은행 API 코드·요청 Body·최소 호환 스키마 불변, 현재 QR 재발급 `Idempotency-Key` 미요구, 후속 재시도·근태 결정은 Open 상태 유지 | `004`·`011` 표시명 정합화, 사업장·QR 원자 생성, HMAC Token·키 교체·잠금·오류 계약, READY·스캔·노쇼·정산 결정 제외   |
+
 ### `4.1.0` 은행 코드 확장 행정 추적
 
-| 구분             | 추적 대상                                                                                 | 연결 계약                                                                                                              |
-| ---------------- | ----------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| 보호 명세 릴리스 | [Issue #247](https://github.com/Flamingo7562/KB-PJT-24-2/issues/247), `SPEC-247-01`        | `BANK-001`, `DEC-BANK-CODE-TABLE`, 충전·출금 Operation, 20개 canonical 코드와 표시명                                   |
+| 구분             | 추적 대상                                                                               | 연결 계약                                                                                                            |
+| ---------------- | --------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| 보호 명세 릴리스 | [Issue #247](https://github.com/Flamingo7562/KB-PJT-24-2/issues/247), `SPEC-247-01`     | `BANK-001`, `DEC-BANK-CODE-TABLE`, 충전·출금 Operation, 20개 canonical 코드와 표시명                                 |
 | 호환성 경계      | 기존 `004`, `088`, `020`, `081`, `011` 유지, 신규 15개 코드 추가, 최소 호환 스키마 불변 | 요청 Body·3자리 검증·계좌 식별·내부 ID 비노출·Mock 계좌 경계 유지, 실제 금융기관 연동과 외부 기관 코드 정확성은 제외 |
 
 ### `3.0.0` M3 행정 추적
@@ -89,23 +96,23 @@
 
 ## 근태·정산·신고
 
-| 요구사항    | REST Operation                                                                          | 도메인·데이터                                               | 연결 결정                                                            |
-| ----------- | --------------------------------------------------------------------------------------- | ----------------------------------------------------------- | -------------------------------------------------------------------- |
-| ATT-001     | `GET /api/workplaces/{workplaceId}/qr`, `POST /api/workplaces/{workplaceId}/qr/reissue` | `qr_tokens`, HMAC Key                                       | DEC-QR-FIXED, DEC-OPEN-QR-REISSUE-IDEMPOTENCY                        |
-| ATT-002     | `POST /api/attendance/scans`                                                            | `qr_tokens`, `work_cases`, `attendance_records`             | DEC-QR-FIXED                                                         |
-| ATT-003     | `POST /api/attendance/scans`                                                            | 사업장 좌표, 100m 반경, 근무 Snapshot                       | DEC-WORKPLACE-RADIUS                                                 |
-| ATT-004     | `POST /api/attendance/scans`                                                            | `attendance_records`, `work_cases.status`                   | DEC-EARLY-CHECKOUT                                                   |
-| ATT-005     | HTTP 없음 — 노쇼 판정                                                                   | `work_cases.status`, `attendance_records`                   | DEC-CHECK-OUT-MISSING                                                |
-| ATT-006     | 판정·해소 Operation은 결정 후 정의                                                      | `work_cases.status=CHECK_OUT_MISSING`, `attendance_records` | DEC-CHECK-OUT-MISSING, DEC-OPEN-CHECK-OUT-MISSING-FLOW               |
-| SETTLE-001  | HTTP 없음 — 정상 퇴근 뒤 정산 예정 시각 결정                                            | `settlements.due_at`, `work_cases.status`                   | DEC-INVITATION-ACCEPTANCE-AGGREGATE, DEC-OPEN-CHECK-OUT-MISSING-FLOW |
-| SETTLE-002  | `POST /api/work-cases/{workCaseId}/settlement/approve`                                  | `settlements`, `escrows`, `wallets`, 원장                   | DEC-SETTLEMENT-TIME, DEC-IDEMPOTENCY                                 |
-| SETTLE-003  | HTTP 없음 — 예정 정산 실행                                                              | `settlements`, 실행 선점·재시도                             | DEC-SETTLEMENT-TIME                                                  |
-| SETTLE-004  | 정산 승인·자동 정산 내부 처리                                                           | `escrows`, `wallets`, `wallet_transactions`                 | DEC-IDEMPOTENCY                                                      |
-| SETTLE-005  | HTTP 없음 — 노쇼 환불                                                                   | `escrows`, `wallet_transactions`, `settlements`             | DEC-OPEN-NO-SHOW-SETTLEMENT                                          |
-| CONTACT-001 | `GET /api/work-cases/{workCaseId}/workplace-contact`                                    | `work_cases`, `workplaces.phone`, OWNER                     | DEC-AUTH-SESSION, DEC-PHONE-STORAGE                                  |
-| DISPUTE-001 | `POST /api/work-cases/{workCaseId}/disputes`                                            | `disputes`                                                  | DEC-DISPUTE-SETTLEMENT                                               |
-| DISPUTE-002 | `GET /api/work-cases/{workCaseId}/disputes`                                             | `disputes`, 근무 당사자                                     | DEC-DISPUTE-SETTLEMENT                                               |
-| DISPUTE-003 | 분쟁 조회·처리 Operation                                                                | `disputes.status`, 처리자·결과                              | DEC-DISPUTE-SETTLEMENT, DEC-OPEN-ADMIN-DISPUTE                       |
+| 요구사항    | REST Operation                                                                                                  | 도메인·데이터                                               | 연결 결정                                                            |
+| ----------- | --------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- | -------------------------------------------------------------------- |
+| ATT-001     | `POST /api/workplaces`, `GET /api/workplaces/{workplaceId}/qr`, `POST /api/workplaces/{workplaceId}/qr/reissue` | `workplaces`, `qr_tokens`, HMAC Key                         | DEC-QR-FIXED, DEC-QR-ERROR-CATALOG, DEC-OPEN-QR-REISSUE-IDEMPOTENCY  |
+| ATT-002     | `POST /api/attendance/scans`                                                                                    | `qr_tokens`, `work_cases`, `attendance_records`             | DEC-QR-FIXED                                                         |
+| ATT-003     | `POST /api/attendance/scans`                                                                                    | 사업장 좌표, 100m 반경, 근무 Snapshot                       | DEC-WORKPLACE-RADIUS                                                 |
+| ATT-004     | `POST /api/attendance/scans`                                                                                    | `attendance_records`, `work_cases.status`                   | DEC-EARLY-CHECKOUT                                                   |
+| ATT-005     | HTTP 없음 — 노쇼 판정                                                                                           | `work_cases.status`, `attendance_records`                   | DEC-CHECK-OUT-MISSING                                                |
+| ATT-006     | 판정·해소 Operation은 결정 후 정의                                                                              | `work_cases.status=CHECK_OUT_MISSING`, `attendance_records` | DEC-CHECK-OUT-MISSING, DEC-OPEN-CHECK-OUT-MISSING-FLOW               |
+| SETTLE-001  | HTTP 없음 — 정상 퇴근 뒤 정산 예정 시각 결정                                                                    | `settlements.due_at`, `work_cases.status`                   | DEC-INVITATION-ACCEPTANCE-AGGREGATE, DEC-OPEN-CHECK-OUT-MISSING-FLOW |
+| SETTLE-002  | `POST /api/work-cases/{workCaseId}/settlement/approve`                                                          | `settlements`, `escrows`, `wallets`, 원장                   | DEC-SETTLEMENT-TIME, DEC-IDEMPOTENCY                                 |
+| SETTLE-003  | HTTP 없음 — 예정 정산 실행                                                                                      | `settlements`, 실행 선점·재시도                             | DEC-SETTLEMENT-TIME                                                  |
+| SETTLE-004  | 정산 승인·자동 정산 내부 처리                                                                                   | `escrows`, `wallets`, `wallet_transactions`                 | DEC-IDEMPOTENCY                                                      |
+| SETTLE-005  | HTTP 없음 — 노쇼 환불                                                                                           | `escrows`, `wallet_transactions`, `settlements`             | DEC-OPEN-NO-SHOW-SETTLEMENT                                          |
+| CONTACT-001 | `GET /api/work-cases/{workCaseId}/workplace-contact`                                                            | `work_cases`, `workplaces.phone`, OWNER                     | DEC-AUTH-SESSION, DEC-PHONE-STORAGE                                  |
+| DISPUTE-001 | `POST /api/work-cases/{workCaseId}/disputes`                                                                    | `disputes`                                                  | DEC-DISPUTE-SETTLEMENT                                               |
+| DISPUTE-002 | `GET /api/work-cases/{workCaseId}/disputes`                                                                     | `disputes`, 근무 당사자                                     | DEC-DISPUTE-SETTLEMENT                                               |
+| DISPUTE-003 | 분쟁 조회·처리 Operation                                                                                        | `disputes.status`, 처리자·결과                              | DEC-DISPUTE-SETTLEMENT, DEC-OPEN-ADMIN-DISPUTE                       |
 
 ## 문서
 
