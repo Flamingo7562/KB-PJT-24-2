@@ -19,7 +19,7 @@ import java.time.LocalDateTime;
  * 최신인지 알 수 없게 됩니다.</p>
  */
 @Getter
-@Builder
+@Builder(toBuilder = true)
 @NoArgsConstructor
 @AllArgsConstructor
 public class InvitationWorkCaseLockRow {
