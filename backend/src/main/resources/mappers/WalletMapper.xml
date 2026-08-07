@@ -122,21 +122,16 @@
             FOR UPDATE
     </select>
 
-    <!-- amount는 반드시 work_cases.agreed_wage와 같아야 한다 (fk_escrows_case_wage) -->
-    <insert id="insertEscrowRecord">
+    <!--
+        수락 Aggregate가 쓴다. amount는 반드시 work_cases.agreed_wage와 같아야 하고
+        (fk_escrows_case_wage), 계약·원장·정산이 모두 같은 acceptedAt을 가리켜야 해서
+        held_at 을 NOW(6) 대신 인자로 받는다. uk_escrows_work_case_id 가 근무당 한 건을
+        보장하므로 중복 수락은 여기서 중복 예외로 드러난다.
+    -->
+    <insert id="insertHeldEscrowAt">
         INSERT INTO escrows (work_case_id, amount, status, held_at)
-        VALUES (#{workCaseId}, #{amount}, 'HELD', NOW(6))
+        VALUES (#{workCaseId}, #{amount}, 'HELD', #{heldAt})
     </insert>
-
-    <!-- 선행 행이 있을 때: UNFUNDED -> HELD -->
-    <update id="holdEscrow">
-        UPDATE escrows
-        SET status     = 'HELD',
-            held_at    = NOW(6),
-            updated_at = NOW(6)
-        WHERE work_case_id = #{workCaseId}
-          AND status = 'UNFUNDED'
-    </update>
 
     <!-- HELD -> RELEASED. 0행이면 이미 정산된 건이다 -->
     <update id="releaseEscrow">

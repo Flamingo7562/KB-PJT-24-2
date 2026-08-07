@@ -1,6 +1,7 @@
 package com.gighub.invitation.mapper;
 
 import com.gighub.invitation.mapper.param.InvitationInsertParam;
+import com.gighub.invitation.mapper.result.AcceptWorkCaseLockRow;
 import com.gighub.invitation.mapper.result.InvitationRow;
 import com.gighub.invitation.mapper.result.InvitationWorkCaseLockRow;
 import com.gighub.invitation.mapper.result.InvitationWorkCaseRow;
@@ -63,6 +64,71 @@ public interface InvitationMapper {
      * @return 활성 초대. 없으면 {@code null}
      */
     InvitationRow findActivePendingByWorkCaseIdForUpdate(@Param("workCaseId") long workCaseId);
+
+    /**
+     * Token Hash로 초대를 잠그지 않고 조회합니다.
+     *
+     * <p>수락은 멱등 Claim을 선점하기 <b>전에</b> Token의 존재와 대상 근무를 알아야 합니다.
+     * 형식 오류·미존재를 Claim 없이 404로 끝내야 하고, 잠금 순서상 근무 행을 초대보다 먼저
+     * 잠가야 하는데 그 근무 식별자가 이 조회에서 나옵니다.</p>
+     *
+     * <p>여기서 읽은 상태는 판정에 쓰지 않습니다. 잠그지 않았으므로 곧바로 낡을 수 있고,
+     * 실제 판정은 잠금 뒤 {@link #lockInvitationById(long)}이 다시 읽은 값으로 합니다.</p>
+     *
+     * @param tokenHash 요청이 전달한 Token 원문의 Hash
+     * @return 일치하는 초대. 없으면 {@code null}
+     */
+    InvitationRow findByTokenHash(@Param("tokenHash") byte[] tokenHash);
+
+    /**
+     * 초대 한 건을 식별자로 잠근 채 다시 읽습니다.
+     *
+     * <p>근무 행을 먼저 잠근 뒤에 부릅니다. Token Hash로 잠그면 조회 계획에 따라 근무보다
+     * 초대를 먼저 잡을 수 있어, 조건 수정·발급 흐름과 잠금 순서가 엇갈립니다.</p>
+     *
+     * @param invitationId 대상 초대 식별자
+     * @return 잠근 초대. 없으면 {@code null}
+     */
+    InvitationRow lockInvitationById(@Param("invitationId") long invitationId);
+
+    /**
+     * 수락 대상 근무 행을 잠그고 판정과 계약 Snapshot에 필요한 값을 함께 읽습니다.
+     *
+     * <p>잠금 순서는 <b>Claim → 근무 → 초대 → 지갑</b>입니다. 조건 수정(#154)과 초대 발급도
+     * 근무 행을 먼저 잠그므로 세 흐름이 동시에 실행돼도 교착이 생기지 않습니다.</p>
+     *
+     * @param workCaseId 수락 대상 근무 식별자
+     * @return 해당 근무가 없으면 {@code null}
+     */
+    AcceptWorkCaseLockRow lockWorkCaseForAccept(@Param("workCaseId") long workCaseId);
+
+    /**
+     * 초대를 {@code ACCEPTED}로 전이하고 수락 당사자·조건 Version·시각을 기록합니다.
+     *
+     * <p>{@code PENDING}일 때만 바뀝니다. 같은 Token을 여러 WORKER가 동시에 수락하면 이
+     * 갱신이 1행을 바꾼 쪽만 당사자가 되고 나머지는 0행으로 패배를 확인합니다. 상태 조건을
+     * Java의 if로 옮기면 확인과 갱신 사이가 벌어져 두 요청이 모두 통과할 수 있습니다.</p>
+     *
+     * @return 전이된 행 수. 이미 종료된 초대면 0
+     */
+    int markAccepted(
+            @Param("invitationId") long invitationId,
+            @Param("acceptedByUserId") long acceptedByUserId,
+            @Param("acceptedTermsVersion") int acceptedTermsVersion,
+            @Param("acceptedAt") LocalDateTime acceptedAt);
+
+    /**
+     * 근무에 WORKER를 연결하고 {@code DRAFT}에서 {@code ACCEPTED}로 전이합니다.
+     *
+     * <p>{@code DRAFT}이고 아직 미매칭일 때만 바뀝니다. 스키마의
+     * {@code ck_work_cases_matched_worker}가 {@code ACCEPTED}에 WORKER를 요구하므로 두 변경을
+     * 한 문장에서 함께 적용합니다.</p>
+     *
+     * @return 전이된 행 수. 상태나 매칭이 어긋나면 0
+     */
+    int assignWorkerAndAccept(
+            @Param("workCaseId") long workCaseId,
+            @Param("workerId") long workerId);
 
     /**
      * 발급 대상 근무 행을 잠그고 발급 가능 여부의 판단 근거를 읽습니다.
