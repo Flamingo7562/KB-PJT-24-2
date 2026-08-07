@@ -178,7 +178,8 @@ class InvitationTokenExposureTest {
     private MockMvc mockMvc(InvitationMapper mapper) {
         InvitationQueryService service = new InvitationQueryServiceImpl(mapper, codec);
         return MockMvcBuilders
-                .standaloneSetup(new InvitationController(service))
+                .standaloneSetup(new InvitationController(
+                        service, null))
                 .setControllerAdvice(new CommonExceptionHandler())
                 .setMessageConverters(
                         new MappingJackson2HttpMessageConverter(ApiJsonMapper.create()))
