@@ -17,6 +17,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -123,6 +124,16 @@ class CommonExceptionHandlerTest {
         mockMvc.perform(get("/test/type-mismatch").param("id", "not-a-number"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+
+        mockMvc.perform(get("/test/model-attribute-type-mismatch").param("page", "abc"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.fieldErrors[0].field").value("page"))
+                .andExpect(jsonPath("$.fieldErrors[0].reason")
+                        .value("요청 파라미터 형식이 올바르지 않습니다."))
+                .andExpect(jsonPath("$.fieldErrors[0].reason", org.hamcrest.Matchers.not(
+                        org.hamcrest.Matchers.containsString("NumberFormatException")
+                )));
 
         mockMvc.perform(post("/test/validation")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -232,6 +243,10 @@ class CommonExceptionHandlerTest {
         public void typeMismatch(@RequestParam Long id) {
         }
 
+        @GetMapping("/test/model-attribute-type-mismatch")
+        public void modelAttributeTypeMismatch(@Valid @ModelAttribute PageQuery query) {
+        }
+
         @GetMapping("/test/header")
         public void missingHeader(@RequestHeader("Idempotency-Key") String idempotencyKey) {
         }
@@ -253,6 +268,19 @@ class CommonExceptionHandlerTest {
 
         public void setName(String name) {
             this.name = name;
+        }
+    }
+
+    private static class PageQuery {
+
+        private int page;
+
+        public int getPage() {
+            return page;
+        }
+
+        public void setPage(int page) {
+            this.page = page;
         }
     }
 }

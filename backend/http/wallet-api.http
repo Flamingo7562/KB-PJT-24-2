@@ -1,65 +1,187 @@
-POST http://localhost:8080/api/work-cases/1/settlement/approve
-Idempotency-Key: PING
+### 지갑 API 수동 검증 시나리오 (SPEC 4.1.0)
+#
+# 사전 준비:
+#   1. docker compose up -d db 로 로컬 MySQL을 기동한다.
+#   2. backend/ 에서 npm run db:seed:contract 를 실행해 test_owner_17 / test_worker_17
+#      계정과 canonical bankCode 20종 Mock 계좌를 준비한다. Demo PIN은 모두 0000이다.
+#   3. Tomcat을 기동한다 (Session Cookie는 HTTP Client가 요청 간 자동으로 보존한다).
+#
+# 이 파일은 test-login 지름길과 bankAccountId 대신, 실제 로그인 → CSRF 토큰 →
+# canonical bankCode/accountNo 요청으로 승인 계약을 그대로 재현한다.
 
-### 1. 사장(3번) 로그인
-GET http://localhost:8080/api/test-login/3
+### 0. CSRF 토큰 발급 (앱 최초 진입과 동일)
+GET http://localhost:8080/api/auth/csrf
 
-### 2. 충전 700,000
+> {%
+    const setCookie = response.headers.valueOf("Set-Cookie");
+    client.global.set("csrfToken", /XSRF-TOKEN=([^;]+)/.exec(setCookie)[1]);
+%}
+
+### 1. 사장(OWNER) 로그인
+POST http://localhost:8080/api/auth/login
+Content-Type: application/json
+X-XSRF-TOKEN: {{csrfToken}}
+
+{
+  "loginId": "test_owner_17",
+  "password": "Test1234!",
+  "expectedRole": "OWNER"
+}
+
+### 2. 로그인 후 CSRF 재발급 (세션이 바뀌면 토큰도 회전한다)
+GET http://localhost:8080/api/auth/csrf
+
+> {%
+    const setCookie = response.headers.valueOf("Set-Cookie");
+    client.global.set("csrfToken", /XSRF-TOKEN=([^;]+)/.exec(setCookie)[1]);
+%}
+
+### 3. 지갑 잔액 조회
+GET http://localhost:8080/api/wallet
+
+### 4. 충전 100,000원 (004 국민은행, Demo PIN 0000)
 POST http://localhost:8080/api/wallet/funding-orders
 Content-Type: application/json
+X-XSRF-TOKEN: {{csrfToken}}
 Idempotency-Key: FUND-001
 
 {
-  "bankAccountId": 1,
-  "amount": 700000
+  "bankCode": "004",
+  "accountNo": "170000000001",
+  "pin": "0000",
+  "amount": 100000
 }
 
-### 3. 알바생(4번) 로그인
-GET http://localhost:8080/api/test-login/4
-
-### 4. 예치
-POST http://localhost:8080/api/invites/TEST-TOKEN-123/accept
+### 5. 같은 Idempotency-Key로 재요청 → 200 + Idempotency-Replayed 헤더, 같은 주문을 그대로 반환하고 재충전하지 않는다
+POST http://localhost:8080/api/wallet/funding-orders
 Content-Type: application/json
-Idempotency-Key: LOCK-001
+X-XSRF-TOKEN: {{csrfToken}}
+Idempotency-Key: FUND-001
 
 {
-  "employerId": 3,
-  "workerId": 4,
-  "workCaseId": 1,
-  "amount": 300000
+  "bankCode": "004",
+  "accountNo": "170000000001",
+  "pin": "0000",
+  "amount": 100000
 }
 
-### 5. 사장(3번) 로그인
-GET http://localhost:8080/api/test-login/3
+### 6. 잘못된 PIN → 403 FORBIDDEN (계좌 존재·상태·PIN 불일치를 구분하지 않는 공통 오류)
+POST http://localhost:8080/api/wallet/funding-orders
+Content-Type: application/json
+X-XSRF-TOKEN: {{csrfToken}}
+Idempotency-Key: FUND-002
 
-### 6. 정산 승인
-POST http://localhost:8080/api/work-cases/1/settlement/approve
-Idempotency-Key: RELEASE-001
+{
+  "bankCode": "004",
+  "accountNo": "170000000001",
+  "pin": "9999",
+  "amount": 10000
+}
 
-### 7. 알바생(4번) 로그인
-GET http://localhost:8080/api/test-login/4
+### 7. 코드표 밖 bankCode → 400 VALIDATION_ERROR
+POST http://localhost:8080/api/wallet/funding-orders
+Content-Type: application/json
+X-XSRF-TOKEN: {{csrfToken}}
+Idempotency-Key: FUND-003
 
-### 8. 출금 300,000
+{
+  "bankCode": "999",
+  "accountNo": "170000000001",
+  "pin": "0000",
+  "amount": 10000
+}
+
+### 8. 신규 은행(090 카카오뱅크)으로 충전 — SPEC 4.1.0의 20종 확장 확인
+POST http://localhost:8080/api/wallet/funding-orders
+Content-Type: application/json
+X-XSRF-TOKEN: {{csrfToken}}
+Idempotency-Key: FUND-004
+
+{
+  "bankCode": "090",
+  "accountNo": "3333245000090",
+  "pin": "0000",
+  "amount": 10000
+}
+
+### 9. 출금 50,000원 (PIN 불필요)
 POST http://localhost:8080/api/wallet/withdrawal-requests
 Content-Type: application/json
+X-XSRF-TOKEN: {{csrfToken}}
 Idempotency-Key: WDR-001
 
 {
-  "bankAccountId": 2,
-  "amount": 300000
+  "bankCode": "004",
+  "accountNo": "170000000002",
+  "amount": 50000
 }
 
-### bankAccountId=0 → 이제 400 VALIDATION_FAILED (기존 500)
+### 10. 거래내역 조회 (필터·정렬·페이지)
+GET http://localhost:8080/api/wallet/transactions?sort=LATEST&page=0&size=20
+
+### 11. 알바생(WORKER) 로그인
+POST http://localhost:8080/api/auth/login
+Content-Type: application/json
+X-XSRF-TOKEN: {{csrfToken}}
+
+{
+  "loginId": "test_worker_17",
+  "password": "Test1234!",
+  "expectedRole": "WORKER"
+}
+
+### 12. WORKER 로그인 후 CSRF 재발급
+GET http://localhost:8080/api/auth/csrf
+
+> {%
+    const setCookie = response.headers.valueOf("Set-Cookie");
+    client.global.set("csrfToken", /XSRF-TOKEN=([^;]+)/.exec(setCookie)[1]);
+%}
+
+### 13. WORKER 출금 — 역할은 허용되므로 잔액 부족 409로 도달한다(권한 403이 아니다).
+#     시드 직후 WORKER 지갑은 0원이라 재시드 없이 실행하면 409 CONFLICT가 정상이다.
 POST http://localhost:8080/api/wallet/withdrawal-requests
 Content-Type: application/json
-Idempotency-Key: TEST-VAL-01
+X-XSRF-TOKEN: {{csrfToken}}
+Idempotency-Key: WDR-002
 
-{"bankAccountId": 0, "amount": 1000}
+{
+  "bankCode": "088",
+  "accountNo": "110245000088",
+  "amount": 10000
+}
 
-### page 타입 오류 → 400
+### 14. WORKER는 충전 API를 사용할 수 없다 → 403 FORBIDDEN (OWNER 전용)
+POST http://localhost:8080/api/wallet/funding-orders
+Content-Type: application/json
+X-XSRF-TOKEN: {{csrfToken}}
+Idempotency-Key: FUND-005
+
+{
+  "bankCode": "004",
+  "accountNo": "170000000001",
+  "pin": "0000",
+  "amount": 10000
+}
+
+### 15. CSRF Header 누락 → 403 FORBIDDEN, 자동 재시도하지 않는다
+POST http://localhost:8080/api/wallet/withdrawal-requests
+Content-Type: application/json
+Idempotency-Key: WDR-003
+
+{
+  "bankCode": "004",
+  "accountNo": "170000000002",
+  "amount": 1000
+}
+
+### 16. page 파라미터 타입 오류 → 400 VALIDATION_ERROR
 GET http://localhost:8080/api/wallet/transactions?page=abc
 
-### 잘못된 JSON → 400
+### 17. 잘못된 JSON Body → 400 VALIDATION_ERROR
 POST http://localhost:8080/api/wallet/withdrawal-requests
 Content-Type: application/json
-Idempotency-Key: TEST-VAL-02
+X-XSRF-TOKEN: {{csrfToken}}
+Idempotency-Key: WDR-004
+
+{ this is not json
