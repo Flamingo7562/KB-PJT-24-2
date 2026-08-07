@@ -49,4 +49,21 @@ describe('idempotentPost', () => {
 
     expect(mocks.post.mock.calls[2][2].headers['Idempotency-Key']).toBe('funding-intent-203')
   })
+
+  it('Body 없는 멱등 POST는 Axios에 undefined를 전달한다', async () => {
+    mocks.post.mockResolvedValueOnce({ data: { workCaseId: 159, escrowStatus: 'HELD' } })
+
+    await idempotentPost('/invitations/token/accept', undefined, {
+      retries: 0,
+      idempotencyKey: 'invitation-intent-159'
+    })
+
+    expect(mocks.post).toHaveBeenCalledWith(
+      '/invitations/token/accept',
+      undefined,
+      expect.objectContaining({
+        headers: expect.objectContaining({ 'Idempotency-Key': 'invitation-intent-159' })
+      })
+    )
+  })
 })

@@ -47,6 +47,21 @@ describe('resolveWorkerLoginRedirect', () => {
     expect(resolveWorkerLoginRedirect(null)).toBe('/worker/home')
   })
 
+  it.each([
+    'https://evil.example/invitations/token',
+    '//evil.example/invitations/token',
+    '\\evil.example\\invitations\\token',
+    'javascript:alert(1)'
+  ])('외부 또는 모호한 복귀 경로 %s 를 거부한다', (redirect) => {
+    expect(resolveWorkerLoginRedirect(redirect)).toBe('/worker/home')
+  })
+
+  it('내부 경로의 query와 fragment는 그대로 보존한다', () => {
+    expect(resolveWorkerLoginRedirect('/invitations/abc123?from=share#terms')).toBe(
+      '/invitations/abc123?from=share#terms'
+    )
+  })
+
   it('사업장 등록으로 보내지 않는다', () => {
     expect(resolveWorkerLoginRedirect(null, { role: 'WORKER', needsWorkplaceSetup: true })).toBe(
       '/worker/home'

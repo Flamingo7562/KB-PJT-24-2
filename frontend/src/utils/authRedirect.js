@@ -19,5 +19,22 @@ export function resolveOwnerLoginRedirect(loginResponse, redirectQuery) {
  * WORKER 는 사업장 등록으로 강제 이동하지 않는다.
  */
 export function resolveWorkerLoginRedirect(redirectQuery /* , loginResponse */) {
-  return redirectQuery || '/worker/home'
+  if (typeof redirectQuery !== 'string' || !redirectQuery.startsWith('/')) {
+    return '/worker/home'
+  }
+
+  // 외부 URL과 브라우저별 해석이 달라질 수 있는 역슬래시 경로는 로그인 복귀에 쓰지 않는다.
+  if (redirectQuery.startsWith('//') || redirectQuery.includes('\\')) {
+    return '/worker/home'
+  }
+
+  try {
+    const base = 'https://gighub.invalid'
+    const target = new URL(redirectQuery, base)
+    return target.origin === base
+      ? `${target.pathname}${target.search}${target.hash}`
+      : '/worker/home'
+  } catch {
+    return '/worker/home'
+  }
 }

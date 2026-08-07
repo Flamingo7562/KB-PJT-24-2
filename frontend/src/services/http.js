@@ -105,7 +105,7 @@ export function newIdempotencyKey() {
  */
 export async function idempotentPost(
   url,
-  body = null,
+  body = undefined,
   { retries = 2, config = {}, idempotencyKey = null } = {}
 ) {
   // 결과가 불확실한 뒤 사용자가 같은 의도를 다시 확인해도 호출자가 보존한 키를 재사용한다.

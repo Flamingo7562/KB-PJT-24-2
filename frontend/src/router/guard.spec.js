@@ -68,6 +68,24 @@ describe('라우터 가드', () => {
     expect(router.currentRoute.value.path).toBe('/owner/home')
   })
 
+  it('비로그인 초대 접근은 WORKER 로그인으로 원래 경로를 보존한다', async () => {
+    const router = buildRouter()
+    await router.push('/invitations/invite-token-159')
+
+    expect(router.currentRoute.value.path).toBe('/worker/login')
+    expect(router.currentRoute.value.query.redirect).toBe('/invitations/invite-token-159')
+  })
+
+  it('OWNER 초대 접근은 승인된 403 화면으로 분리한다', async () => {
+    const auth = useAuthStore()
+    auth.setUser({ name: '김사장', role: 'OWNER', needsWorkplaceSetup: false })
+
+    const router = buildRouter()
+    await router.push('/invitations/invite-token-159')
+
+    expect(router.currentRoute.value.path).toBe('/forbidden')
+  })
+
   it('사업장 설정이 필요한 OWNER 는 등록 화면으로 모인다', async () => {
     const auth = useAuthStore()
     auth.setUser({ name: '김사장', role: 'OWNER', needsWorkplaceSetup: true })

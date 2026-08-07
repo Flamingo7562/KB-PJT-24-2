@@ -137,6 +137,14 @@ export async function deleteDocument(documentId) {
  */
 export function documentFileUrl(documentId, mode = 'view') {
   if (USE_MOCK) return ''
+  return serverDocumentFileUrl(documentId, mode)
+}
+
+/**
+ * 계약 수락 직후처럼 목록 Mock과 무관하게 서버의 최종 문서 Stream을 열어야 할 때 사용한다.
+ * 저장소 URL이 아니라 권한 검사를 수행하는 동일 출처 API 경로만 만든다.
+ */
+export function serverDocumentFileUrl(documentId, mode = 'view') {
   const base = import.meta.env.VITE_API_BASE_URL || '/api'
   return `${base}/documents/${documentId}/file?mode=${mode}`
 }
