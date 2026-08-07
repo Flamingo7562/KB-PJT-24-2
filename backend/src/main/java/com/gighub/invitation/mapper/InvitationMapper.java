@@ -2,6 +2,7 @@ package com.gighub.invitation.mapper;
 
 import com.gighub.invitation.mapper.param.InvitationInsertParam;
 import com.gighub.invitation.mapper.result.InvitationRow;
+import com.gighub.invitation.mapper.result.InvitationWorkCaseLockRow;
 import com.gighub.invitation.mapper.result.InvitationWorkCaseRow;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -62,6 +63,21 @@ public interface InvitationMapper {
      * @return 활성 초대. 없으면 {@code null}
      */
     InvitationRow findActivePendingByWorkCaseIdForUpdate(@Param("workCaseId") long workCaseId);
+
+    /**
+     * 발급 대상 근무 행을 잠그고 발급 가능 여부의 판단 근거를 읽습니다.
+     *
+     * <p>반드시 Transaction 안에서, 그리고 초대 행을 잠그기 <b>전에</b> 부릅니다. 조건 수정
+     * 흐름(#154)도 근무 행을 먼저 잠그므로 두 흐름의 잠금 순서가 같아 교착이 생기지
+     * 않습니다.</p>
+     *
+     * <p>{@code work_cases}를 근무 도메인 Mapper 대신 여기서 읽는 이유는 조회 흐름과 같습니다.
+     * 초대가 필요한 열만 읽는 자기 SQL을 두면 두 도메인이 같은 파일을 함께 고치지 않습니다.</p>
+     *
+     * @param workCaseId 발급 대상 근무 식별자
+     * @return 해당 근무가 없으면 {@code null}
+     */
+    InvitationWorkCaseLockRow lockWorkCaseForIssue(@Param("workCaseId") long workCaseId);
 
     /**
      * 초대가 가리키는 근무의 현재 조건을 조회합니다.

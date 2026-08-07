@@ -10,6 +10,7 @@ import com.gighub.invitation.controller.InvitationController;
 import com.gighub.invitation.mapper.InvitationMapper;
 import com.gighub.invitation.mapper.param.InvitationInsertParam;
 import com.gighub.invitation.mapper.result.InvitationRow;
+import com.gighub.invitation.mapper.result.InvitationWorkCaseLockRow;
 import com.gighub.invitation.mapper.result.InvitationWorkCaseRow;
 import com.gighub.invitation.service.InvitationQueryService;
 import com.gighub.invitation.service.impl.InvitationQueryServiceImpl;
@@ -260,6 +261,11 @@ class InvitationTokenExposureTest {
 
         @Override
         public InvitationRow findActivePendingByWorkCaseIdForUpdate(long workCaseId) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public InvitationWorkCaseLockRow lockWorkCaseForIssue(long workCaseId) {
             throw new UnsupportedOperationException();
         }
 

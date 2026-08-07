@@ -14,6 +14,7 @@ import com.gighub.invitation.exception.InvitationTermsChangedException;
 import com.gighub.invitation.mapper.InvitationMapper;
 import com.gighub.invitation.mapper.param.InvitationInsertParam;
 import com.gighub.invitation.mapper.result.InvitationRow;
+import com.gighub.invitation.mapper.result.InvitationWorkCaseLockRow;
 import com.gighub.invitation.mapper.result.InvitationWorkCaseRow;
 
 import com.gighub.invitation.token.InvitationTokenCodec;
@@ -321,6 +322,11 @@ class InvitationQueryServiceImplTest {
 
         @Override
         public InvitationRow findActivePendingByWorkCaseIdForUpdate(long workCaseId) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public InvitationWorkCaseLockRow lockWorkCaseForIssue(long workCaseId) {
             throw new UnsupportedOperationException();
         }
 

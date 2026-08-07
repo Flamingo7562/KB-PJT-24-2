@@ -68,6 +68,23 @@
     </select>
 
     <!--
+        발급 가능 여부를 정하는 열만 읽습니다. 근무 도메인의 lockById 와 같은 행을 같은
+        순서로 잠그므로 두 흐름이 함께 실행돼도 교착이 생기지 않습니다.
+    -->
+    <select id="lockWorkCaseForIssue"
+            resultType="com.gighub.invitation.mapper.result.InvitationWorkCaseLockRow">
+        SELECT id AS work_case_id,
+               employer_id,
+               worker_id,
+               status,
+               terms_version,
+               starts_at
+        FROM work_cases
+        WHERE id = #{workCaseId}
+        FOR UPDATE
+    </select>
+
+    <!--
         초대 응답에 없는 좌표와 인증 반경은 SELECT에서 뺍니다. 읽지 않아야 이후 계층이
         실수로 노출할 수 없습니다.
 
