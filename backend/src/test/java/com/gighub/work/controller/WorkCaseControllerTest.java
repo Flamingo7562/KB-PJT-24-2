@@ -1,6 +1,7 @@
 package com.gighub.work.controller;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 
 import com.gighub.auth.security.AuthPrincipal;
@@ -11,7 +12,10 @@ import com.gighub.common.exception.RoleMismatchException;
 import com.gighub.common.exception.WorkCaseLockedException;
 import com.gighub.member.domain.UserRole;
 import com.gighub.work.domain.WorkCaseStatus;
+import com.gighub.work.dto.WorkCaseDetailResponse;
 import com.gighub.work.dto.WorkCaseSummaryResponse;
+import com.gighub.work.mapper.result.AttendanceSummaryRow;
+import com.gighub.work.mapper.result.WorkCaseDetailRow;
 import com.gighub.work.service.WorkCaseService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -275,6 +279,55 @@ class WorkCaseControllerTest {
     @Test
     void listRejectsRequestWithoutAuthentication() throws Exception {
         mockMvc.perform(get("/api/workplaces/5/work-cases"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    // ---------- GET detail ----------
+
+    @Test
+    void detailReturnsApprovedEnvelope() throws Exception {
+        when(workCaseService.detail(any(), anyLong())).thenReturn(WorkCaseDetailResponse.from(
+                WorkCaseDetailRow.builder()
+                        .workCaseId(101L)
+                        .title("주말 홀 서빙")
+                        .startsAt(LocalDateTime.of(2026, 8, 20, 9, 0))
+                        .endsAt(LocalDateTime.of(2026, 8, 20, 18, 0))
+                        .breakMinutes(60)
+                        .breakPaid(false)
+                        .dailyWage(120_000L)
+                        .status(WorkCaseStatus.DRAFT)
+                        .termsVersion(1)
+                        .workplaceName("강남점")
+                        .workplaceAddress("서울 강남구 테헤란로 1 2층")
+                        .employerId(7L)
+                        .workerId(null)
+                        .workerName(null)
+                        .build(),
+                null, null,
+                AttendanceSummaryRow.builder().checkedInAt(null).checkedOutAt(null).build(),
+                null, null));
+
+        mockMvc.perform(get("/api/work-cases/101").principal(ownerAuthentication()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.workCaseId").value(101))
+                .andExpect(jsonPath("$.data.worker").doesNotExist())
+                .andExpect(jsonPath("$.data.attendance").exists())
+                .andExpect(jsonPath("$.data.attendance.checkedInAt").doesNotExist());
+    }
+
+    @Test
+    void detailSurfacesMissingWorkCaseAsNotFound() throws Exception {
+        when(workCaseService.detail(any(), anyLong()))
+                .thenThrow(new ResourceNotFoundException("근무 Case를 찾을 수 없습니다."));
+
+        mockMvc.perform(get("/api/work-cases/101").principal(ownerAuthentication()))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("RESOURCE_NOT_FOUND"));
+    }
+
+    @Test
+    void detailRejectsRequestWithoutAuthentication() throws Exception {
+        mockMvc.perform(get("/api/work-cases/101"))
                 .andExpect(status().isUnauthorized());
     }
 

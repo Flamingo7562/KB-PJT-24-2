@@ -22,6 +22,7 @@ import com.gighub.common.exception.ResourceNotFoundException;
 import com.gighub.common.exception.WorkCaseLockedException;
 import com.gighub.config.RootConfig;
 import com.gighub.member.domain.UserRole;
+import com.gighub.work.dto.WorkCaseDetailResponse;
 import com.gighub.work.dto.WorkCaseSummaryResponse;
 import com.gighub.work.service.command.WorkCaseCreateCommand;
 import com.gighub.work.service.command.WorkCaseUpdateCommand;
@@ -68,6 +69,7 @@ class WorkCaseServiceDatabaseIntegrationTest {
             Long ownerId = insertOwner(jdbc, "qa154w" + suffix);
             Long otherOwnerId = insertOwner(jdbc, "qa154x" + suffix);
             Long workplaceId = insertWorkplace(jdbc, ownerId, businessNumber);
+            Long detailWorkerUserId = null;
 
             try {
                 Long workCaseId = verifyCreateStoresRealAddressAndTimes(
@@ -87,8 +89,15 @@ class WorkCaseServiceDatabaseIntegrationTest {
                 verifyDeleteCancelsWithInvitationHistory(service, jdbc, ownerId, cancelableId);
 
                 verifySummaryReflectsCurrentStatuses(service, ownerId, otherOwnerId, workplaceId);
+                detailWorkerUserId = verifyDetailAggregatesAllDomains(
+                        jdbc, service, ownerId, otherOwnerId, workplaceId);
             } finally {
                 cleanUp(jdbc, ownerId, otherOwnerId);
+                // work_contracts·attendance_records가 이 WORKER를 참조하므로 위 cleanUp이
+                // 그 자식 행을 먼저 지운 뒤에만 안전하게 지울 수 있습니다.
+                if (detailWorkerUserId != null) {
+                    jdbc.update("DELETE FROM users WHERE id = ?", detailWorkerUserId);
+                }
             }
         }
     }
@@ -183,6 +192,61 @@ class WorkCaseServiceDatabaseIntegrationTest {
         assertThrows(
                 ResourceNotFoundException.class,
                 () -> service.summary(owner(otherOwnerId), workplaceId));
+    }
+
+    /**
+     * 계약·문서·에스크로·정산·근태·초대를 실제 여러 테이블에 심어 상세 조회가 이들을 하나의
+     * Aggregate로 정확히 합치는지 확인합니다. 계약은 있는데 연결 문서가 없는 손상 상태와,
+     * 당사자가 아닌 접근이 거부되는지도 함께 봅니다.
+     */
+    private Long verifyDetailAggregatesAllDomains(
+            JdbcTemplate jdbc,
+            WorkCaseService service,
+            Long ownerId,
+            Long otherOwnerId,
+            Long workplaceId) {
+        Long workerUserId = insertWorker(jdbc, "qa154d1" + UUID.randomUUID().toString().substring(0, 8));
+        Long workCaseId = insertMatchedWorkCase(jdbc, ownerId, workplaceId, workerUserId, "COMPLETED");
+
+        insertInvitation(jdbc, workCaseId, "ACCEPTED");
+        Long documentId = insertEmploymentContractDocument(jdbc, ownerId, workCaseId);
+        insertContract(jdbc, workCaseId, ownerId, workerUserId);
+        insertEscrow(jdbc, workCaseId, "RELEASED");
+        insertSettlement(jdbc, workCaseId, "COMPLETED");
+        insertAttendance(jdbc, workCaseId, workerUserId, "CHECK_IN");
+        insertAttendance(jdbc, workCaseId, workerUserId, "CHECK_OUT");
+
+        WorkCaseDetailResponse asOwner = service.detail(owner(ownerId), workCaseId);
+        assertEquals(workCaseId, asOwner.getWorkCaseId());
+        assertNotNull(asOwner.getWorker());
+        assertEquals(workerUserId, asOwner.getWorker().getWorkerId());
+        assertNotNull(asOwner.getLatestInvitation());
+        assertEquals("ACCEPTED", asOwner.getLatestInvitation().getStatus());
+        assertNotNull(asOwner.getContract());
+        assertEquals(documentId, asOwner.getContract().getDocumentId());
+        assertNotNull(asOwner.getEscrow());
+        assertEquals("RELEASED", asOwner.getEscrow().getStatus());
+        assertNotNull(asOwner.getSettlement());
+        assertEquals("COMPLETED", asOwner.getSettlement().getStatus());
+        assertNotNull(asOwner.getAttendance().getCheckedInAt());
+        assertNotNull(asOwner.getAttendance().getCheckedOutAt());
+
+        WorkCaseDetailResponse asWorker =
+                service.detail(new AuthPrincipal(workerUserId, UserRole.WORKER, "이알바"), workCaseId);
+        assertEquals(workCaseId, asWorker.getWorkCaseId());
+
+        assertThrows(
+                ResourceNotFoundException.class,
+                () -> service.detail(owner(otherOwnerId), workCaseId));
+
+        // 계약은 있는데 연결 문서가 없는 손상 상태는 500으로 이어지는 예외를 던져야 합니다.
+        Long brokenWorkCaseId = insertMatchedWorkCase(jdbc, ownerId, workplaceId, workerUserId, "COMPLETED");
+        insertContract(jdbc, brokenWorkCaseId, ownerId, workerUserId);
+        assertThrows(
+                IllegalStateException.class,
+                () -> service.detail(owner(ownerId), brokenWorkCaseId));
+
+        return workerUserId;
     }
 
     /** 다른 OWNER는 존재 여부를 알 수 없도록 404로만 응답받습니다. */
@@ -345,12 +409,101 @@ class WorkCaseServiceDatabaseIntegrationTest {
                 Long.class, businessNumber);
     }
 
+    private Long insertWorker(JdbcTemplate jdbc, String loginId) {
+        jdbc.update(
+                "INSERT INTO users (login_id, email, password_hash, name, role)"
+                        + " VALUES (?, ?, ?, '이알바', 'WORKER')",
+                loginId,
+                loginId + "@example.com",
+                "$2a$10$0000000000000000000000000000000000000000000000000000");
+        return jdbc.queryForObject("SELECT id FROM users WHERE login_id = ?", Long.class, loginId);
+    }
+
+    /** ck_work_cases_matched_worker가 DRAFT·CANCELED가 아닌 상태에 worker_id NOT NULL을 요구합니다. */
+    private Long insertMatchedWorkCase(
+            JdbcTemplate jdbc,
+            Long employerId,
+            Long workplaceId,
+            Long workerId,
+            String status) {
+        jdbc.update(
+                "INSERT INTO work_cases"
+                        + " (employer_id, worker_id, workplace_id, title, starts_at, ends_at,"
+                        + " break_minutes, break_paid, workplace_name, workplace_address,"
+                        + " allowed_radius_meters, agreed_wage, terms_version, status)"
+                        + " VALUES (?, ?, ?, '주말 홀 서빙 상세 검증', ?, ?, 60, 0, '강남점',"
+                        + " '서울 강남구 테헤란로 1 2층', 100.00, 120000, 1, ?)",
+                employerId, workerId, workplaceId,
+                LocalDateTime.of(2026, 8, 20, 9, 0), LocalDateTime.of(2026, 8, 20, 18, 0),
+                status);
+        return jdbc.queryForObject(
+                "SELECT id FROM work_cases WHERE employer_id = ? AND worker_id = ? AND status = ?"
+                        + " ORDER BY id DESC LIMIT 1",
+                Long.class, employerId, workerId, status);
+    }
+
+    private Long insertEmploymentContractDocument(JdbcTemplate jdbc, Long ownerUserId, Long workCaseId) {
+        jdbc.update(
+                "INSERT INTO documents"
+                        + " (created_by_user_id, owner_user_id, work_case_id, document_type, status)"
+                        + " VALUES (?, ?, ?, 'EMPLOYMENT_CONTRACT', 'ACTIVE')",
+                ownerUserId, ownerUserId, workCaseId);
+        return jdbc.queryForObject(
+                "SELECT id FROM documents WHERE work_case_id = ? AND document_type = 'EMPLOYMENT_CONTRACT'",
+                Long.class, workCaseId);
+    }
+
+    private void insertContract(JdbcTemplate jdbc, Long workCaseId, Long employerId, Long workerId) {
+        jdbc.update(
+                "INSERT INTO work_contracts"
+                        + " (work_case_id, employer_id, worker_id, title, starts_at, ends_at,"
+                        + " break_minutes, workplace_name, workplace_address, allowed_radius_meters,"
+                        + " agreed_wage, source_terms_version, terms_snapshot, accepted_at)"
+                        + " VALUES (?, ?, ?, '주말 홀 서빙 상세 검증', ?, ?, 60, '강남점',"
+                        + " '서울 강남구 테헤란로 1 2층', 100.00, 120000, 1, JSON_OBJECT(), ?)",
+                workCaseId, employerId, workerId,
+                LocalDateTime.of(2026, 8, 20, 9, 0), LocalDateTime.of(2026, 8, 20, 18, 0),
+                LocalDateTime.of(2026, 8, 10, 4, 0));
+    }
+
+    private void insertEscrow(JdbcTemplate jdbc, Long workCaseId, String status) {
+        jdbc.update(
+                "INSERT INTO escrows (work_case_id, amount, status) VALUES (?, 120000, ?)",
+                workCaseId, status);
+    }
+
+    private void insertSettlement(JdbcTemplate jdbc, Long workCaseId, String status) {
+        jdbc.update(
+                "INSERT INTO settlements (work_case_id, amount, status, due_at, completed_at)"
+                        + " VALUES (?, 120000, ?, ?, ?)",
+                workCaseId, status,
+                LocalDateTime.of(2026, 8, 21, 0, 0), LocalDateTime.of(2026, 8, 21, 0, 5));
+    }
+
+    private void insertAttendance(JdbcTemplate jdbc, Long workCaseId, Long workerId, String type) {
+        LocalDateTime capturedAt = "CHECK_IN".equals(type)
+                ? LocalDateTime.of(2026, 8, 20, 9, 0)
+                : LocalDateTime.of(2026, 8, 20, 18, 0);
+        jdbc.update(
+                "INSERT INTO attendance_records"
+                        + " (work_case_id, worker_id, attendance_type, captured_at, attempted_at, result)"
+                        + " VALUES (?, ?, ?, ?, ?, 'SUCCESS')",
+                workCaseId, workerId, type, capturedAt, capturedAt);
+    }
+
     private void cleanUp(JdbcTemplate jdbc, Long... ownerUserIds) {
         for (Long ownerUserId : ownerUserIds) {
-            jdbc.update(
-                    "DELETE FROM work_invitations WHERE work_case_id IN"
-                            + " (SELECT id FROM work_cases WHERE employer_id = ?)",
-                    ownerUserId);
+            // work_cases를 FK RESTRICT로 참조하는 자식 테이블을 전부 먼저 지웁니다. 상세 조회
+            // 검증이 심은 계약·문서·에스크로·정산·근태 행을 지우지 않으면 work_cases DELETE가
+            // 참조 무결성 오류로 실패합니다.
+            String childScope = " WHERE work_case_id IN"
+                    + " (SELECT id FROM work_cases WHERE employer_id = ?)";
+            jdbc.update("DELETE FROM attendance_records" + childScope, ownerUserId);
+            jdbc.update("DELETE FROM settlements" + childScope, ownerUserId);
+            jdbc.update("DELETE FROM escrows" + childScope, ownerUserId);
+            jdbc.update("DELETE FROM documents" + childScope, ownerUserId);
+            jdbc.update("DELETE FROM work_contracts" + childScope, ownerUserId);
+            jdbc.update("DELETE FROM work_invitations" + childScope, ownerUserId);
             jdbc.update("DELETE FROM work_cases WHERE employer_id = ?", ownerUserId);
             jdbc.update("DELETE FROM workplaces WHERE owner_user_id = ?", ownerUserId);
             jdbc.update("DELETE FROM users WHERE id = ?", ownerUserId);
