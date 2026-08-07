@@ -1,6 +1,6 @@
 ---
 patch_id: SPEC-247-01
-status: draft
+status: accepted
 issue: 247
 base_spec_version: 4.0.1
 targets:
