@@ -128,6 +128,16 @@
         VALUES (#{workCaseId}, #{amount}, 'HELD', NOW(6))
     </insert>
 
+    <!--
+        수락 Aggregate 전용이다. 계약·원장·정산이 모두 같은 acceptedAt을 가리켜야 해서
+        held_at 을 NOW(6) 대신 인자로 받는다. uk_escrows_work_case_id 가 근무당 한 건을
+        보장하므로 중복 수락은 여기서 중복 예외로 드러난다.
+    -->
+    <insert id="insertHeldEscrowAt">
+        INSERT INTO escrows (work_case_id, amount, status, held_at)
+        VALUES (#{workCaseId}, #{amount}, 'HELD', #{heldAt})
+    </insert>
+
     <!-- 선행 행이 있을 때: UNFUNDED -> HELD -->
     <update id="holdEscrow">
         UPDATE escrows
