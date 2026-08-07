@@ -28,10 +28,6 @@ public final class ContractArtifactHandle {
         return NOTHING;
     }
 
-    public boolean isNothing() {
-        return this == NOTHING;
-    }
-
     public long getWorkCaseId() {
         return workCaseId;
     }
