@@ -8,6 +8,7 @@ import javax.validation.constraints.Size;
 import com.fasterxml.jackson.annotation.JsonAnySetter;
 import com.gighub.auth.validation.PasswordMatches;
 import com.gighub.auth.validation.Utf8ByteLength;
+import com.gighub.common.validation.PhoneNormalizer;
 import com.gighub.member.domain.UserRole;
 
 /** 승인된 가입 입력과 정규화·검증 계약입니다. */
@@ -36,7 +37,7 @@ public class SignupRequest {
     @Size(max = 255, message = "이메일은 255자 이하여야 합니다.")
     private String email;
 
-    @Pattern(regexp = "^0\\d{8,10}$", message = "전화번호 형식이 올바르지 않습니다.")
+    @Pattern(regexp = PhoneNormalizer.VALID_PATTERN, message = "전화번호 형식이 올바르지 않습니다.")
     private String phone;
 
     @NotNull(message = "역할은 필수입니다.")
@@ -87,7 +88,7 @@ public class SignupRequest {
     }
 
     public void setPhone(String phone) {
-        this.phone = AuthNormalizer.normalizePhone(phone);
+        this.phone = PhoneNormalizer.normalize(phone);
     }
 
     public UserRole getRole() {
