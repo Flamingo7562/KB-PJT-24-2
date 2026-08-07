@@ -12,6 +12,7 @@ import javax.validation.constraints.Size;
 import com.fasterxml.jackson.annotation.JsonAnySetter;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
+import com.gighub.common.validation.PhoneNormalizer;
 import com.gighub.workplace.validation.CoordinatePair;
 
 /**
@@ -49,7 +50,7 @@ public final class WorkplaceCreateRequest {
     private final String detailAddress;
 
     @NotBlank(message = "사업장 전화번호는 필수입니다.")
-    @Pattern(regexp = "^0\\d{8,10}$", message = "전화번호 형식이 올바르지 않습니다.")
+    @Pattern(regexp = PhoneNormalizer.VALID_PATTERN, message = "전화번호 형식이 올바르지 않습니다.")
     private final String phone;
 
     @DecimalMin(value = "-90", message = "위도는 -90 이상이어야 합니다.")
@@ -163,7 +164,7 @@ public final class WorkplaceCreateRequest {
         }
 
         public Builder phone(String phone) {
-            this.phone = WorkplaceNormalizer.normalizePhone(phone);
+            this.phone = PhoneNormalizer.normalize(phone);
             return this;
         }
 

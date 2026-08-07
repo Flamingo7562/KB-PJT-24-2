@@ -5,17 +5,17 @@ import javax.validation.constraints.Pattern;
 import com.fasterxml.jackson.annotation.JsonAnySetter;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.gighub.auth.dto.AuthNormalizer;
+import com.gighub.common.validation.PhoneNormalizer;
 
 /** 승인 명세의 내 프로필 수정 입력입니다. 전화번호만 허용합니다. */
 public final class UserProfileUpdateRequest {
 
-    @Pattern(regexp = "^0\\d{8,10}$", message = "전화번호 형식이 올바르지 않습니다.")
+    @Pattern(regexp = PhoneNormalizer.VALID_PATTERN, message = "전화번호 형식이 올바르지 않습니다.")
     private final String phone;
 
     @JsonCreator
     public UserProfileUpdateRequest(@JsonProperty("phone") String phone) {
-        this.phone = AuthNormalizer.normalizePhone(phone);
+        this.phone = PhoneNormalizer.normalize(phone);
     }
 
     public String getPhone() {
