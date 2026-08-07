@@ -70,6 +70,14 @@ public class QrHmacKeys {
         return value == null ? null : value.clone();
     }
 
+    /** 키 원문이 로그·오류·디버거 출력에 노출되지 않도록 값은 항상 숨깁니다. */
+    @Override
+    public String toString() {
+        return "QrHmacKeys{activeKeyId=" + activeKeyId
+                + ", registeredKeyCount=" + keys.size()
+                + ", keyValues=****}";
+    }
+
     private static String readActiveKeyId(Environment environment) {
         return environment.getRequiredProperty(ACTIVE_KEY_ID_PROPERTY).trim();
     }

@@ -46,6 +46,19 @@ class QrHmacKeysTest {
     }
 
     @Test
+    void masksKeyValuesInToString() {
+        MockEnvironment environment = environment(KEY_A);
+        environment.setProperty("qr.hmac.key-ids", "k1,k0");
+        environment.setProperty("qr.hmac.key.k0", KEY_B);
+
+        QrHmacKeys keys = new QrHmacKeys(environment);
+
+        assertEquals(
+                "QrHmacKeys{activeKeyId=k1, registeredKeyCount=2, keyValues=****}",
+                keys.toString());
+    }
+
+    @Test
     void unknownKeyIdIsNull() {
         assertNull(new QrHmacKeys(environment(KEY_A)).key("nope"));
     }
