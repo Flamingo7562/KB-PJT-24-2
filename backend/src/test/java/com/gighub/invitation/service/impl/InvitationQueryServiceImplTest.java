@@ -11,10 +11,8 @@ import com.gighub.invitation.exception.InvitationExpiredException;
 import com.gighub.invitation.exception.InvitationNotFoundException;
 import com.gighub.invitation.exception.InvitationRevokedException;
 import com.gighub.invitation.exception.InvitationTermsChangedException;
-import com.gighub.invitation.mapper.InvitationMapper;
-import com.gighub.invitation.mapper.param.InvitationInsertParam;
+import com.gighub.invitation.mapper.InvitationMapperTestDouble;
 import com.gighub.invitation.mapper.result.InvitationRow;
-import com.gighub.invitation.mapper.result.InvitationWorkCaseLockRow;
 import com.gighub.invitation.mapper.result.InvitationWorkCaseRow;
 
 import com.gighub.invitation.token.InvitationTokenCodec;
@@ -296,7 +294,7 @@ class InvitationQueryServiceImplTest {
     }
 
     /** 조회 호출 자체를 관찰해야 해서 Mock 대신 직접 만든 Stub을 씁니다. */
-    private static final class StubInvitationMapper implements InvitationMapper {
+    private static final class StubInvitationMapper extends InvitationMapperTestDouble {
 
         private final List<byte[]> lookedUpHashes = new ArrayList<>();
         private final List<Long> expiredIds = new ArrayList<>();
@@ -305,29 +303,9 @@ class InvitationQueryServiceImplTest {
         private InvitationWorkCaseRow workCase;
 
         @Override
-        public int insertPending(InvitationInsertParam param) {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public int updateTokenHash(long invitationId, byte[] tokenHash) {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
         public InvitationRow findByTokenHashForUpdate(byte[] tokenHash) {
             lookedUpHashes.add(tokenHash);
             return invitation;
-        }
-
-        @Override
-        public InvitationRow findActivePendingByWorkCaseIdForUpdate(long workCaseId) {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public InvitationWorkCaseLockRow lockWorkCaseForIssue(long workCaseId) {
-            throw new UnsupportedOperationException();
         }
 
         @Override
@@ -339,16 +317,6 @@ class InvitationQueryServiceImplTest {
         public int markExpired(long invitationId) {
             expiredIds.add(invitationId);
             return 1;
-        }
-
-        @Override
-        public int expireOverduePending(long workCaseId, LocalDateTime now) {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public int revokePendingByWorkCaseId(long workCaseId, LocalDateTime revokedAt) {
-            throw new UnsupportedOperationException();
         }
     }
 }

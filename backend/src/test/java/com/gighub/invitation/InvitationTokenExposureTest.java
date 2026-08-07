@@ -8,9 +8,8 @@ import com.gighub.invitation.config.InvitationLinkFactory;
 import com.gighub.invitation.config.InvitationProperties;
 import com.gighub.invitation.controller.InvitationController;
 import com.gighub.invitation.mapper.InvitationMapper;
-import com.gighub.invitation.mapper.param.InvitationInsertParam;
+import com.gighub.invitation.mapper.InvitationMapperTestDouble;
 import com.gighub.invitation.mapper.result.InvitationRow;
-import com.gighub.invitation.mapper.result.InvitationWorkCaseLockRow;
 import com.gighub.invitation.mapper.result.InvitationWorkCaseRow;
 import com.gighub.invitation.service.InvitationQueryService;
 import com.gighub.invitation.service.impl.InvitationQueryServiceImpl;
@@ -234,21 +233,11 @@ class InvitationTokenExposureTest {
     }
 
     /** 예상하지 못한 실패 경로까지 확인해야 해서 Mock 대신 직접 만든 Stub을 씁니다. */
-    private static final class StubInvitationMapper implements InvitationMapper {
+    private static final class StubInvitationMapper extends InvitationMapperTestDouble {
 
         private InvitationRow invitation;
         private InvitationWorkCaseRow workCase;
         private boolean failUnexpectedly;
-
-        @Override
-        public int insertPending(InvitationInsertParam param) {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public int updateTokenHash(long invitationId, byte[] tokenHash) {
-            throw new UnsupportedOperationException();
-        }
 
         @Override
         public InvitationRow findByTokenHashForUpdate(byte[] tokenHash) {
@@ -260,16 +249,6 @@ class InvitationTokenExposureTest {
         }
 
         @Override
-        public InvitationRow findActivePendingByWorkCaseIdForUpdate(long workCaseId) {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public InvitationWorkCaseLockRow lockWorkCaseForIssue(long workCaseId) {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
         public InvitationWorkCaseRow findWorkCaseForInvitation(long workCaseId) {
             return workCase;
         }
@@ -277,16 +256,6 @@ class InvitationTokenExposureTest {
         @Override
         public int markExpired(long invitationId) {
             return 1;
-        }
-
-        @Override
-        public int expireOverduePending(long workCaseId, LocalDateTime now) {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public int revokePendingByWorkCaseId(long workCaseId, LocalDateTime revokedAt) {
-            throw new UnsupportedOperationException();
         }
     }
 }
