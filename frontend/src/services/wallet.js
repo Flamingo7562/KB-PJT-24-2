@@ -3,7 +3,7 @@
  *
  * 실제 Session·CSRF·멱등 HTTP로 GET /wallet, /wallet/transactions,
  * POST /wallet/funding-orders, /wallet/withdrawal-requests에 연결되어 있다.
- * Mock은 개발 환경에서 VITE_USE_MOCK=true로만 켠다. 충전 PIN 입력 화면은 #203의 책임이다.
+ * Mock은 개발 환경에서 VITE_USE_MOCK=true로만 켠다.
  */
 import http, { idempotentPost } from '@/services/http'
 import { USE_MOCK } from '@/services/mockFlag'
@@ -189,8 +189,21 @@ export async function fetchTransactions(params = {}) {
 }
 
 /** 충전 성공 응답에는 최신 잔액을 합치지 않는다. PIN 입력과 수명주기는 #203에서 완성한다. */
-export async function chargeWallet({ bankCode, accountNo, pin, amount }) {
+export async function chargeWallet(
+  { bankCode, accountNo, pin, amount },
+  { idempotencyKey = null } = {}
+) {
   if (USE_MOCK) {
+    if (pin !== '0000') {
+      // 계좌 존재·상태·PIN 불일치는 같은 외부 경계로 숨겨 계좌 정보를 추론하지 못하게 한다.
+      const error = new Error('계좌를 사용할 수 없습니다.')
+      error.code = 'FORBIDDEN'
+      error.response = {
+        status: 403,
+        data: { code: 'FORBIDDEN', message: error.message, fieldErrors: [] }
+      }
+      throw error
+    }
     const normalizedAmount = Number(amount)
     mockWallet.availableBalance += normalizedAmount
     const result = {
@@ -214,12 +227,16 @@ export async function chargeWallet({ bankCode, accountNo, pin, amount }) {
     })
     return result
   }
-  const { data } = await idempotentPost('/wallet/funding-orders', {
-    bankCode,
-    accountNo,
-    pin,
-    amount
-  })
+  const { data } = await idempotentPost(
+    '/wallet/funding-orders',
+    {
+      bankCode,
+      accountNo,
+      pin,
+      amount
+    },
+    { idempotencyKey }
+  )
   return data
 }
 

@@ -1,11 +1,11 @@
 <script setup>
 /**
  * [B] 사장 충전  ·  /owner/wallet/charge  ·  OWNER
- * PortOne 모의 결제창 — 은행·계좌번호·금액 입력 후 충전(Mock 승인). 사장 전용.
- * 연계 API: POST /wallet/funding-orders  →  @/services/wallet
+ * 은행·계좌번호·금액을 검증하고 메모리 전용 초안으로 확인 화면에 전달한다. 사장 전용.
+ * 실제 POST /wallet/funding-orders는 PIN 확인 화면에서 한 번만 호출한다.
  * 공통: BankSelect(은행) · AppField(계좌) · WalletAmountField · 승인 계좌/금액 검증
  */
-import { computed, ref } from 'vue'
+import { computed, onBeforeMount, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 import AppBackHeader from '@/components/common/AppBackHeader.vue'
@@ -13,22 +13,19 @@ import AppField from '@/components/common/AppField.vue'
 import BaseButton from '@/components/common/BaseButton.vue'
 import BankSelect from '@/components/wallet/BankSelect.vue'
 import WalletAmountField from '@/components/wallet/WalletAmountField.vue'
-import { chargeWallet } from '@/services/wallet'
 import { useUiStore } from '@/stores/ui'
-import { useWalletStore } from '@/stores/wallet'
-import { formatKRW } from '@/utils/format'
+import { useWalletFundingStore } from '@/stores/walletFunding'
 import { bankAccountRule, isWalletAmount, normalizeBankAccountNo } from '@/utils/validators'
 
 const router = useRouter()
 const ui = useUiStore()
-const walletStore = useWalletStore()
+const fundingStore = useWalletFundingStore()
 
 const bankCode = ref('')
 const accountNo = ref('')
 const amount = ref('')
 const accountError = ref('')
 const amountError = ref('')
-const submitting = ref(false)
 
 const accountCheck = computed(() => bankAccountRule(accountNo.value))
 
@@ -40,10 +37,15 @@ const amountFieldError = computed(() =>
   amount.value && !amountCheck.value.valid ? amountCheck.value.message : amountError.value
 )
 const canSubmit = computed(
-  () => !!bankCode.value && accountCheck.value.valid && amountCheck.value.valid && !submitting.value
+  () => !!bankCode.value && accountCheck.value.valid && amountCheck.value.valid
 )
 
-async function onSubmit() {
+onBeforeMount(() => {
+  // 새 충전 입력은 이전 화면 이탈 때 남았을 수 있는 민감 초안을 이어받지 않는다.
+  fundingStore.clearDraft()
+})
+
+function onSubmit() {
   if (!bankCode.value) {
     ui.toast('은행을 선택해주세요.', { type: 'warning' })
     return
@@ -52,22 +54,12 @@ async function onSubmit() {
   amountError.value = amountCheck.value.valid ? '' : amountCheck.value.message
   if (accountError.value || amountError.value) return
 
-  submitting.value = true
-  try {
-    // 서버가 금액·계좌를 최종 재검증한다(프론트 값 불신 — 추후 PortOne 교체 지점).
-    await chargeWallet({
-      bankCode: bankCode.value,
-      accountNo: normalizeBankAccountNo(accountNo.value),
-      amount: Number(amount.value)
-    })
-    await walletStore.loadWallet()
-    ui.toast(`${formatKRW(Number(amount.value))} 충전이 완료되었습니다.`, { type: 'success' })
-    router.back()
-  } catch {
-    ui.toast('충전에 실패했습니다. 잠시 후 다시 시도해주세요.', { type: 'danger' })
-  } finally {
-    submitting.value = false
-  }
+  fundingStore.setDraft({
+    bankCode: bankCode.value,
+    accountNo: normalizeBankAccountNo(accountNo.value),
+    amount: Number(amount.value)
+  })
+  router.push({ name: 'owner-charge-confirm' })
 }
 </script>
 
@@ -97,7 +89,7 @@ async function onSubmit() {
         :disabled="!canSubmit"
         @click="onSubmit"
       >
-        {{ submitting ? '처리 중…' : '충전하기' }}
+        충전하기
       </BaseButton>
     </main>
   </div>

@@ -1,11 +1,11 @@
-import { flushPromises, mount } from '@vue/test-utils'
+import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import OwnerChargeView from '@/views/owner/wallet/OwnerChargeView.vue'
 
-const back = vi.fn()
-vi.mock('vue-router', () => ({ useRouter: () => ({ back }) }))
+const push = vi.fn()
+vi.mock('vue-router', () => ({ useRouter: () => ({ push }) }))
 
 vi.mock('@/services/wallet', () => ({
   chargeWallet: vi.fn(),
@@ -14,11 +14,12 @@ vi.mock('@/services/wallet', () => ({
 }))
 
 import { chargeWallet, fetchWallet } from '@/services/wallet'
+import { useWalletFundingStore } from '@/stores/walletFunding'
 
 describe('OwnerChargeView', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
-    back.mockClear()
+    push.mockReset().mockResolvedValue()
     chargeWallet.mockReset().mockResolvedValue({
       fundingOrderId: 10,
       status: 'COMPLETED',
@@ -31,23 +32,24 @@ describe('OwnerChargeView', () => {
     })
   })
 
-  it('canonical 은행 코드와 정규화 계좌번호만 Mock 충전 경계에 전달한다', async () => {
+  it('canonical 은행 코드와 정규화 계좌번호를 메모리 초안으로만 전달한다', async () => {
     const wrapper = mount(OwnerChargeView)
+    const fundingStore = useWalletFundingStore()
 
     await wrapper.find('button.bank').trigger('click')
     const [accountInput, amountInput] = wrapper.findAll('input')
     await accountInput.setValue('170-0000-00001')
     await amountInput.setValue('100000')
     await wrapper.find('button.submit').trigger('click')
-    await flushPromises()
 
-    const payload = chargeWallet.mock.calls[0][0]
-    expect(payload).toEqual({ bankCode: '004', accountNo: '170000000001', amount: 100000 })
-    expect(payload).not.toHaveProperty('bankAccountId')
-    expect(payload).not.toHaveProperty('walletId')
-    expect(payload).not.toHaveProperty('userId')
-    expect(fetchWallet).toHaveBeenCalledOnce()
-    expect(back).toHaveBeenCalled()
+    expect(fundingStore.draft).toEqual({
+      bankCode: '004',
+      accountNo: '170000000001',
+      amount: 100000
+    })
+    expect(chargeWallet).not.toHaveBeenCalled()
+    expect(fetchWallet).not.toHaveBeenCalled()
+    expect(push).toHaveBeenCalledWith({ name: 'owner-charge-confirm' })
   })
 
   it('1억원을 초과한 금액은 제출하지 못한다', async () => {

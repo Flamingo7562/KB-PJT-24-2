@@ -1,6 +1,9 @@
 /**
- * 지갑 Service 계약 테스트 — 실제 HTTP 경로의 URL·Params·Body를 고정한다.
- * Mock 분기는 mockFlag(VITE_USE_MOCK)가 개발 환경에서만 켜므로 여기서는 다루지 않는다.
+ * 지갑 Service 계약 테스트.
+ *
+ * 기본 경로는 실제 HTTP이므로 URL·Params·Body를 고정한다. Mock 분기는 mockFlag가
+ * 개발 환경에서만 켜므로, Mock 동작을 검증할 때는 USE_MOCK을 명시적으로 주입해
+ * 실행 환경의 VITE_USE_MOCK 값에 결과가 흔들리지 않게 한다.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -63,13 +66,28 @@ describe('wallet service', () => {
       amount: 100_000
     })
 
-    expect(idempotentPost).toHaveBeenCalledWith('/wallet/funding-orders', {
+    const [url, body] = idempotentPost.mock.calls[0]
+    expect(url).toBe('/wallet/funding-orders')
+    expect(body).toEqual({
       bankCode: '004',
       accountNo: '170000000001',
       pin: '0000',
       amount: 100_000
     })
     expect(result).toEqual({ fundingOrderId: 10, status: 'COMPLETED', bankTransactionId: 20 })
+  })
+
+  it('충전은 호출자가 보존한 Idempotency Key를 그대로 넘긴다', async () => {
+    idempotentPost.mockResolvedValue({
+      data: { fundingOrderId: 10, status: 'COMPLETED', bankTransactionId: 20 }
+    })
+
+    await chargeWallet(
+      { bankCode: '004', accountNo: '170000000001', pin: '0000', amount: 100_000 },
+      { idempotencyKey: 'keep-this-key' }
+    )
+
+    expect(idempotentPost.mock.calls[0][2]).toEqual({ idempotencyKey: 'keep-this-key' })
   })
 
   it('출금은 멱등 POST로 bankCode/accountNo/amount만 보내고 pin을 포함하지 않는다', async () => {
@@ -87,5 +105,54 @@ describe('wallet service', () => {
     expect(url).toBe('/wallet/withdrawal-requests')
     expect(body).toEqual({ bankCode: '088', accountNo: '170000000002', amount: 50_000 })
     expect(result).toEqual({ withdrawalRequestId: 11, status: 'COMPLETED', bankTransactionId: 21 })
+  })
+})
+
+describe('wallet Mock service', () => {
+  // Mock 분기는 opt-in이므로 실행 환경 설정 대신 USE_MOCK을 직접 주입해 검증한다.
+  async function importWithMock() {
+    vi.resetModules()
+    vi.doMock('@/services/mockFlag', () => ({ USE_MOCK: true }))
+    return import('@/services/wallet')
+  }
+
+  beforeEach(() => {
+    vi.resetModules()
+    vi.doUnmock('@/services/mockFlag')
+  })
+
+  it('잘못된 Demo PIN은 계좌 존재 여부를 구분하지 않는 승인 오류로 거부한다', async () => {
+    const walletService = await importWithMock()
+
+    await expect(
+      walletService.chargeWallet({
+        bankCode: '004',
+        accountNo: '170000000001',
+        pin: '1234',
+        amount: 100_000
+      })
+    ).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+      response: {
+        status: 403,
+        data: { code: 'FORBIDDEN', message: '계좌를 사용할 수 없습니다.' }
+      }
+    })
+  })
+
+  it('올바른 Demo PIN은 잔액 대신 승인 식별자와 상태만 반환한다', async () => {
+    const walletService = await importWithMock()
+
+    const result = await walletService.chargeWallet({
+      bankCode: '004',
+      accountNo: '170000000001',
+      pin: '0000',
+      amount: 100_000
+    })
+
+    expect(Object.keys(result).sort()).toEqual(
+      ['fundingOrderId', 'status', 'bankTransactionId'].sort()
+    )
+    expect(result).not.toHaveProperty('availableBalance')
   })
 })
