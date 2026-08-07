@@ -1,81 +1,91 @@
+/**
+ * 지갑 Service 계약 테스트 — 실제 HTTP 경로의 URL·Params·Body를 고정한다.
+ * Mock 분기는 mockFlag(VITE_USE_MOCK)가 개발 환경에서만 켜므로 여기서는 다루지 않는다.
+ */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-let walletService
+vi.mock('@/services/http', () => ({
+  default: { get: vi.fn() },
+  idempotentPost: vi.fn()
+}))
 
-describe('wallet Mock service', () => {
-  beforeEach(async () => {
-    vi.resetModules()
-    walletService = await import('@/services/wallet')
+import http, { idempotentPost } from '@/services/http'
+import { chargeWallet, fetchTransactions, fetchWallet, withdrawWallet } from '@/services/wallet'
+
+describe('wallet service', () => {
+  beforeEach(() => {
+    http.get.mockReset()
+    idempotentPost.mockReset()
   })
 
-  it('지갑 요약을 승인 도메인 모델로 반환한다', async () => {
-    const result = await walletService.fetchWallet()
-
-    expect(result).toEqual({
-      currency: 'KRW',
-      availableBalance: 1_250_000,
-      lockedBalance: 480_000
+  it('지갑 잔액을 GET /wallet으로 조회하고 data를 그대로 반환한다', async () => {
+    http.get.mockResolvedValue({
+      data: { currency: 'KRW', availableBalance: 100_000, lockedBalance: 20_000 }
     })
+
+    const result = await fetchWallet()
+
+    expect(http.get).toHaveBeenCalledWith('/wallet')
+    expect(result).toEqual({ currency: 'KRW', availableBalance: 100_000, lockedBalance: 20_000 })
   })
 
-  it('거래 Item과 Page Metadata를 함께 보존한다', async () => {
-    const result = await walletService.fetchTransactions({ page: 1, size: 2 })
+  it('거래 조회는 승인 Query Parameter를 그대로 GET /wallet/transactions에 전달한다', async () => {
+    const page = { number: 0, size: 20, totalElements: 1, totalPages: 1 }
+    http.get.mockResolvedValue({ data: { content: [{ transactionId: 1 }], page } })
+    const params = {
+      workplaceId: 7,
+      from: '2026-07-01',
+      to: '2026-07-31',
+      type: 'FUNDING',
+      minAmount: 1_000,
+      maxAmount: 5_000,
+      keyword: '허브',
+      sort: 'AMOUNT_ASC',
+      page: 1,
+      size: 10
+    }
 
-    expect(result.page).toEqual({ number: 1, size: 2, totalElements: 6, totalPages: 3 })
-    expect(result.content).toHaveLength(2)
-    expect(Object.keys(result.content[0]).sort()).toEqual(
-      [
-        'transactionId',
-        'type',
-        'amount',
-        'direction',
-        'availableAfter',
-        'lockedAfter',
-        'workCaseId',
-        'workTitle',
-        'workplaceName',
-        'displayStatus',
-        'createdAt'
-      ].sort()
-    )
+    const result = await fetchTransactions(params)
+
+    expect(http.get).toHaveBeenCalledWith('/wallet/transactions', { params })
+    expect(result).toEqual({ content: [{ transactionId: 1 }], page })
   })
 
-  it('사업장 필터는 사업장과 무관한 충전·출금 거래를 제외한다', async () => {
-    const result = await walletService.fetchTransactions({ workplaceId: 1 })
+  it('충전은 멱등 POST로 bankCode/accountNo/pin/amount만 보낸다', async () => {
+    idempotentPost.mockResolvedValue({
+      data: { fundingOrderId: 10, status: 'COMPLETED', bankTransactionId: 20 }
+    })
 
-    expect(result.content).not.toHaveLength(0)
-    expect(result.content.every((tx) => tx.workCaseId != null)).toBe(true)
-    expect(result.content.some((tx) => ['FUNDING', 'WITHDRAWAL'].includes(tx.type))).toBe(false)
-  })
-
-  it('Mutation 응답에는 잔액 대신 승인 식별자와 상태만 반환하고 잔액은 재조회한다', async () => {
-    const before = await walletService.fetchWallet()
-    const result = await walletService.chargeWallet({
+    const result = await chargeWallet({
       bankCode: '004',
       accountNo: '170000000001',
       pin: '0000',
       amount: 100_000
     })
-    const after = await walletService.fetchWallet()
 
-    expect(Object.keys(result).sort()).toEqual(
-      ['fundingOrderId', 'status', 'bankTransactionId'].sort()
-    )
-    expect(result.status).toBe('COMPLETED')
-    expect(result).not.toHaveProperty('availableBalance')
-    expect(after.availableBalance).toBe(before.availableBalance + 100_000)
+    expect(idempotentPost).toHaveBeenCalledWith('/wallet/funding-orders', {
+      bankCode: '004',
+      accountNo: '170000000001',
+      pin: '0000',
+      amount: 100_000
+    })
+    expect(result).toEqual({ fundingOrderId: 10, status: 'COMPLETED', bankTransactionId: 20 })
   })
 
-  it('출금 Mock도 withdrawalRequestId 계약을 사용한다', async () => {
-    const result = await walletService.withdrawWallet({
+  it('출금은 멱등 POST로 bankCode/accountNo/amount만 보내고 pin을 포함하지 않는다', async () => {
+    idempotentPost.mockResolvedValue({
+      data: { withdrawalRequestId: 11, status: 'COMPLETED', bankTransactionId: 21 }
+    })
+
+    const result = await withdrawWallet({
       bankCode: '088',
       accountNo: '170000000002',
       amount: 50_000
     })
 
-    expect(Object.keys(result).sort()).toEqual(
-      ['withdrawalRequestId', 'status', 'bankTransactionId'].sort()
-    )
-    expect(result).not.toHaveProperty('txId')
+    const [url, body] = idempotentPost.mock.calls[0]
+    expect(url).toBe('/wallet/withdrawal-requests')
+    expect(body).toEqual({ bankCode: '088', accountNo: '170000000002', amount: 50_000 })
+    expect(result).toEqual({ withdrawalRequestId: 11, status: 'COMPLETED', bankTransactionId: 21 })
   })
 })

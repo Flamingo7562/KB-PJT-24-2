@@ -5,10 +5,31 @@ import BankSelect from '@/components/wallet/BankSelect.vue'
 import { BANKS, findBank } from '@/utils/constants'
 
 describe('BankSelect', () => {
-  it('승인된 숫자 3자리 은행 코드 다섯 개만 노출한다', () => {
+  it('승인된 canonical 은행 코드 20개만 노출한다', () => {
     const codes = BANKS.map((bank) => bank.code)
 
-    expect(codes).toEqual(['004', '088', '020', '081', '011'])
+    expect(codes).toEqual([
+      '004',
+      '088',
+      '020',
+      '081',
+      '011',
+      '003',
+      '090',
+      '092',
+      '089',
+      '032',
+      '031',
+      '131',
+      '034',
+      '023',
+      '027',
+      '002',
+      '007',
+      '045',
+      '048',
+      '071'
+    ])
     expect(new Set(codes).size).toBe(codes.length)
     expect(codes.every((code) => /^\d{3}$/.test(code))).toBe(true)
     expect(findBank('KB')).toBeNull()

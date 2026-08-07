@@ -8,11 +8,12 @@ const push = vi.fn()
 vi.mock('vue-router', () => ({ useRouter: () => ({ push }) }))
 
 vi.mock('@/services/worker', () => ({ getWorkerHome: vi.fn() }))
+vi.mock('@/services/wallet', () => ({ fetchWallet: vi.fn(), fetchTransactions: vi.fn() }))
 
+import { fetchWallet } from '@/services/wallet'
 import { getWorkerHome } from '@/services/worker'
 
 const homePayload = {
-  wallet: { availableBalance: 320000 },
   todayWorkCase: {
     status: 'LATE',
     title: '주말 홀 서빙',
@@ -38,13 +39,16 @@ describe('WorkerHomeView', () => {
     setActivePinia(createPinia())
     push.mockClear()
     getWorkerHome.mockResolvedValue(structuredClone(homePayload))
+    fetchWallet
+      .mockReset()
+      .mockResolvedValue({ currency: 'KRW', availableBalance: 320_000, lockedBalance: 0 })
   })
 
   it('안심지갑 잔액·오늘의 알바·확보 안심금액을 표시한다', async () => {
     const wrapper = mount(WorkerHomeView)
     await flushPromises()
 
-    expect(wrapper.text()).toContain('320,000원') // 안심지갑 잔액
+    expect(wrapper.text()).toContain('320,000원') // 안심지갑 잔액(공용 wallet Store)
     expect(wrapper.text()).toContain('주말 홀 서빙') // 오늘의 알바
     expect(wrapper.text()).toContain('현재까지 확보한 안심금액') // 안심금액 카드
     expect(wrapper.text()).toContain('일급 90,000원') // agreedWage 로 읽는지 확인
@@ -52,7 +56,6 @@ describe('WorkerHomeView', () => {
 
   it('오늘 근무가 없으면 안심금액 카드를 숨긴다', async () => {
     getWorkerHome.mockResolvedValue({
-      wallet: { availableBalance: 0 },
       todayWorkCase: { status: 'NONE' },
       earning: null
     })

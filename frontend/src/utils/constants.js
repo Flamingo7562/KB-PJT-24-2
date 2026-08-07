@@ -100,17 +100,34 @@ export const SCAN_TYPE = {
 
 /**
  * 은행 목록(충전·출금 은행 선택).
- * `logo`: assets/images/banks/*.png 로고. `chip`: 로고 로드 실패 시 폴백 색.
+ * `logo`: assets/images/banks/*.png 로고(없으면 BankSelect가 `chip` 색 점으로 대체 표시).
  *
- * 승인 계약은 아래 다섯 은행만 허용한다. 화면 라벨과 API 전송값을 분리하고,
- * `KB`나 `SHINHAN` 같은 별칭을 전송값으로 다시 도입하지 않는다.
+ * SPEC 4.1.0 기준 승인된 canonical bankCode 20종(docs/specs/API_SPEC.md '지갑과 거래').
+ * 화면 라벨과 API 전송값을 분리하고, `KB`나 `SHINHAN` 같은 별칭을 전송값으로 다시
+ * 도입하지 않는다. `131`은 DGB대구은행과 화면 선택지를 구분하기 위한 iM뱅크 전용
+ * 프로젝트 코드다.
  */
 export const BANKS = [
   { code: '004', name: 'KB국민은행', logo: bankKb, chip: '#FFCC00' },
   { code: '088', name: '신한은행', logo: bankShinhan, chip: '#0046FF' },
   { code: '020', name: '우리은행', logo: bankWoori, chip: '#0067AC' },
   { code: '081', name: '하나은행', logo: bankHana, chip: '#008485' },
-  { code: '011', name: 'NH농협은행', logo: bankNh, chip: '#19A94B' }
+  { code: '011', name: 'NH농협은행', logo: bankNh, chip: '#19A94B' },
+  { code: '003', name: '기업은행', logo: null, chip: '#004EA2' },
+  { code: '090', name: '카카오뱅크', logo: null, chip: '#FEE500' },
+  { code: '092', name: '토스뱅크', logo: null, chip: '#0064FF' },
+  { code: '089', name: '케이뱅크', logo: null, chip: '#FF4D4D' },
+  { code: '032', name: '부산은행', logo: null, chip: '#00519E' },
+  { code: '031', name: 'DGB대구은행', logo: null, chip: '#0F4C9A' },
+  { code: '131', name: 'iM뱅크', logo: null, chip: '#5B3EBB' },
+  { code: '034', name: '광주은행', logo: null, chip: '#E4032E' },
+  { code: '023', name: 'SC제일은행', logo: null, chip: '#003057' },
+  { code: '027', name: '씨티은행', logo: null, chip: '#003882' },
+  { code: '002', name: 'KDB산업은행', logo: null, chip: '#00478A' },
+  { code: '007', name: '수협은행', logo: null, chip: '#0067AC' },
+  { code: '045', name: '새마을금고', logo: null, chip: '#00954E' },
+  { code: '048', name: '신협', logo: null, chip: '#0068B7' },
+  { code: '071', name: '우체국', logo: null, chip: '#D0021B' }
 ]
 
 export const BANKS_ALL = BANKS

@@ -1,7 +1,8 @@
 <script setup>
 /**
  * 은행 선택 그리드 — 충전·출금 공용.
- * 승인된 다섯 은행만 노출하며, 사용자에게는 이름을 보여주고 API에는 숫자 bankCode를 보낸다.
+ * 승인된 canonical bankCode 20종(@/utils/constants BANKS)만 노출하며, 사용자에게는
+ * 이름을 보여주고 API에는 숫자 bankCode를 보낸다.
  *
  * v-model 은 은행 코드(BANKS_ALL[].code) 문자열이다.
  */

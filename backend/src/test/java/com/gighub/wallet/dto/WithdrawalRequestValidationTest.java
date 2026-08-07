@@ -27,7 +27,10 @@ class WithdrawalRequestValidationTest {
 
     @Test
     void acceptsEveryApprovedBankCode() {
-        for (String bankCode : new String[]{"004", "088", "020", "081", "011"}) {
+        for (String bankCode : new String[]{
+                "004", "088", "020", "081", "011", "003", "090", "092", "089", "032",
+                "031", "131", "034", "023", "027", "002", "007", "045", "048", "071"
+        }) {
             assertTrue(
                     validator.validate(request(bankCode, ACCOUNT_NO, AMOUNT)).isEmpty(),
                     bankCode + "는 승인된 은행 코드여야 합니다."
