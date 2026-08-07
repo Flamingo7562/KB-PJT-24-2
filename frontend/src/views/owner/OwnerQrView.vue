@@ -68,6 +68,8 @@ async function load() {
  * 첫 응답으로 인쇄한 QR 이 두 번째 요청에 폐기된다.
  */
 async function confirmReissue() {
+  // :disabled 가 이미 막지만, 이 요청은 멱등 Header 가 없어 한 번 새면 인쇄물이 죽는다.
+  // 화면 상태에만 기대지 않고 호출 지점에서도 끊는다.
   if (reissuing.value) return
 
   const workplaceId = workplaceStore.selectedId
