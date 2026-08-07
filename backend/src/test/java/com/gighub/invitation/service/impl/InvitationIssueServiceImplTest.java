@@ -7,6 +7,7 @@ import com.gighub.common.exception.RoleMismatchException;
 import com.gighub.common.exception.WorkCaseLockedException;
 import com.gighub.invitation.config.InvitationLinkFactory;
 import com.gighub.invitation.config.InvitationProperties;
+import com.gighub.invitation.dto.InvitationIssueResponse;
 import com.gighub.invitation.mapper.InvitationMapper;
 import com.gighub.invitation.mapper.param.InvitationInsertParam;
 import com.gighub.invitation.mapper.result.InvitationRow;
@@ -206,6 +207,83 @@ class InvitationIssueServiceImplTest {
         );
 
         assertFalse(failure.getMessage().contains(token));
+    }
+
+    @Test
+    void reissueRevokesTheCurrentInvitationAndCreatesADifferentOne() {
+        mapper.workCase = draftWorkCase(3);
+        mapper.activePending = pendingInvitation(11L, 3, STARTS_AT);
+
+        InvitationIssueResponse response = service(STARTS_AT.minusDays(1L))
+                .reissue(owner(), WORK_CASE_ID);
+
+        // 철회가 새 발급보다 먼저여야 두 Link가 동시에 유효한 순간이 없습니다.
+        assertTrue(mapper.calls.indexOf("revoke") < mapper.calls.indexOf("insert"));
+        assertEquals(1, mapper.revokedAt.size());
+        assertEquals(1, mapper.inserted.size());
+        assertEquals(3, mapper.inserted.get(0).getExpectedTermsVersion());
+
+        // 새 초대는 다른 ID라 Link도 이전과 다릅니다.
+        assertEquals(
+                WEB_ORIGIN + "/invitations/" + codec.deriveToken(NEW_INVITATION_ID),
+                response.getInviteUrl()
+        );
+        assertFalse(response.getInviteUrl().contains(codec.deriveToken(11L)));
+    }
+
+    @Test
+    void reissueWithoutAReplaceableInvitationConflicts() {
+        mapper.workCase = draftWorkCase(3);
+
+        // 활성 초대가 아예 없는 경우입니다.
+        mapper.activePending = null;
+        assertEquals(
+                "초대 상태를 다시 확인해 주세요.",
+                assertThrows(
+                        ConflictException.class,
+                        () -> service(STARTS_AT.minusDays(1L)).reissue(owner(), WORK_CASE_ID)
+                ).getMessage()
+        );
+
+        // 이전 Version의 초대만 남은 경우도 교체 대상이 아닙니다.
+        mapper.activePending = pendingInvitation(11L, 2, STARTS_AT);
+        assertThrows(
+                ConflictException.class,
+                () -> service(STARTS_AT.minusDays(1L)).reissue(owner(), WORK_CASE_ID)
+        );
+
+        assertTrue(mapper.inserted.isEmpty(), "충돌 경로에서 새 초대를 만들면 안 됩니다.");
+        assertTrue(mapper.revokedAt.isEmpty(), "충돌 경로에서 기존 초대를 건드리면 안 됩니다.");
+    }
+
+    @Test
+    void reissueSharesTheSameOwnershipAndStateGuardsAsIssue() {
+        mapper.activePending = pendingInvitation(11L, 1, STARTS_AT);
+
+        mapper.workCase = draftWorkCase(1);
+        assertThrows(
+                RoleMismatchException.class,
+                () -> service(STARTS_AT.minusDays(1L)).reissue(worker(), WORK_CASE_ID)
+        );
+
+        mapper.workCase = null;
+        assertThrows(
+                ResourceNotFoundException.class,
+                () -> service(STARTS_AT.minusDays(1L)).reissue(owner(), WORK_CASE_ID)
+        );
+
+        mapper.workCase = draftWorkCase(1).toBuilder().status("ACCEPTED").build();
+        assertThrows(
+                WorkCaseLockedException.class,
+                () -> service(STARTS_AT.minusDays(1L)).reissue(owner(), WORK_CASE_ID)
+        );
+
+        // 시작 시각을 넘긴 근무는 재발급도 할 수 없습니다.
+        mapper.workCase = draftWorkCase(1);
+        assertThrows(
+                WorkCaseLockedException.class,
+                () -> service(STARTS_AT).reissue(owner(), WORK_CASE_ID)
+        );
     }
 
     private void assertLocked(LocalDateTime now) {

@@ -118,6 +118,39 @@ class WorkCaseInvitationControllerTest {
                 409, "CONFLICT");
     }
 
+    @Test
+    void reissueAlwaysUsesCreatedWithTheSameEnvelope() throws Exception {
+        when(invitationIssueService.reissue(any(), eq(WORK_CASE_ID))).thenReturn(response());
+
+        mockMvc.perform(post("/api/work-cases/{workCaseId}/invitations/reissue", WORK_CASE_ID)
+                        .principal(ownerAuthentication()))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.inviteUrl").value(INVITE_URL))
+                .andExpect(jsonPath("$.data.expiresAt").value("2026-08-20T01:00:00Z"))
+                .andExpect(jsonPath("$.data.token").doesNotExist());
+
+        verify(invitationIssueService).reissue(any(AuthPrincipal.class), eq(WORK_CASE_ID));
+    }
+
+    @Test
+    void reissueWithoutAReplaceableInvitationUsesTheApprovedConflict() throws Exception {
+        doThrow(new ConflictException("초대 상태를 다시 확인해 주세요."))
+                .when(invitationIssueService).reissue(any(), eq(WORK_CASE_ID));
+
+        mockMvc.perform(post("/api/work-cases/{workCaseId}/invitations/reissue", WORK_CASE_ID)
+                        .principal(ownerAuthentication()))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("CONFLICT"))
+                .andExpect(jsonPath("$.data").doesNotExist());
+    }
+
+    @Test
+    void reissueIsNotReachableWithoutAuthentication() throws Exception {
+        mockMvc.perform(post("/api/work-cases/{workCaseId}/invitations/reissue", WORK_CASE_ID))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("AUTH_REQUIRED"));
+    }
+
     private void assertFailure(RuntimeException failure, int status, String code) throws Exception {
         doThrow(failure).when(invitationIssueService).issue(any(), eq(WORK_CASE_ID));
 

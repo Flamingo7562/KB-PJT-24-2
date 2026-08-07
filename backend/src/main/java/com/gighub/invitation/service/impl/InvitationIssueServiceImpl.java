@@ -92,6 +92,29 @@ public class InvitationIssueServiceImpl implements InvitationIssueService {
         return InvitationIssueResult.created(createInvitation(workCase));
     }
 
+    @Override
+    @Transactional
+    public InvitationIssueResponse reissue(AuthPrincipal principal, long workCaseId) {
+        InvitationWorkCaseLockRow workCase = lockIssuableWorkCase(principal, workCaseId);
+        LocalDateTime now = LocalDateTime.now(clock);
+
+        invitationMapper.expireOverduePending(workCaseId, now);
+
+        InvitationRow active =
+                invitationMapper.findActivePendingByWorkCaseIdForUpdate(workCaseId);
+        boolean replaceable = active != null
+                && active.getExpectedTermsVersion().equals(workCase.getTermsVersion());
+        if (!replaceable) {
+            // 교체할 대상이 없습니다. 이 경우 새로 만들어 주면 재발급과 일반 발급의 구분이
+            // 사라지고, 호출자는 기존 Link가 무효가 됐는지 알 수 없게 됩니다.
+            throw new ConflictException(UNUSABLE_INVITATION);
+        }
+
+        // 철회와 새 발급이 한 Transaction에 있어야 두 Link가 동시에 유효한 순간이 없습니다.
+        invitationMapper.revokePendingByWorkCaseId(workCaseId, now);
+        return createInvitation(workCase);
+    }
+
     /**
      * 근무 행을 잠그고 소유권과 발급 가능 상태를 확인합니다.
      *

@@ -45,4 +45,20 @@ public class WorkCaseInvitationController {
                 .status(result.isCreated() ? HttpStatus.CREATED : HttpStatus.OK)
                 .body(ApiResponse.of(result.getResponse()));
     }
+
+    /**
+     * 현재 활성 초대를 철회하고 새 Link로 교체합니다.
+     *
+     * <p>항상 새 초대를 만들므로 성공은 언제나 201입니다. 발급과 응답 Body는 같습니다.</p>
+     */
+    @PostMapping("/api/work-cases/{workCaseId}/invitations/reissue")
+    public ResponseEntity<ApiResponse<InvitationIssueResponse>> reissue(
+            @PathVariable long workCaseId,
+            Authentication authentication) {
+        AuthPrincipal principal = AuthPrincipals.resolve(authentication);
+
+        return ResponseEntity.status(HttpStatus.CREATED).body(
+                ApiResponse.of(invitationIssueService.reissue(principal, workCaseId))
+        );
+    }
 }
