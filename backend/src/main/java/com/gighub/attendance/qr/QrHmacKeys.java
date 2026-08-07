@@ -5,6 +5,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.regex.Pattern;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
 
@@ -35,10 +36,16 @@ public class QrHmacKeys {
     private final String activeKeyId;
     private final Map<String, byte[]> keys;
 
+    /**
+     * 생성자가 둘이라 Container가 어느 쪽을 쓸지 스스로 정하지 못합니다. 주입 대상을 명시하지
+     * 않으면 기본 생성자를 찾다가 기동이 깨집니다.
+     */
+    @Autowired
     public QrHmacKeys(Environment environment) {
         this(readActiveKeyId(environment), readKeys(environment));
     }
 
+    /** 테스트가 properties 없이 키를 직접 넣을 때 쓰는 생성자입니다. */
     QrHmacKeys(String activeKeyId, Map<String, byte[]> keys) {
         this.activeKeyId = requireValidKeyId(activeKeyId);
         this.keys = Map.copyOf(keys);
