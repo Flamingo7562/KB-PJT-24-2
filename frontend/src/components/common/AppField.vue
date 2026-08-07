@@ -12,7 +12,7 @@
  * IME(한글): 조합 중에는 값을 올리지 않고 조합이 끝날 때 한 번만 올린다.
  * digits-only 필드는 조합 시작 즉시 조합을 취소해 한글이 화면에 찍히지 않게 한다.
  */
-import { nextTick, ref, useId } from 'vue'
+import { nextTick, ref, useId, watch } from 'vue'
 
 const props = defineProps({
   label: { type: String, default: '' },
@@ -28,7 +28,8 @@ const props = defineProps({
   success: { type: String, default: '' },
   required: { type: Boolean, default: false },
   disabled: { type: Boolean, default: false },
-  maxlength: { type: [String, Number], default: null }
+  maxlength: { type: [String, Number], default: null },
+  autocomplete: { type: String, default: null }
 })
 
 const emit = defineEmits(['update:modelValue', 'blur'])
@@ -55,6 +56,9 @@ async function syncDomValue() {
     el.setSelectionRange(next.length, next.length)
   }
 }
+
+// 요청 종료 뒤 PIN처럼 부모가 값을 비울 때 DOM 속성뿐 아니라 실제 입력값도 즉시 지운다.
+watch(() => props.modelValue, syncDomValue)
 
 function onInput(e) {
   if (composing.value) return
@@ -106,6 +110,7 @@ function onCompositionEnd(e) {
         :placeholder="placeholder"
         :disabled="disabled"
         :maxlength="maxlength"
+        :autocomplete="autocomplete"
         :aria-describedby="error || success || hint ? messageId : undefined"
         :aria-invalid="error ? 'true' : undefined"
         @input="onInput"

@@ -66,6 +66,23 @@ describe('wallet Mock service', () => {
     expect(after.availableBalance).toBe(before.availableBalance + 100_000)
   })
 
+  it('잘못된 Demo PIN은 계좌 존재 여부를 구분하지 않는 승인 오류로 거부한다', async () => {
+    await expect(
+      walletService.chargeWallet({
+        bankCode: '004',
+        accountNo: '170000000001',
+        pin: '1234',
+        amount: 100_000
+      })
+    ).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+      response: {
+        status: 403,
+        data: { code: 'FORBIDDEN', message: '계좌를 사용할 수 없습니다.' }
+      }
+    })
+  })
+
   it('출금 Mock도 withdrawalRequestId 계약을 사용한다', async () => {
     const result = await walletService.withdrawWallet({
       bankCode: '088',

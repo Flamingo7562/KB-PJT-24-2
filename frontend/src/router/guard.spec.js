@@ -94,4 +94,13 @@ describe('라우터 가드', () => {
 
     expect(router.currentRoute.value.name).toBe('not-found')
   })
+
+  it('충전 확인 화면은 URL에 계좌 정보를 넣지 않는 OWNER 보호 라우트다', () => {
+    const resolved = appRouter.resolve({ name: 'owner-charge-confirm' })
+
+    expect(resolved.path).toBe('/owner/wallet/charge/confirm')
+    expect(resolved.meta).toMatchObject({ requiresAuth: true, role: 'OWNER' })
+    expect(resolved.query).toEqual({})
+    expect(resolved.params).toEqual({})
+  })
 })

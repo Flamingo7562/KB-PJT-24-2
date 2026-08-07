@@ -167,6 +167,10 @@ class CommonExceptionHandlerTest {
                         "CONFLICT",
                         "IDEMPOTENCY_KEY_REUSED",
                         "WORK_CASE_LOCKED",
+                        "INVITATION_EXPIRED",
+                        "INVITATION_REVOKED",
+                        "INVITATION_ALREADY_ACCEPTED",
+                        "INVITATION_TERMS_CHANGED",
                         "CONTRACT_RETENTION_REQUIRED",
                         "INTERNAL_ERROR"
                 ),
@@ -180,6 +184,7 @@ class CommonExceptionHandlerTest {
                 String packageName = parameterType.getPackageName();
                 assertFalse(packageName.startsWith("com.gighub.bank"));
                 assertFalse(packageName.startsWith("com.gighub.document"));
+                assertFalse(packageName.startsWith("com.gighub.invitation"));
                 assertFalse(packageName.startsWith("com.gighub.wallet"));
             }
         }
