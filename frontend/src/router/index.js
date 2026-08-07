@@ -86,6 +86,12 @@ const routes = [
     meta: OWNER
   },
   {
+    path: '/owner/wallet/charge/confirm',
+    name: 'owner-charge-confirm',
+    component: () => import('@/views/owner/wallet/OwnerChargeConfirmView.vue'),
+    meta: OWNER
+  },
+  {
     path: '/owner/wallet/withdraw',
     name: 'owner-withdraw',
     component: () => import('@/views/owner/wallet/OwnerWithdrawView.vue'),

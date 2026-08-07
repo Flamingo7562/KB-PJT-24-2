@@ -2,8 +2,8 @@
 
 | 항목        | 값              |
 | ----------- | --------------- |
-| 명세 릴리스 | `4.0.1`         |
-| 승인일      | 2026-08-06      |
+| 명세 릴리스 | `4.1.0`         |
+| 승인일      | 2026-08-07      |
 | 소유자      | PM/Admin Master |
 
 이 표는 요구사항을 승인 REST Operation과 도메인에 연결합니다. 개발 진행률, 임시 데이터
@@ -43,6 +43,13 @@
 | WALLET-004    | `GET /api/wallet/transactions`                                            | `wallet_transactions`, `work_cases`, `workplaces`                                                                               | DEC-PAGE, DEC-TIME, DEC-TRANSACTION-DISPLAY                                                                                                                                  |
 | WALLET-005    | 지갑·계좌 금액 변경 Operation                                             | `wallet_transactions`, `mock_bank_transactions`                                                                                 | DEC-IDEMPOTENCY                                                                                                                                                              |
 | WALLET-006    | 충전·출금·초대 수락·정산 승인 Operation                                   | `idempotency_requests`, 멱등 Key, 금융 Aggregate                                                                                | DEC-IDEMPOTENCY, DEC-IDEMPOTENCY-STORAGE, DEC-IDEMPOTENCY-CLAIM-LIFECYCLE                                                                                                    |
+
+### `4.1.0` 은행 코드 확장 행정 추적
+
+| 구분             | 추적 대상                                                                                 | 연결 계약                                                                                                              |
+| ---------------- | ----------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| 보호 명세 릴리스 | [Issue #247](https://github.com/Flamingo7562/KB-PJT-24-2/issues/247), `SPEC-247-01`        | `BANK-001`, `DEC-BANK-CODE-TABLE`, 충전·출금 Operation, 20개 canonical 코드와 표시명                                   |
+| 호환성 경계      | 기존 `004`, `088`, `020`, `081`, `011` 유지, 신규 15개 코드 추가, 최소 호환 스키마 불변 | 요청 Body·3자리 검증·계좌 식별·내부 ID 비노출·Mock 계좌 경계 유지, 실제 금융기관 연동과 외부 기관 코드 정확성은 제외 |
 
 ### `3.0.0` M3 행정 추적
 
