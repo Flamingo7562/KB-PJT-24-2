@@ -1,20 +1,23 @@
 <script setup>
 /**
  * [C] 사장 QR  ·  /owner/qr  ·  OWNER  (탭 화면)
- * 선택 지점의 정적 QR 표시(값 고정 — 출력해 매장에 부착하는 용도).
+ * 선택 지점의 고정 QR 표시와 재발급(출력해 매장에 부착하는 용도).
  * 지점 컨텍스트: useWorkplaceStore().selectedId 기준.
- * 연계 API: GET /workplaces/{id}/qr → { qrToken }
- *   →  @/services/workplaces (getWorkplaceQr)
+ * 연계 API: GET /workplaces/{id}/qr, POST /workplaces/{id}/qr/reissue
+ *   →  @/services/workplaces (getWorkplaceQr, reissueWorkplaceQr)
  *
- * 토큰 발급·검증은 서버가 한다. 만료·재발급 주기가 없으므로 프론트는 표시만 담당하고,
- * 지점이 바뀔 때만 다시 조회한다.
+ * 토큰 발급·검증은 서버가 한다. 만료 주기가 없어 값이 고정이므로 지점이 바뀔 때만 다시
+ * 조회한다. 재발급은 사장이 직접 실행하며 기존 QR 을 즉시 폐기한다 — 되돌릴 수 없어
+ * 확인 모달과 전송 중 잠금을 둔다.
  * QR 이미지는 qrcode 로 canvas 에 직접 그린다(브라우저 생성 — docs/DEPENDENCY_SPECIFICATION.md).
  */
 import QRCode from 'qrcode'
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 
+import BaseButton from '@/components/common/BaseButton.vue'
+import BaseModal from '@/components/common/BaseModal.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
-import { getWorkplaceQr } from '@/services/workplaces'
+import { getWorkplaceQr, reissueWorkplaceQr } from '@/services/workplaces'
 import { useUiStore } from '@/stores/ui'
 import { useWorkplaceStore } from '@/stores/workplace'
 
@@ -38,6 +41,8 @@ const workplaceStore = useWorkplaceStore()
 const qr = ref(null)
 const loading = ref(false)
 const canvasEl = ref(null)
+const confirmOpen = ref(false)
+const reissuing = ref(false)
 
 const workplaceName = computed(() => workplaceStore.selected?.name ?? '')
 
@@ -54,6 +59,29 @@ async function load() {
     ui.toast('QR을 불러오지 못했어요.', { type: 'danger' })
   } finally {
     loading.value = false
+  }
+}
+
+/**
+ * 재발급 확정. 성공 응답이 곧 새 활성 QR 이므로 재조회하지 않고 그대로 반영한다.
+ * 전송 중에는 버튼을 잠근다 — 이 요청은 멱등 Header 를 쓰지 않으므로 두 번 보내면
+ * 첫 응답으로 인쇄한 QR 이 두 번째 요청에 폐기된다.
+ */
+async function confirmReissue() {
+  if (reissuing.value) return
+
+  const workplaceId = workplaceStore.selectedId
+  if (workplaceId == null) return
+
+  reissuing.value = true
+  try {
+    qr.value = await reissueWorkplaceQr(workplaceId)
+    ui.toast('QR을 새로 발급했어요. 매장에 붙인 QR을 교체해주세요.', { type: 'success' })
+    confirmOpen.value = false
+  } catch {
+    ui.toast('QR을 재발급하지 못했어요.', { type: 'danger' })
+  } finally {
+    reissuing.value = false
   }
 }
 
@@ -112,6 +140,29 @@ watch(() => qr.value?.qrToken, draw)
           <template v-else>표시할 QR이 없어요.</template>
         </p>
       </div>
+
+      <!--
+        재발급 버튼을 qr 존재 여부에 묶지 않는다. 활성 QR 이 없는 지점은 조회가 실패하는데,
+        그 상태에서 사용자가 스스로 복구할 수 있는 유일한 경로가 재발급이다.
+      -->
+      <BaseButton variant="secondary" :disabled="reissuing" @click="confirmOpen = true">
+        QR 재발급
+      </BaseButton>
+
+      <BaseModal :open="confirmOpen" title="QR을 새로 발급할까요?" @close="confirmOpen = false">
+        <p class="confirm-text">
+          지금 매장에 붙여둔 QR은 <strong>즉시 사용할 수 없게 됩니다.</strong> 새 QR을 다시 출력해
+          교체해주세요.
+        </p>
+        <template #footer>
+          <BaseButton variant="ghost" :disabled="reissuing" @click="confirmOpen = false">
+            취소
+          </BaseButton>
+          <BaseButton variant="danger" :disabled="reissuing" @click="confirmReissue">
+            {{ reissuing ? '발급 중…' : '재발급' }}
+          </BaseButton>
+        </template>
+      </BaseModal>
     </template>
   </div>
 </template>
@@ -170,5 +221,11 @@ watch(() => qr.value?.qrToken, draw)
   font-size: var(--text-sm);
   color: var(--color-text);
   word-break: break-all;
+}
+
+.confirm-text {
+  font-size: var(--text-sm);
+  color: var(--color-text);
+  line-height: 1.6;
 }
 </style>

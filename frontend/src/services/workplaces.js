@@ -146,18 +146,27 @@ export async function deleteWorkplace(workplaceId) {
 }
 
 /**
- * 지점 출퇴근 QR 조회 → { qrToken }.
+ * 지점 출퇴근 QR 조회 → { workplaceId, qrToken, createdAt }.
  *
- * 정적 QR — 지점마다 값이 고정이라 만료·재발급 주기가 없다. 출력해 매장에 부착하는 용도.
- * 프론트는 받은 토큰을 그대로 표시하며, 지점을 바꿀 때만 다시 조회한다.
+ * 고정 QR — 지점마다 값이 고정이라 만료 주기가 없다. 출력해 매장에 부착하는 용도.
+ * 서버가 저장된 nonce 로부터 매번 같은 토큰을 다시 서명하므로 반복 조회 결과가 같다.
+ * 조회는 QR 을 만들지도 교체하지도 않는다.
  * 토큰 발급·검증은 서버 책임이고, 대리 출근 차단은 스캔 시 GPS 반경 검증이 담당한다.
- * TODO(#162): 엔드포인트 위치·응답 필드 확정 후 USE_MOCK 해제.
  */
 export async function getWorkplaceQr(workplaceId) {
-  if (USE_MOCK) {
-    // 정적 QR 이므로 같은 지점은 항상 같은 토큰이 나와야 한다(시각 기반 값 금지).
-    return { qrToken: `mock-qr-${workplaceId}` }
-  }
   const { data } = await http.get(`/workplaces/${workplaceId}/qr`)
+  return data
+}
+
+/**
+ * 지점 출퇴근 QR 재발급 → { workplaceId, qrToken, reissuedAt }.
+ *
+ * 기존 QR 을 즉시 폐기한다 — 이미 인쇄해 부착한 QR 이 그 순간 죽으므로 되돌릴 수 없다.
+ * 승인 계약은 이 요청에 멱등 Header 를 요구하지 않는다(DEC-OPEN-QR-REISSUE-IDEMPOTENCY).
+ * 응답은 언제나 현재 활성 QR 의 권위 있는 표현이며, 이중 제출 방지는 화면의 확인 단계와
+ * 전송 중 비활성화가 담당한다.
+ */
+export async function reissueWorkplaceQr(workplaceId) {
+  const { data } = await http.post(`/workplaces/${workplaceId}/qr/reissue`)
   return data
 }

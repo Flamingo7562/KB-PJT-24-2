@@ -11,7 +11,13 @@ vi.mock('@/services/http', () => ({
 }))
 
 import http from '@/services/http'
-import { createWorkplace, listWorkplaces, updateWorkplace } from '@/services/workplaces'
+import {
+  createWorkplace,
+  getWorkplaceQr,
+  listWorkplaces,
+  reissueWorkplaceQr,
+  updateWorkplace
+} from '@/services/workplaces'
 
 const APPROVED_CREATE_FIELDS = [
   'businessRegistrationNumber',
@@ -155,5 +161,45 @@ describe('listWorkplaces', () => {
     await listWorkplaces({ size: 0 })
 
     expect(http.get.mock.calls[0][1].params.size).toBe(1)
+  })
+})
+
+/**
+ * 고정 QR 계약.
+ * 조회는 저장된 nonce 로부터 서버가 매번 같은 토큰을 다시 서명하므로 값이 고정이다.
+ * 재발급은 기존 QR 을 즉시 폐기하며 승인 계약이 멱등 Header 를 요구하지 않는다.
+ */
+describe('사업장 고정 QR', () => {
+  beforeEach(() => {
+    http.get.mockReset()
+    http.post.mockReset()
+  })
+
+  it('조회는 승인 경로를 호출하고 payload 를 벗겨 돌려준다', async () => {
+    http.get.mockResolvedValue({
+      data: { workplaceId: 7, qrToken: 'v1.k1.7.nonce.mac', createdAt: '2026-07-31T00:00:00Z' }
+    })
+
+    const qr = await getWorkplaceQr(7)
+
+    expect(http.get).toHaveBeenCalledWith('/workplaces/7/qr')
+    expect(qr).toEqual({
+      workplaceId: 7,
+      qrToken: 'v1.k1.7.nonce.mac',
+      createdAt: '2026-07-31T00:00:00Z'
+    })
+  })
+
+  it('재발급은 Body 없이 POST 하고 멱등 Header 를 붙이지 않는다', async () => {
+    http.post.mockResolvedValue({
+      data: { workplaceId: 7, qrToken: 'v1.k1.7.new.mac', reissuedAt: '2026-07-31T00:10:00Z' }
+    })
+
+    const qr = await reissueWorkplaceQr(7)
+
+    // idempotentPost 로 바꾸면 서버가 요구하지 않는 Idempotency-Key 를 보내게 된다.
+    expect(http.post).toHaveBeenCalledWith('/workplaces/7/qr/reissue')
+    expect(qr.qrToken).toBe('v1.k1.7.new.mac')
+    expect(qr.reissuedAt).toBe('2026-07-31T00:10:00Z')
   })
 })
