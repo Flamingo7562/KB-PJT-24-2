@@ -5,8 +5,8 @@
  * 연계 API: GET /work-cases/{id} · GET /work-cases/{id}/workplace-contact  →  @/services/workCases
  * route.params.workCaseId 사용. 공통: StatusChip · 문의하기 시트 · 신고 진입.
  */
-import { Phone } from 'lucide-vue-next'
-import { onMounted, ref } from 'vue'
+import { FileText, Phone } from 'lucide-vue-next'
+import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import AppBackHeader from '@/components/common/AppBackHeader.vue'
@@ -14,6 +14,7 @@ import BaseBottomSheet from '@/components/common/BaseBottomSheet.vue'
 import BaseButton from '@/components/common/BaseButton.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import StatusChip from '@/components/common/StatusChip.vue'
+import { contractFileUrl } from '@/services/documents'
 import { getOwnerContact, getWorkCase } from '@/services/workCases'
 import { useUiStore } from '@/stores/ui'
 import {
@@ -21,7 +22,7 @@ import {
   formatDuration,
   formatKRW,
   formatPhoneInput,
-  formatTimeRange,
+  formatSeoulTimeRange,
   onlyDigits
 } from '@/utils/format'
 
@@ -32,6 +33,10 @@ const ui = useUiStore()
 const workCaseId = route.params.workCaseId
 const workCase = ref(null)
 const loading = ref(true)
+const contractViewUrl = computed(() => {
+  const documentId = workCase.value?.contract?.documentId
+  return documentId ? contractFileUrl(documentId, 'view') : ''
+})
 
 onMounted(async () => {
   try {
@@ -83,7 +88,11 @@ function goReport() {
             </div>
             <div class="chips">
               <StatusChip :status="workCase.status" kind="workCase" />
-              <StatusChip :status="workCase.settleStatus" kind="settle" />
+              <StatusChip
+                v-if="workCase.settlement"
+                :status="workCase.settlement.status"
+                kind="settle"
+              />
             </div>
           </header>
 
@@ -94,7 +103,7 @@ function goReport() {
             </div>
             <div class="row">
               <dt>근무 시간</dt>
-              <dd>{{ formatTimeRange(workCase.startTime, workCase.endTime) }}</dd>
+              <dd>{{ formatSeoulTimeRange(workCase.startsAt, workCase.endsAt) }}</dd>
             </div>
             <div class="row">
               <dt>휴게 시간</dt>
@@ -111,6 +120,16 @@ function goReport() {
         </section>
 
         <div class="actions">
+          <a
+            v-if="contractViewUrl"
+            :href="contractViewUrl"
+            target="_blank"
+            rel="noopener"
+            class="contract-link"
+          >
+            <FileText :size="18" />
+            최종 근로계약서 보기
+          </a>
           <BaseButton variant="secondary" size="lg" block @click="openContact">
             <Phone :size="18" />
             사장님께 문의
@@ -206,6 +225,20 @@ function goReport() {
   flex-direction: column;
   gap: var(--space-sm);
   margin-top: var(--space-lg);
+}
+.contract-link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-xs);
+  width: 100%;
+  padding: var(--space-md) var(--space-lg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-worker);
+  background: var(--color-surface);
+  font-size: var(--text-lg);
+  font-weight: var(--weight-medium);
 }
 .contact-loading {
   font-size: var(--text-sm);

@@ -137,6 +137,16 @@ export async function deleteDocument(documentId) {
  */
 export function documentFileUrl(documentId, mode = 'view') {
   if (USE_MOCK) return ''
+  return contractFileUrl(documentId, mode)
+}
+
+/**
+ * 시스템 생성 근로계약 최종본 URL.
+ *
+ * 일반 문서 목록·업로드 Mock과 독립된 M4 계약 파일 경계다. 서버가 매 요청 Session과
+ * 계약 당사자를 검사하고 SIGNED Version 2를 Stream하므로 Storage URL을 만들거나 저장하지 않는다.
+ */
+export function contractFileUrl(documentId, mode = 'view') {
   const base = import.meta.env.VITE_API_BASE_URL || '/api'
   return `${base}/documents/${documentId}/file?mode=${mode}`
 }

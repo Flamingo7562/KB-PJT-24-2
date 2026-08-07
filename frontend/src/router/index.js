@@ -266,8 +266,7 @@ export function routeGuard(to) {
 
   // G4: 초대 딥링크는 WORKER 전용 — OWNER 접근 차단
   if (to.meta.invite && auth.isAuthenticated && auth.role === 'OWNER') {
-    ui.toast('알바생 전용 링크입니다.', { type: 'warning' })
-    return auth.homeRoute()
+    return '/forbidden'
   }
 
   // G2: 역할 불일치 → 각자 홈 + 안내 토스트
