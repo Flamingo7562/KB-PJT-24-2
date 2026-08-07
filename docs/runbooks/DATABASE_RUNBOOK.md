@@ -72,6 +72,14 @@ Copy-Item backend/config/database.example.properties backend/config/database-loc
 
 호스트 애플리케이션의 JDBC 주소는 `localhost:${MYSQL_PORT}`를 사용하지만, Docker 네트워크 안의 Flyway는 항상 `db:3306`으로 연결합니다.
 
+`database-local.properties`의 `qr.hmac.key.k1`에는 출퇴근 고정 QR 서명 키를 넣습니다. 값이 없거나 32바이트 미만이면 애플리케이션과 `databaseTest`가 기동 단계에서 실패합니다.
+
+```powershell
+[Convert]::ToBase64String((1..32 | ForEach-Object { Get-Random -Maximum 256 }))
+```
+
+이 키는 로컬 파일에만 두고 Git에 추가하지 않습니다.
+
 새 clone, Connector/J 버전 변경 또는 Gradle `clean` 실행 후에는 Flyway 컨테이너가 마운트할 JDBC Driver를 먼저 준비합니다.
 
 ```powershell
