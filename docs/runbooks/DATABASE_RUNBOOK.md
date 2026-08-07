@@ -72,6 +72,20 @@ Copy-Item backend/config/database.example.properties backend/config/database-loc
 
 호스트 애플리케이션의 JDBC 주소는 `localhost:${MYSQL_PORT}`를 사용하지만, Docker 네트워크 안의 Flyway는 항상 `db:3306`으로 연결합니다.
 
+### 초대 Link 설정
+
+같은 `database-local.properties`가 초대 Link 설정도 함께 담습니다. 아래 세 키가 없으면 Spring Root Context가 생성되지 않아 애플리케이션과 `databaseTest`가 모두 시작하지 못합니다.
+
+| 키                            | 값                                                                    |
+| ----------------------------- | --------------------------------------------------------------------- |
+| `invite.hmac.secret`          | 초대 Token 파생 Secret. 32자 이상이며 저장소에 커밋하지 않습니다.     |
+| `invite.hmac.previous-secret` | Secret 교체 중에만 이전 값을 넣고, 평소에는 빈 값으로 둡니다.         |
+| `invite.web-origin`           | 초대 URL을 만들 절대 Origin. 경로·Query·Fragment를 포함하지 않습니다. |
+
+로컬 기본값은 예제 파일에 있습니다. `invite.web-origin`은 로컬 Vite 주소인 `http://localhost:5173`을 사용합니다.
+
+Secret을 교체할 때는 새 값을 `invite.hmac.secret`에, 직전 값을 `invite.hmac.previous-secret`에 둡니다. 이전 Secret으로 발급된 활성 초대는 만료되거나 철회될 때까지 Link를 다시 만들어 낼 수 있어야 하므로, 그 초대들이 모두 끝난 뒤에만 `invite.hmac.previous-secret`을 비웁니다. 두 값을 동시에 바꾸면 아직 유효한 초대의 현재 Link를 조회할 수 없게 되고, OWNER는 재발급으로만 복구할 수 있습니다.
+
 새 clone, Connector/J 버전 변경 또는 Gradle `clean` 실행 후에는 Flyway 컨테이너가 마운트할 JDBC Driver를 먼저 준비합니다.
 
 ```powershell
