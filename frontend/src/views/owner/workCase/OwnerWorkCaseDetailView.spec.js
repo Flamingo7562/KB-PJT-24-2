@@ -86,12 +86,37 @@ describe('OwnerWorkCaseDetailView', () => {
     vi.useRealTimers()
   })
 
-  it('근무 조건을 근무지 기준 시각과 조건 버전으로 표시한다', async () => {
+  it('근무 조건을 근무지 기준 시각으로 표시한다', async () => {
     const wrapper = mountView()
     await flushPromises()
 
     expect(wrapper.text()).toContain('09:00 ~ 18:00')
-    expect(wrapper.text()).toContain('v3')
+  })
+
+  /*
+   * termsVersion 은 조건 변경 감지·계약 Snapshot 추적용 내부 값이라 화면에 내보내지 않는다.
+   * 픽스처의 termsVersion 은 3 이고 sourceTermsVersion 도 3 이므로, 어느 쪽이 되살아나도
+   * 'v3' 또는 '조건 버전' 문구로 드러난다.
+   */
+  it('내부 값인 조건 버전을 화면에 노출하지 않는다', async () => {
+    getWorkCase.mockResolvedValue({
+      ...DRAFT_DETAIL,
+      status: 'IN_PROGRESS',
+      contract: {
+        contractId: 7,
+        documentId: 9,
+        sourceTermsVersion: 3,
+        acceptedAt: '2026-07-25T01:00:00Z'
+      }
+    })
+    const wrapper = mountView()
+    await flushPromises()
+
+    const text = wrapper.text()
+    expect(text).not.toContain('조건 버전')
+    expect(text).not.toContain('v3')
+    // 같은 영역의 다른 정보는 그대로 보여야 한다(행 전체를 지운 것이 아니다).
+    expect(text).toContain('2026.07.25 10:00')
   })
 
   it('수정 실패의 breakMinutes 서버 오류를 휴게시간 필드에 표시한다', async () => {

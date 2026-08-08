@@ -344,10 +344,11 @@ async function onReissueInvite() {
               <dt>일급</dt>
               <dd class="wage">{{ formatKRW(workCase.dailyWage) }}</dd>
             </div>
-            <div class="detail-row">
-              <dt>조건 버전</dt>
-              <dd>v{{ workCase.termsVersion }}</dd>
-            </div>
+            <!--
+              termsVersion 은 화면에 내보내지 않는다. 조건 변경을 감지해 이전 링크를 철회하고
+              계약서가 어떤 조건을 박제했는지 추적하는 내부 장치이며(WORK-005), 사용자에게
+              'v3' 는 아무 의미가 없다. 서버 응답과 컬럼은 그대로 둔다.
+            -->
           </dl>
 
           <!--
@@ -370,7 +371,6 @@ async function onReissueInvite() {
                 <dt>계약 확정</dt>
                 <dd>
                   {{ formatSeoulDateTime(workCase.contract.acceptedAt) }}
-                  <span class="sub">(조건 v{{ workCase.contract.sourceTermsVersion }})</span>
                   <a
                     v-if="contractViewUrl"
                     :href="contractViewUrl"
