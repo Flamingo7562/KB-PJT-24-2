@@ -233,30 +233,30 @@ function goWorkCase() {
 
         <section class="detail-card">
           <dl class="info">
-            <div class="row">
+            <div class="detail-row">
               <dt>근무일</dt>
               <dd>{{ workDateText }}</dd>
             </div>
-            <div class="row">
+            <div class="detail-row">
               <dt>근무 시간</dt>
               <dd>{{ formatSeoulTimeRange(invite.startsAt, invite.endsAt) }}</dd>
             </div>
-            <div class="row">
+            <div class="detail-row">
               <dt>휴게 시간</dt>
               <dd>
                 {{ formatDuration(invite.breakMinutes) }}
                 <span class="break-tag">{{ invite.breakPaid ? '유급' : '무급' }}</span>
               </dd>
             </div>
-            <div class="row">
+            <div class="detail-row">
               <dt>일급</dt>
               <dd class="wage">{{ formatKRW(invite.dailyWage) }}</dd>
             </div>
-            <div class="row">
+            <div class="detail-row">
               <dt>조건 버전</dt>
               <dd>v{{ invite.termsVersion }}</dd>
             </div>
-            <div class="row">
+            <div class="detail-row">
               <dt>초대 만료</dt>
               <dd>{{ formatSeoulDateTime(invite.expiresAt) }}</dd>
             </div>
@@ -332,19 +332,22 @@ function goWorkCase() {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
 }
-.row {
+/* 클래스 이름이 `.row` 가 아닌 이유: main.js 가 Bootstrap 전체 CSS 를 로드하고, Bootstrap 의
+   그리드 `.row { flex-wrap: wrap }` + `.row > * { width: 100% }` 가 걸려 dt·dd 가 세로로
+   쌓인다(음수 margin 도 함께 샌다). 이름을 분리해 충돌 자체를 없앤다. */
+.detail-row {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
   gap: var(--space-md);
   padding: var(--space-sm) 0;
 }
-.row dt,
+.detail-row dt,
 .accepted-detail p {
   font-size: var(--text-md);
   color: var(--color-text-sub);
 }
-.row dd {
+.detail-row dd {
   text-align: right;
   font-size: var(--text-md);
   color: var(--color-text);

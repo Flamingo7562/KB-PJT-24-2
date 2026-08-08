@@ -120,7 +120,7 @@ describe('OwnerWorkCaseDetailView', () => {
     const wrapper = mountView()
     await flushPromises()
 
-    expect(wrapper.find('.progress').exists()).toBe(false)
+    expect(wrapper.find('.progress-section').exists()).toBe(false)
   })
 
   it('계약·예치·근태 근거를 진행 현황에 표시한다', async () => {
