@@ -47,6 +47,32 @@ describe('AppTopBar 지점 select', () => {
     expect(optionLabels).toEqual(['홍대점'])
   })
 
+  /*
+   * 닫힌 select 는 폭이 좁아 긴 지점명을 CSS 로 말줄임한다(#275). 잘린 이름을 사용자가
+   * 확인할 수 있는 경로가 title 뿐이므로, 말줄임과 title 은 한 쌍으로 유지돼야 한다.
+   * (말줄임·화살표 겹침 자체는 CSS 라 jsdom 이 판정하지 못해 브라우저에서 확인했다.)
+   */
+  it('선택한 지점의 전체 이름을 title 로 노출한다', async () => {
+    useAuthStore().setUser({ name: '김사장', role: 'OWNER', needsWorkplaceSetup: false })
+    const workplace = useWorkplaceStore()
+    workplace.workplaces = [
+      { workplaceId: 1, name: '강남점', status: 'ACTIVE' },
+      { workplaceId: 2, name: '동대문역사문화공원점', status: 'ACTIVE' }
+    ]
+    workplace.selectedId = 2
+    workplace.loaded = true
+
+    const wrapper = mount(AppTopBar, {
+      props: { role: 'OWNER' },
+      global: { stubs: { LogoSymbol: true } }
+    })
+
+    const select = wrapper.get('select')
+    expect(select.attributes('title')).toBe('동대문역사문화공원점')
+    // title 을 붙이면서 기존 접근성 이름을 덮지 않아야 한다.
+    expect(select.attributes('aria-label')).toBe('지점 선택')
+  })
+
   it('ACTIVE 사업장이 하나도 없으면 select 자체를 그리지 않는다', async () => {
     // 픽스처가 항상 ACTIVE 를 하나 이상 포함하면 v-else-if 를 workplaces.length 로
     // 되돌려도 참이 되어 이 회귀를 못 잡는다. ACTIVE 를 0개로 둬 v-else-if 자체를 고정한다.
