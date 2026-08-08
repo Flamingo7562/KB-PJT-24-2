@@ -160,6 +160,17 @@ async function confirm() {
 function goWorkCase() {
   router.push(`/worker/work/work-cases/${accepted.value.workCaseId}`)
 }
+
+/**
+ * 확정 직후의 주 경로는 안심지갑(홈)이다.
+ *
+ * 서버가 수락 Aggregate 에서 일급을 에스크로로 잡으므로(escrowStatus=HELD), 알바생이
+ * 이 시점에 가장 확인하고 싶은 것은 "내 임금이 안전하게 예치됐다"는 사실이다.
+ * synchronizeAcceptedState 가 이미 지갑을 다시 읽어 둬서 홈은 최신 값을 보여준다.
+ */
+function goHome() {
+  router.push('/worker/home')
+}
 </script>
 
 <template>
@@ -211,9 +222,16 @@ function goWorkCase() {
           </BaseButton>
         </div>
 
-        <BaseButton variant="worker" size="lg" block @click="goWorkCase">
-          근무 상세 확인
-        </BaseButton>
+        <!--
+          동기화 실패(syncError)일 때도 두 경로를 막지 않는다. 근무는 이미 확정됐으므로
+          화면에 가두면 사용자가 같은 수락을 다시 시도하게 된다.
+        -->
+        <div class="accepted-actions">
+          <BaseButton variant="worker" size="lg" block @click="goHome">
+            안심지갑 확인하기
+          </BaseButton>
+          <BaseButton variant="secondary" block @click="goWorkCase">근무 상세 확인</BaseButton>
+        </div>
       </template>
 
       <template v-else-if="invite">
@@ -453,6 +471,14 @@ function goWorkCase() {
   border-radius: var(--radius-sm);
 }
 .screen-body > .btn {
+  margin-top: var(--space-lg);
+}
+/* 확정 완료 화면의 이동 버튼 묶음. 버튼이 .screen-body 의 직계가 아니게 되므로
+   위 규칙이 걸리지 않아 여백을 여기서 준다. */
+.accepted-actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
   margin-top: var(--space-lg);
 }
 </style>
