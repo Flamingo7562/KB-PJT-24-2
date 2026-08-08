@@ -4,6 +4,7 @@ import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.FilterType;
 import org.springframework.context.annotation.Import;
+import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.stereotype.Controller;
 
 import com.gighub.auth.security.SecurityConfig;
@@ -17,6 +18,7 @@ import com.gighub.auth.security.SecurityConfig;
  * <p>MySQL 연결과 MyBatis 영속성 Bean은 {@link DatabaseConfig}에 분리해 관리합니다.</p>
  */
 @Configuration
+@EnableScheduling
 @Import({DatabaseConfig.class, SecurityConfig.class})
 @ComponentScan(
         basePackages = "com.gighub",

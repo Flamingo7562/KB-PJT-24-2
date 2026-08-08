@@ -1,0 +1,178 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.gighub.attendance.mapper.AttendanceLifecycleMapper">
+
+    <resultMap id="lifecycleWorkCaseResult"
+               type="com.gighub.attendance.mapper.result.AttendanceLifecycleWorkCaseRow">
+        <constructor>
+            <idArg column="workCaseId" javaType="java.lang.Long"/>
+            <arg column="status" javaType="com.gighub.work.domain.WorkCaseStatus"/>
+            <arg column="startsAt" javaType="java.time.LocalDateTime"/>
+            <arg column="endsAt" javaType="java.time.LocalDateTime"/>
+        </constructor>
+    </resultMap>
+
+    <select id="findReadyCandidateIds" resultType="java.lang.Long">
+        SELECT id
+        FROM work_cases
+        WHERE status = 'ACCEPTED'
+          AND starts_at &lt;= #{readyAt}
+          AND starts_at &gt; #{noShowAfter}
+        ORDER BY starts_at, id
+        LIMIT #{batchSize}
+    </select>
+
+    <select id="findNoShowCandidateIds" resultType="java.lang.Long">
+        SELECT wc.id
+        FROM work_cases wc
+        WHERE wc.status = 'READY'
+          AND wc.starts_at &lt;= #{noShowAt}
+          AND NOT EXISTS (
+              SELECT 1
+              FROM attendance_records ar
+              WHERE ar.work_case_id = wc.id
+                AND ar.attendance_type = 'CHECK_IN'
+                AND ar.result = 'SUCCESS'
+          )
+        ORDER BY wc.starts_at, wc.id
+        LIMIT #{batchSize}
+    </select>
+
+    <select id="findCheckoutMissingCandidateIds" resultType="java.lang.Long">
+        SELECT wc.id
+        FROM work_cases wc
+        WHERE wc.status = 'IN_PROGRESS'
+          AND wc.ends_at &lt;= #{checkoutMissingAt}
+          AND EXISTS (
+              SELECT 1
+              FROM attendance_records check_in
+              WHERE check_in.work_case_id = wc.id
+                AND check_in.attendance_type = 'CHECK_IN'
+                AND check_in.result = 'SUCCESS'
+          )
+          AND NOT EXISTS (
+              SELECT 1
+              FROM attendance_records check_out
+              WHERE check_out.work_case_id = wc.id
+                AND check_out.attendance_type = 'CHECK_OUT'
+                AND check_out.result = 'SUCCESS'
+          )
+        ORDER BY wc.ends_at, wc.id
+        LIMIT #{batchSize}
+    </select>
+
+    <select id="lockById" resultMap="lifecycleWorkCaseResult">
+        SELECT id        AS workCaseId,
+               status    AS status,
+               starts_at AS startsAt,
+               ends_at   AS endsAt
+        FROM work_cases
+        WHERE id = #{workCaseId}
+        FOR UPDATE
+    </select>
+
+    <!--
+        근무 행을 잠근 뒤 각 Aggregate를 독립적으로 검사해, 실패 원인을 좌표·문서 Key 없이
+        감사할 수 있게 합니다. 이 조회는 어떤 자금·근태 행도 변경하지 않습니다.
+    -->
+    <select id="findReadinessCheck"
+            resultType="com.gighub.attendance.mapper.result.AttendanceReadinessCheckRow">
+        SELECT wc.worker_id IS NOT NULL AS workerAssigned,
+               EXISTS(
+                   SELECT 1
+                   FROM work_invitations wi
+                   WHERE wi.work_case_id = wc.id
+                     AND wi.status = 'ACCEPTED'
+                     AND wi.accepted_by_user_id = wc.worker_id
+                     AND wi.expected_terms_version = wc.terms_version
+                     AND wi.accepted_terms_version = wc.terms_version
+                     AND wi.accepted_at IS NOT NULL
+               ) AS invitationAccepted,
+               EXISTS(
+                   SELECT 1
+                   FROM work_contracts contract
+                   WHERE contract.work_case_id = wc.id
+                     AND contract.employer_id = wc.employer_id
+                     AND contract.worker_id = wc.worker_id
+                     AND contract.agreed_wage = wc.agreed_wage
+                     AND contract.source_terms_version = wc.terms_version
+               ) AS contractMatched,
+               EXISTS(
+                   SELECT 1
+                   FROM escrows escrow
+                   WHERE escrow.work_case_id = wc.id
+                     AND escrow.amount = wc.agreed_wage
+                     AND escrow.status = 'HELD'
+               ) AS escrowHeld,
+               EXISTS(
+                   SELECT 1
+                   FROM settlements settlement
+                   WHERE settlement.work_case_id = wc.id
+                     AND settlement.amount = wc.agreed_wage
+                     AND settlement.status = 'WAITING'
+                     AND settlement.due_at IS NULL
+               ) AS settlementWaiting,
+               EXISTS(
+                   SELECT 1
+                   FROM workplaces workplace
+                   WHERE workplace.id = wc.workplace_id
+                     AND workplace.owner_user_id = wc.employer_id
+                     AND workplace.status = 'ACTIVE'
+                     AND workplace.latitude IS NOT NULL
+                     AND workplace.longitude IS NOT NULL
+               ) AS workplaceLocated,
+               EXISTS(
+                   SELECT 1
+                   FROM documents document
+                   JOIN document_versions signed_version
+                     ON signed_version.document_id = document.id
+                    AND signed_version.version_type = 'SIGNED'
+                   JOIN document_signatures signature
+                     ON signature.document_id = document.id
+                    AND signature.signed_version_id = signed_version.id
+                    AND signature.signer_user_id = wc.worker_id
+                    AND signature.signed_checksum = signed_version.checksum
+                   JOIN document_versions original_version
+                     ON original_version.document_id = document.id
+                    AND original_version.id = signature.source_version_id
+                    AND original_version.version_type = 'ORIGINAL'
+                    AND signature.source_checksum = original_version.checksum
+                   JOIN document_shares share
+                     ON share.document_id = document.id
+                    AND share.work_case_id = wc.id
+                    AND share.shared_with_user_id = wc.worker_id
+                    AND share.purpose = 'CONTRACT_PARTY'
+                    AND share.status = 'ACTIVE'
+                   WHERE document.work_case_id = wc.id
+                     AND document.document_type = 'EMPLOYMENT_CONTRACT'
+                     AND document.status = 'ACTIVE'
+                     AND signed_version.version_no = (
+                         SELECT MAX(latest_version.version_no)
+                         FROM document_versions latest_version
+                         WHERE latest_version.document_id = document.id
+                     )
+               ) AS signedContractRecorded
+        FROM work_cases wc
+        WHERE wc.id = #{workCaseId}
+    </select>
+
+    <select id="hasSuccessfulAttendance" resultType="boolean">
+        SELECT EXISTS(
+            SELECT 1
+            FROM attendance_records
+            WHERE work_case_id = #{workCaseId}
+              AND attendance_type = #{attendanceType}
+              AND result = 'SUCCESS'
+        )
+    </select>
+
+    <update id="transitionStatus">
+        UPDATE work_cases
+        SET status = #{status}
+        WHERE id = #{workCaseId}
+          AND status = #{expectedStatus}
+    </update>
+
+</mapper>
