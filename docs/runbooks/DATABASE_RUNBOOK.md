@@ -363,6 +363,8 @@ npm.cmd run db:seed:contract
 
 이 명령은 미적용 Migration을 먼저 적용한 뒤 [`test-contract-escrow.sql`](../../backend/src/test/resources/db/seed/test-contract-escrow.sql)을 실행합니다. 로컬 DB의 합성 테스트 데이터만 대상으로 하며 공용 DB나 운영 DB에서는 실행하지 않습니다.
 
+재실행하면 아래 사용자 비귀속 Mock 계좌를 초기 상태로 되돌리기 위해 해당 계좌를 참조하는 로컬 `funding_orders`, `withdrawal_requests`, `mock_bank_transactions` 합성 기록을 먼저 정리합니다. 수동 테스트 이력을 보존해야 한다면 별도 로컬 DB나 Docker volume에서 Seed를 실행합니다.
+
 | 항목           | 초기 상태                                        |
 | -------------- | ------------------------------------------------ |
 | 사장님 로그인  | `test_owner_17` / `Test1234!`                    |
