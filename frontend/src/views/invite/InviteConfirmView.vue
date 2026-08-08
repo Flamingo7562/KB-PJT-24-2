@@ -252,10 +252,11 @@ function goWorkCase() {
               <dt>일급</dt>
               <dd class="wage">{{ formatKRW(invite.dailyWage) }}</dd>
             </div>
-            <div class="row">
-              <dt>조건 버전</dt>
-              <dd>v{{ invite.termsVersion }}</dd>
-            </div>
+            <!--
+              termsVersion 은 화면에 내보내지 않는다. 서버가 조건 변경을 감지하는 내부
+              장치일 뿐이라 'v3' 가 알바생에게 뜻하는 바가 없고, 수락 직전 화면에서는
+              오히려 무엇을 놓쳤나 하는 오해를 준다. 서버 응답은 그대로 둔다.
+            -->
             <div class="row">
               <dt>초대 만료</dt>
               <dd>{{ formatSeoulDateTime(invite.expiresAt) }}</dd>

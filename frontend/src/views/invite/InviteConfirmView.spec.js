@@ -79,16 +79,30 @@ describe('InviteConfirmView', () => {
     newIdempotencyKey.mockClear()
   })
 
-  it('승인 DTO를 KST 시각·조건 버전으로 표시하고 Canvas를 만들지 않는다', async () => {
+  it('승인 DTO를 KST 시각으로 표시하고 Canvas를 만들지 않는다', async () => {
     const wrapper = mountView()
     await flushPromises()
 
     expect(getInvite).toHaveBeenCalledWith('safe_token')
     expect(wrapper.text()).toContain('2026.08.20')
     expect(wrapper.text()).toContain('10:00 ~ 18:00')
-    expect(wrapper.text()).toContain('v3')
     expect(wrapper.text()).toContain('등록된 배지 없음')
     expect(wrapper.find('canvas').exists()).toBe(false)
+  })
+
+  /*
+   * termsVersion 은 서버가 조건 변경을 감지하는 내부 값이라 화면에 내보내지 않는다.
+   * 수락 직전 화면이라 의미 없는 값이 오히려 오해를 준다. 픽스처의 termsVersion 은 3 이다.
+   */
+  it('내부 값인 조건 버전을 화면에 노출하지 않는다', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+
+    const text = wrapper.text()
+    expect(text).not.toContain('조건 버전')
+    expect(text).not.toContain('v3')
+    // 만료 시각은 같은 목록에 남아 있어야 한다(행 하나만 제거한 것이다).
+    expect(text).toContain('초대 만료')
   })
 
   it('Body 없는 수락 후 근무·지갑을 재조회하고 계약 최종본 Stream을 연다', async () => {
