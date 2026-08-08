@@ -69,15 +69,15 @@ describe('SecuredEarningCard', () => {
 
   it('i 아이콘을 누르면 안내가 열리고 다시 누르면 닫힌다', async () => {
     const wrapper = mountCard(90000, { attachTo: document.body })
-    expect(wrapper.find('.popover').exists()).toBe(false)
+    expect(wrapper.find('.info-popover').exists()).toBe(false)
 
     await wrapper.find('button.info').trigger('click')
-    expect(wrapper.find('.popover').exists()).toBe(true)
+    expect(wrapper.find('.info-popover').exists()).toBe(true)
     expect(wrapper.text()).toContain('1분마다 갱신되는 예상치')
     expect(wrapper.find('button.info').attributes('aria-expanded')).toBe('true')
 
     await wrapper.find('button.info').trigger('click')
-    expect(wrapper.find('.popover').exists()).toBe(false)
+    expect(wrapper.find('.info-popover').exists()).toBe(false)
 
     wrapper.unmount()
   })
@@ -86,11 +86,11 @@ describe('SecuredEarningCard', () => {
     const wrapper = mountCard(90000, { attachTo: document.body })
 
     await wrapper.find('button.info').trigger('click')
-    expect(wrapper.find('.popover').exists()).toBe(true)
+    expect(wrapper.find('.info-popover').exists()).toBe(true)
 
     document.body.click()
     await nextTick()
-    expect(wrapper.find('.popover').exists()).toBe(false)
+    expect(wrapper.find('.info-popover').exists()).toBe(false)
 
     wrapper.unmount()
   })
@@ -99,12 +99,12 @@ describe('SecuredEarningCard', () => {
     const wrapper = mountCard(90000, { attachTo: document.body })
 
     await wrapper.find('button.info').trigger('click')
-    expect(wrapper.find('.popover').exists()).toBe(true)
+    expect(wrapper.find('.info-popover').exists()).toBe(true)
 
     // `KeyboardEvent` 는 eslint 전역 화이트리스트에 없다 — 등재된 `window` 를 거친다.
     document.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape' }))
     await nextTick()
-    expect(wrapper.find('.popover').exists()).toBe(false)
+    expect(wrapper.find('.info-popover').exists()).toBe(false)
 
     wrapper.unmount()
   })
