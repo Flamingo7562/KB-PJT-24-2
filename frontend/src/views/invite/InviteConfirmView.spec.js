@@ -109,6 +109,49 @@ describe('InviteConfirmView', () => {
     expect(wrapper.text()).toContain('임금 예치 완료')
   })
 
+  /*
+   * 수락 시 서버가 일급을 에스크로로 잡으므로(escrowStatus=HELD) 확정 직후 알바생이 가장
+   * 확인하고 싶은 것은 임금이 예치됐다는 사실이다. 안심지갑이 주 경로이고 근무 상세는 보조다.
+   */
+  it('확정 후 안심지갑과 근무 상세 두 경로를 모두 제공한다', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+
+    await wrapper.get('input[type="checkbox"]').setValue(true)
+    await acceptButton(wrapper).trigger('click')
+    await flushPromises()
+
+    const wallet = wrapper.findAll('button').find((b) => b.text().includes('안심지갑'))
+    await wallet.trigger('click')
+    expect(push).toHaveBeenCalledWith('/worker/home')
+
+    const detail = wrapper.findAll('button').find((b) => b.text().includes('근무 상세'))
+    await detail.trigger('click')
+    expect(push).toHaveBeenCalledWith('/worker/work/work-cases/42')
+  })
+
+  /*
+   * 근무는 이미 확정된 상태다. 동기화 실패를 이유로 이동을 막으면 사용자가 화면에 갇혀
+   * 같은 수락을 다시 시도하게 된다.
+   */
+  it('수락 후 동기화가 실패해도 이동 경로를 막지 않는다', async () => {
+    getWorkCase.mockRejectedValue(new Error('network'))
+    const wrapper = mountView()
+    await flushPromises()
+
+    await wrapper.get('input[type="checkbox"]').setValue(true)
+    await acceptButton(wrapper).trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('최신 정보를 모두 불러오지 못했어요')
+
+    await wrapper
+      .findAll('button')
+      .find((b) => b.text().includes('안심지갑'))
+      .trigger('click')
+    expect(push).toHaveBeenCalledWith('/worker/home')
+  })
+
   it('결과가 불확실한 사용자 재확인은 같은 멱등 Key를 유지한다', async () => {
     confirmInvite
       .mockRejectedValueOnce(new Error('network'))
