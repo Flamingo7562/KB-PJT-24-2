@@ -24,11 +24,11 @@ const emit = defineEmits(['confirm', 'close'])
 <template>
   <BaseModal :open="open" title="출금 확인" @close="emit('close')">
     <dl class="summary">
-      <div class="row">
+      <div class="detail-row">
         <dt>입금 계좌</dt>
         <dd>{{ bankName }} {{ accountNo }}</dd>
       </div>
-      <div class="row">
+      <div class="detail-row">
         <dt>출금 금액</dt>
         <dd class="amount">{{ formatKRW(amount) }}</dd>
       </div>
@@ -65,25 +65,28 @@ const emit = defineEmits(['confirm', 'close'])
   background: var(--color-bg);
   border-radius: var(--radius-sm);
 }
-.row {
+/* 클래스 이름이 `.row` 가 아닌 이유: main.js 가 Bootstrap 전체 CSS 를 로드하고, Bootstrap 의
+   그리드 `.row { flex-wrap: wrap }` + `.row > * { width: 100% }` 가 걸려 dt·dd 가 세로로
+   쌓인다(음수 margin 도 함께 샌다). 이름을 분리해 충돌 자체를 없앤다. */
+.detail-row {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
   gap: var(--space-md);
 }
-.row dt {
+.detail-row dt {
   flex-shrink: 0;
   font-size: var(--text-sm);
   color: var(--color-text-sub);
 }
-.row dd {
+.detail-row dd {
   text-align: right;
   font-size: var(--text-md);
   font-weight: var(--weight-medium);
   color: var(--color-text);
   word-break: break-all;
 }
-.row dd.amount {
+.detail-row dd.amount {
   font-size: var(--text-lg);
   font-weight: var(--weight-bold);
 }

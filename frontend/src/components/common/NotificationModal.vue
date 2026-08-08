@@ -32,7 +32,7 @@ const { items, isOpen, loading, enabled } = storeToRefs(store)
         :class="{ unread: !n.isRead }"
         @click="store.markRead(n.notificationId)"
       >
-        <div class="row">
+        <div class="item-head">
           <strong class="title">{{ n.title }}</strong>
           <span class="date">{{ formatDateTime(n.createdAt) }}</span>
         </div>
@@ -67,7 +67,10 @@ const { items, isOpen, loading, enabled } = storeToRefs(store)
   background: var(--color-danger);
   vertical-align: middle;
 }
-.row {
+/* 클래스 이름이 `.row` 가 아닌 이유: main.js 가 Bootstrap 전체 CSS 를 로드하고, Bootstrap 의
+   그리드 `.row { flex-wrap: wrap }` + `.row > * { width: 100% }` 가 걸려 제목과 날짜가
+   세로로 쌓인다(음수 margin 도 함께 샌다). 이름을 분리해 충돌 자체를 없앤다. */
+.item-head {
   display: flex;
   align-items: baseline;
   justify-content: space-between;

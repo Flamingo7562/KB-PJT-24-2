@@ -355,7 +355,7 @@ async function onReissueInvite() {
             계약·예치·근태 근거 — "이 근무가 왜 수정·삭제되지 않는지"를 설명한다.
             각 객체는 근거 행이 없으면 통째로 null 이라 v-if 로 행 단위로 감춘다.
           -->
-          <section v-if="hasProgressInfo" class="progress">
+          <section v-if="hasProgressInfo" class="progress-section">
             <h3 class="section-title">진행 현황</h3>
             <dl class="detail">
               <div v-if="workCase.latestInvitation" class="detail-row">
@@ -618,11 +618,16 @@ async function onReissueInvite() {
   font-weight: var(--weight-medium);
 }
 
-/* ---- 진행 현황(초대·계약·예치·근태) ---- */
-.progress {
+/* ---- 진행 현황(초대·계약·예치·근태) ----
+   클래스 이름이 `.progress` 가 아닌 이유: main.js 가 Bootstrap 전체 CSS 를 로드하고,
+   Bootstrap 의 `.progress { display:flex; height:1rem; overflow:hidden }` 가 걸려 섹션이
+   16px 로 잘린다(제목 "진행 현황"과 목록이 가로로 눌려 깨져 보인다). scoped 는 [data-v] 로
+   특이도만 올릴 뿐, 여기서 선언하지 않은 속성은 막지 못한다 — 이름을 분리해 충돌 자체를
+   없앤다(.field-row · .app-toast 와 같은 이유). */
+.progress-section {
   margin-top: var(--space-xl);
 }
-.progress .detail {
+.progress-section .detail {
   margin-top: var(--space-sm);
 }
 
