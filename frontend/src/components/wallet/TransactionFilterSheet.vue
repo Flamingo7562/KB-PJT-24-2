@@ -39,6 +39,7 @@ export function buildTransactionFilterParams(draft = {}) {
 </script>
 
 <script setup>
+import { ChevronDown } from 'lucide-vue-next'
 import { computed, reactive, watch } from 'vue'
 
 import AppField from '@/components/common/AppField.vue'
@@ -91,16 +92,20 @@ function onApply() {
     <div class="filter-body">
       <div v-if="workplaces.length" class="group">
         <label class="group-label" for="wallet-workplace-filter">사업장</label>
-        <select id="wallet-workplace-filter" v-model="draft.workplaceId" class="select">
-          <option value="">전체 사업장</option>
-          <option
-            v-for="workplace in workplaces"
-            :key="workplace.workplaceId"
-            :value="workplace.workplaceId"
-          >
-            {{ workplace.name }}
-          </option>
-        </select>
+        <!-- 화살표는 AppTopBar 의 지점 select 와 같은 이유로 직접 그린다(#275). -->
+        <span class="select-wrap">
+          <select id="wallet-workplace-filter" v-model="draft.workplaceId" class="select">
+            <option value="">전체 사업장</option>
+            <option
+              v-for="workplace in workplaces"
+              :key="workplace.workplaceId"
+              :value="workplace.workplaceId"
+            >
+              {{ workplace.name }}
+            </option>
+          </select>
+          <ChevronDown :size="16" class="select-caret" aria-hidden="true" />
+        </span>
       </div>
 
       <AppField v-model="draft.keyword" label="검색어" placeholder="내용·설명 검색" />
@@ -190,13 +195,35 @@ function onApply() {
   font-weight: var(--weight-medium);
   color: var(--color-text-sub);
 }
+/* 네이티브 화살표는 padding box 안에 UA 가 그려 위치를 제어할 수 없고, 긴 사업장명이
+   그 밑으로 파고든다. 화살표를 끄고 직접 그려 자리를 확실히 비운다(#275). */
+.select-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
 .select {
   width: 100%;
   padding: var(--space-md);
+  /* caret(16px) + 좌우 여백 */
+  padding-right: 36px;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   background: var(--color-surface);
   color: var(--color-text);
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.select-caret {
+  position: absolute;
+  right: var(--space-md);
+  color: var(--color-text-sub);
+  /* 화살표를 눌러도 select 가 열려야 한다. */
+  pointer-events: none;
 }
 .chips {
   display: flex;
